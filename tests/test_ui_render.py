@@ -4,7 +4,7 @@ import pytest
 import discord
 
 from rob.ui.cards.registration import throne_setup_card
-from rob.ui.render import CardSection, RenderedMessage, RobCard, add_action_row, render_card, supports_components_v2
+from rob.ui.render import CardSection, RenderedMessage, RobCard, add_card_actions, build_action_row, render_card, supports_components_v2
 
 
 def test_components_v2_support_check_exposes_required_runtime():
@@ -27,9 +27,9 @@ def test_v2_edit_kwargs_clear_legacy_fields_and_keep_view():
     msg = render_card(RobCard(title="T", body="B"))
     kwargs = msg.edit_kwargs()
     assert kwargs["content"] is None
-    assert kwargs["embed"] is None
-    assert kwargs["embeds"] is None
-    assert kwargs["attachments"] is None
+    assert "embed" not in kwargs
+    assert kwargs["embeds"] == []
+    assert kwargs["attachments"] == []
     assert kwargs["view"] is msg.view
 
 
@@ -60,10 +60,16 @@ def test_title_uses_h2_markdown():
     assert "## Hello" in str(msg.view.children[0].children[0].content)
 
 
-def test_add_action_row_puts_buttons_in_top_level_action_row():
+def test_add_card_actions_puts_buttons_in_top_level_action_row():
     msg = throne_setup_card("hello")
-    add_action_row(msg.view, discord.ui.Button(label="Continue"), discord.ui.Button(label="Not Now"))
+    add_card_actions(msg.view, discord.ui.Button(label="Continue"), discord.ui.Button(label="Not Now"))
     assert type(msg.view.children[0]).__name__ == "Container"
     assert type(msg.view.children[1]).__name__ == "ActionRow"
     assert type(msg.view.children[1].children[0]).__name__ == "Button"
     assert type(msg.view.children[1].children[1]).__name__ == "Button"
+
+
+def test_build_action_row_wraps_buttons():
+    row = build_action_row(discord.ui.Button(label="A"), discord.ui.Button(label="B"))
+    assert type(row).__name__ == "ActionRow"
+    assert len(row.children) == 2

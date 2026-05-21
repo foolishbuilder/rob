@@ -9,7 +9,8 @@ from discord.ext import commands
 
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.registration import domme_registered_card, registration_card, throne_setup_card
-from rob.ui.render import add_action_row
+from rob.ui.copy import THRONE_SETUP_INTRO, throne_setup_steps
+from rob.ui.render import add_card_actions
 
 if TYPE_CHECKING:
     from rob.discord.client import RobBot
@@ -27,17 +28,8 @@ def add_setup_buttons(view: discord.ui.LayoutView, *, creator_id: int, webhook_u
             super().__init__(label="Continue Setup", style=discord.ButtonStyle.primary)
 
         async def callback(self, interaction: discord.Interaction) -> None:
-            body = (
-                "To make sure Rob gets the right information, you'll need to set up the Webhook Integration in your Throne settings.\n\n"
-                "Here's how:\n\n"
-                "1. Head to https://throne.com/ and sign in.\n2. Go to Settings, then click Integrations.\n3. Scroll until you see Webhooks.\n"
-                "4. Click Enable Webhooks.\n5. Under Subscriber URLs, click Add URL.\n6. Enter the almighty link below.\n"
-                "7. Click Save Settings, then click Test Webhook and wait for the success message.\n\n"
-                "Once done, come back here and I'll let you know if it worked.\n\n"
-                f"The almighty link:\n```\n{webhook_url}\n```\nDid it work?"
-            )
-            msg = throne_setup_card(body)
-            add_action_row(msg.view, YesButton(creator_id, send_track_channel_id), NotYetButton())
+            msg = throne_setup_card(throne_setup_steps(webhook_url))
+            add_card_actions(msg.view, YesButton(creator_id, send_track_channel_id), NotYetButton())
             await interaction.response.edit_message(**msg.edit_kwargs())
 
     class NotNowButton(discord.ui.Button):
@@ -51,7 +43,7 @@ def add_setup_buttons(view: discord.ui.LayoutView, *, creator_id: int, webhook_u
             )
             await interaction.response.edit_message(**msg.edit_kwargs())
 
-    add_action_row(view, ContinueSetupButton(), NotNowButton())
+    add_card_actions(view, ContinueSetupButton(), NotNowButton())
 
 
 class YesButton(discord.ui.Button):
@@ -88,7 +80,7 @@ class YesButton(discord.ui.Button):
             "Not seeing it yet.\n\nPlease make sure you clicked Save Settings in Throne, then click Test Webhook again. "
             "Once Throne shows a success message, press Yes here again."
         )
-        add_action_row(msg.view, YesButton(self.creator_id, self.send_track_channel_id), NotYetButton())
+        add_card_actions(msg.view, YesButton(self.creator_id, self.send_track_channel_id), NotYetButton())
         await interaction.response.edit_message(**msg.edit_kwargs())
 
 
@@ -126,7 +118,7 @@ class RegistrationCog(commands.Cog):
 
         settings = await self.bot.guild_settings_repo.get(interaction.guild.id)
         try:
-            dm_msg = throne_setup_card("Howdy Partner!\n\nYou've received this DM because you've enabled Throne tracking for yourself. Before we can continue, we'll need you to do some extra steps inside Throne first.")
+            dm_msg = throne_setup_card(THRONE_SETUP_INTRO)
             add_setup_buttons(dm_msg.view, creator_id=result.creator.id, webhook_url=result.webhook_url, send_track_channel_id=settings.send_track_channel_id if settings else None)
             await interaction.user.send(**dm_msg.send_kwargs())
         except discord.Forbidden as exc:

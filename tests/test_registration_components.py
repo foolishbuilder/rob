@@ -6,7 +6,7 @@ from rob.discord.cogs.registration import add_setup_buttons
 from rob.ui.cards.registration import throne_setup_card
 
 
-def test_add_setup_buttons_creates_action_row_not_top_level_buttons():
+def test_add_setup_buttons_creates_container_then_action_row_not_top_level_buttons():
     msg = throne_setup_card("setup")
     add_setup_buttons(msg.view, creator_id=1, webhook_url="https://example.com/webhook", send_track_channel_id=123)
     assert type(msg.view.children[0]).__name__ == "Container"

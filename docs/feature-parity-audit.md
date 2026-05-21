@@ -28,3 +28,15 @@ This patch intentionally preserves split webhook/bot services and PostgreSQL-onl
 - Test events update creator setup verification timestamps (`setup_verified_at`, `last_test_webhook_at`, `last_successful_event_at`) and return `{"ok": true, "setup_verified": true}`.
 - Test events do not insert `sends` rows and do not enter the Discord send tracker queue.
 - Runtime now uses true LayoutView-based Components V2 rendering when supported, with automatic no embed fallback if required V2 classes are unavailable.
+
+## Old Rob wording / copy reference
+
+- Sources checked:
+  - `notpatdev/rob-the-bot` (not accessible from this workspace)
+  - `legacy/single-process-bot/` (fallback used)
+- Copy restored:
+  - registration
+  - Throne setup
+  - errors/snag-paperwork tone
+- Copy intentionally changed:
+  - copy was centralized into `rob/ui/copy.py` constants/helpers so cogs stop hardcoding long user-facing blocks.

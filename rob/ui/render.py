@@ -46,7 +46,7 @@ class RenderedMessage:
     view: discord.ui.LayoutView | None = None
     mode: Literal["components_v2"] = "components_v2"
     def send_kwargs(self) -> dict[str, Any]: return {"content": self.content, "view": self.view}
-    def edit_kwargs(self) -> dict[str, Any]: return {"content": None, "embed": None, "embeds": None, "attachments": None, "view": self.view}
+    def edit_kwargs(self) -> dict[str, Any]: return {"content": None, "embeds": [], "attachments": [], "view": self.view}
 
 
 def supports_components_v2() -> bool:
@@ -60,13 +60,16 @@ def require_components_v2() -> None:
     raise RuntimeError(f"Discord Components V2 is required for Rob card rendering. Missing: {', '.join(missing)}")
 
 
-def add_action_row(view: discord.ui.LayoutView, *buttons: discord.ui.Button) -> None:
-    if not buttons:
-        return
+def build_action_row(*buttons: discord.ui.Button) -> discord.ui.ActionRow:
     if not hasattr(discord.ui, "ActionRow"):
         raise RuntimeError("discord.ui.ActionRow is required to place buttons in Components V2 layouts.")
-    row = discord.ui.ActionRow(*buttons)
-    view.add_item(row)
+    return discord.ui.ActionRow(*buttons)
+
+
+def add_card_actions(view: discord.ui.LayoutView, *buttons: discord.ui.Button) -> None:
+    if not buttons:
+        return
+    view.add_item(build_action_row(*buttons))
 
 
 def render_card(card: RobCard, *, view: discord.ui.LayoutView | None = None) -> RenderedMessage:
