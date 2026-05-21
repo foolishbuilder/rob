@@ -7,4 +7,4 @@ from rob.ui.theme import COLOR_DANGER
 
 def error_card(message: str, detail: str | None = None):
     description = message if detail is None else f"{message}\n\n{detail}"
-    return render(make_card(title="Rob | Error", body=description, color=COLOR_DANGER, footer=ERROR_FOOTER))
+    return render(make_card(title="Rob | Error", body=description, color=COLOR_DANGER, footer=ERROR_FOOTER, variant="error", callout="What to try next: check inputs or try again."))

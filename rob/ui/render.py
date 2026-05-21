@@ -5,7 +5,8 @@ from typing import Any, Literal
 
 import discord
 
-_REQUIRED_V2 = ("LayoutView", "Container", "Section", "TextDisplay", "Separator", "MediaGallery", "Thumbnail")
+_REQUIRED_V2 = ("LayoutView", "Container", "Section", "TextDisplay", "Separator", "MediaGallery", "Thumbnail", "Button")
+CardVariant = Literal["default", "success", "error", "warning", "setup", "privacy", "leaderboard", "send", "counting", "status"]
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,10 @@ class RobCard:
     image_url: str | None = None
     actions: list[CardAction] = field(default_factory=list)
     color: discord.Colour | None = None
+    variant: CardVariant = "default"
+    eyebrow: str | None = None
+    callout: str | None = None
+    code_block: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,18 +45,8 @@ class RenderedMessage:
     content: str | None = None
     view: discord.ui.LayoutView | None = None
     mode: Literal["components_v2"] = "components_v2"
-
-    def send_kwargs(self) -> dict[str, Any]:
-        return {"content": self.content, "view": self.view}
-
-    def edit_kwargs(self) -> dict[str, Any]:
-        return {
-            "content": None,
-            "embed": None,
-            "embeds": None,
-            "attachments": None,
-            "view": self.view,
-        }
+    def send_kwargs(self) -> dict[str, Any]: return {"content": self.content, "view": self.view}
+    def edit_kwargs(self) -> dict[str, Any]: return {"content": None, "embed": None, "embeds": None, "attachments": None, "view": self.view}
 
 
 def supports_components_v2() -> bool:
@@ -62,30 +57,33 @@ def require_components_v2() -> None:
     if supports_components_v2():
         return
     missing = [name for name in _REQUIRED_V2 if not hasattr(discord.ui, name)]
-    raise RuntimeError(
-        "Discord Components V2 is required for Rob card rendering, but this discord.py build does not expose "
-        f"LayoutView/Bot UI Kit components. Missing: {', '.join(missing)}"
-    )
+    raise RuntimeError(f"Discord Components V2 is required for Rob card rendering. Missing: {', '.join(missing)}")
 
 
 def render_card(card: RobCard, *, view: discord.ui.LayoutView | None = None) -> RenderedMessage:
     require_components_v2()
     if view is not None and len(view.children) > 0:
-        raise RuntimeError(
-            "render_card(view=...) expects an empty LayoutView so Rob can place the card container before action buttons. "
-            "Add buttons after rendering to preserve container-first ordering."
-        )
+        raise RuntimeError("render_card(view=...) expects an empty LayoutView.")
     layout = view or discord.ui.LayoutView(timeout=1800)
-
-    items: list[Any] = [discord.ui.TextDisplay(f"# {card.title}"), discord.ui.TextDisplay(card.body), discord.ui.Separator()]
-    for section in card.sections:
-        items.append(discord.ui.TextDisplay(f"**{section.title}**\n{section.text}"))
+    items: list[Any] = []
+    if card.eyebrow:
+        items.append(discord.ui.TextDisplay(f"-# {card.eyebrow}"))
+    items.append(discord.ui.TextDisplay(f"## {card.title}"))
+    items.append(discord.ui.TextDisplay(card.body))
+    if card.callout:
+        items.append(discord.ui.Separator())
+        items.append(discord.ui.TextDisplay(card.callout))
+    if card.code_block:
+        items.append(discord.ui.TextDisplay(f"```\n{card.code_block}\n```"))
+    if card.sections:
+        items.append(discord.ui.Separator())
+        for section in card.sections:
+            items.append(discord.ui.TextDisplay(f"**{section.title}**\n{section.text}"))
     if card.image_url:
         items.append(discord.ui.Separator())
         items.append(discord.ui.MediaGallery(discord.MediaGalleryItem(media=card.image_url)))
     if card.footer:
         items.append(discord.ui.Separator())
         items.append(discord.ui.TextDisplay(f"-# {card.footer}"))
-
     layout.add_item(discord.ui.Container(*items, accent_color=card.color))
     return RenderedMessage(view=layout)

@@ -52,3 +52,8 @@ def test_render_card_rejects_prepopulated_layout_to_enforce_container_first_orde
     view.add_item(discord.ui.Button(label="X"))
     with pytest.raises(RuntimeError):
         render_card(RobCard(title="T", body="B"), view=view)
+
+
+def test_title_uses_h2_markdown():
+    msg = render_card(RobCard(title="Hello", body="Body"))
+    assert "## Hello" in str(msg.view.children[0].children[0].content)

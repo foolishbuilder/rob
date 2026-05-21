@@ -51,3 +51,8 @@ The webhook server is the HTTP-only side of Rob.
 - Test events update creator setup verification timestamps (`setup_verified_at`, `last_test_webhook_at`, `last_successful_event_at`) and return `{"ok": true, "setup_verified": true}`.
 - Test events do not insert `sends` rows and do not enter the Discord send tracker queue.
 - Runtime currently renders registration/setup UI with no embed fallback via a Components V2 compatibility layer until discord.py exposes stable V2 APIs.
+
+- `THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS` (default `false`) allows known test sender usernames to pass as real sends for dev testing.
+- `THRONE_TEST_GIFTER_USERNAMES` controls sender-name-based test detection (default `marie_123`).
+- Explicit test/setup payloads are always setup-only and never inserted as sends.
+- Webhook payload `price`/`amount` values are treated as authoritative minor currency units for send amounts.

@@ -33,7 +33,7 @@ class SendService:
         currency = payload.currency or "USD"
         is_private = payload.is_private
 
-        if (
+        if False and (
             amount_cents == 0
             and payload.event_type == "gift_purchased"
             and self.throne is not None
@@ -53,7 +53,7 @@ class SendService:
 
         sub_id = None
         sub_user_id = None
-        if payload.gifter_username:
+        if payload.gifter_username and payload.gifter_username.lower() != "anonymous":
             sub = await self.subs.get_by_name(creator.guild_id, payload.gifter_username)
             if sub is not None:
                 sub_id = sub.id
@@ -70,7 +70,7 @@ class SendService:
                 amount_cents=amount_cents,
                 currency=currency,
                 method="throne",
-                source="webhook",
+                source="throne_webhook",
                 item_name=payload.item_name,
                 item_image_url=payload.item_image_url,
                 external_id=None,

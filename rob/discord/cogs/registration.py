@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import logging
 
 import discord
 from discord import app_commands
@@ -12,6 +13,8 @@ from rob.ui.cards.registration import domme_registered_card, registration_card, 
 if TYPE_CHECKING:
     from rob.discord.client import RobBot
 
+
+log = logging.getLogger(__name__)
 
 SUCCESS_GIF_URL = "https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExMDN5OW9vZTYyODl4MnRmd3A5aGVxeWVkNWF2eTY4ZnhwdXVpeW4wYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/uLiEXaouJVkuA/giphy.gif"
 
@@ -128,8 +131,13 @@ class RegistrationCog(commands.Cog):
             dm_msg = throne_setup_card("Howdy Partner!\n\nYou've received this DM because you've enabled Throne tracking for yourself. Before we can continue, we'll need you to do some extra steps inside Throne first.")
             add_setup_buttons(dm_msg.view, creator_id=result.creator.id, webhook_url=result.webhook_url, send_track_channel_id=settings.send_track_channel_id if settings else None)
             await interaction.user.send(**dm_msg.send_kwargs())
-        except discord.HTTPException:
-            await interaction.followup.send(**error_card("You're registered, but Rob couldn't DM you.", "Please enable Direct Messages, then run /register domme again.").send_kwargs(), ephemeral=True)
+        except discord.Forbidden as exc:
+            log.warning("Failed to DM Throne setup flow to user_id=%s guild_id=%s reason=Forbidden status=%s code=%s text=%s", interaction.user.id, interaction.guild.id if interaction.guild else None, getattr(exc, "status", None), getattr(exc, "code", None), getattr(exc, "text", None))
+            await interaction.followup.send(**error_card("You're registered, but Rob couldn't DM you.", "This usually means Discord blocked the DM. Please check:\n\n- Server Privacy Settings → Allow direct messages from server members\n- You have not blocked this bot\n- Your Discord privacy settings allow bot/member DMs\n\nOnce fixed, run /register domme again.").send_kwargs(), ephemeral=True)
+            return
+        except discord.HTTPException as exc:
+            log.exception("Failed to DM Throne setup flow to user_id=%s guild_id=%s status=%s code=%s text=%s", interaction.user.id, interaction.guild.id if interaction.guild else None, getattr(exc, "status", None), getattr(exc, "code", None), getattr(exc, "text", None))
+            await interaction.followup.send(**error_card("You're registered, but Rob couldn't DM you.", "This usually means Discord blocked the DM. Please check:\n\n- Server Privacy Settings → Allow direct messages from server members\n- You have not blocked this bot\n- Your Discord privacy settings allow bot/member DMs\n\nOnce fixed, run /register domme again.").send_kwargs(), ephemeral=True)
             return
 
         await interaction.followup.send(**domme_registered_card().send_kwargs(), ephemeral=True)

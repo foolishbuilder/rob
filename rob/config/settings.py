@@ -18,6 +18,8 @@ class BaseSettings:
 @dataclass(frozen=True)
 class WebhookSettings(BaseSettings):
     throne_webhook_host: str
+    throne_parse_test_sends_as_real_sends: bool
+    throne_test_gifter_usernames: tuple[str, ...]
     throne_webhook_port: int
     throne_webhook_base_url: str
     throne_webhook_require_signature: bool
@@ -95,6 +97,8 @@ def load_webhook_settings(env_file: str | Path | None = None) -> WebhookSettings
         log_level=base.log_level,
         database_url=base.database_url,
         throne_webhook_host=_env_str("THRONE_WEBHOOK_HOST", "127.0.0.1"),
+        throne_parse_test_sends_as_real_sends=_env_bool("THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS", False),
+        throne_test_gifter_usernames=tuple(u.strip().lower() for u in _env_str("THRONE_TEST_GIFTER_USERNAMES", "marie_123").split(",") if u.strip()),
         throne_webhook_port=_env_int("THRONE_WEBHOOK_PORT", 8080, minimum=1),
         throne_webhook_base_url=_env_str(
             "THRONE_WEBHOOK_BASE_URL",

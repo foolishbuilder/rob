@@ -14,7 +14,7 @@ from rob.database.repositories.throne_creators import ThroneCreatorsRepository
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
-from rob.throne.payloads import is_supported_event_type, is_test_webhook_payload, parse_throne_send_payload
+from rob.throne.payloads import is_explicit_test_webhook_payload, is_known_test_sender, is_supported_event_type, parse_throne_send_payload
 from rob.throne.security import (
     build_signed_message,
     secret_matches,
@@ -90,9 +90,13 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
         )
 
     parsed = parse_throne_send_payload(creator_id=creator_id, payload=payload)
-    if is_test_webhook_payload(payload, parsed):
+    explicit_test = is_explicit_test_webhook_payload(payload, parsed)
+    known_test_sender = is_known_test_sender(parsed.gifter_username, test_gifter_usernames=set(settings.throne_test_gifter_usernames))
+    if explicit_test or (known_test_sender and not settings.throne_parse_test_sends_as_real_sends):
         await creators.mark_setup_verified(matched_creator.id)
         return web.json_response({"ok": True, "setup_verified": True})
+    if known_test_sender and settings.throne_parse_test_sends_as_real_sends:
+        log.warning("Known Throne test sender accepted as real send due to THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS=true. creator_id=%s gifter_username=%s", creator_id, parsed.gifter_username)
 
     if not is_supported_event_type(parsed.event_type):
         await creators.touch_successful_event(matched_creator.id)

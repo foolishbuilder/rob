@@ -85,19 +85,12 @@ def parse_timestamp(value: Any) -> datetime:
 def _money_to_cents(value: Any, *, event_type: str | None) -> int:
     if value is None:
         return 0
-
     if isinstance(value, str):
         cleaned = value.strip().replace("$", "").replace(",", "")
         if not cleaned:
             return 0
-        numeric = float(cleaned)
-    else:
-        numeric = float(value)
-
-    if event_type == "contribution_purchased":
-        return int(round(numeric))
-
-    return int(round(numeric * 100))
+        return int(round(float(cleaned)))
+    return int(round(float(value)))
 
 
 def build_fallback_hash(
@@ -138,12 +131,7 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
-def is_test_webhook_payload(
-    payload: dict[str, Any],
-    parsed: ThroneSendPayload | None = None,
-    *,
-    test_gifter_usernames: set[str] | None = None,
-) -> bool:
+def is_explicit_test_webhook_payload(payload: dict[str, Any], parsed: ThroneSendPayload | None = None) -> bool:
     data = _as_dict(payload.get("data"))
     event_type = _first_str(payload.get("type"), payload.get("eventType"), payload.get("event_type"), parsed.event_type if parsed else None)
     event_name = _first_str(payload.get("event"), data.get("event"))
@@ -164,16 +152,28 @@ def is_test_webhook_payload(
     if any(_as_bool(v) is True for v in boolean_flags):
         return True
 
-    usernames = {u.strip().lower() for u in (test_gifter_usernames or {"marie_123"}) if u.strip()}
-    if usernames:
-        gifter = (parsed.gifter_username if parsed else None) or _first_str(data.get("gifterUsername"), data.get("senderUsername"), payload.get("gifterUsername"), payload.get("senderUsername"))
-        if gifter and gifter.strip().lower() in usernames:
-            return True
-
     item_name = (parsed.item_name if parsed else None) or _first_str(data.get("itemName"), payload.get("itemName"))
     order_id = (parsed.order_id if parsed else None) or _first_str(data.get("orderId"), payload.get("orderId"))
     joined = f"{item_name or ''} {order_id or ''}".lower()
     return any(token in joined for token in ("test", "webhook", "setup"))
+
+
+def is_known_test_sender(gifter_username: str | None, *, test_gifter_usernames: set[str] | None = None) -> bool:
+    usernames = {u.strip().lower() for u in (test_gifter_usernames or {"marie_123"}) if u.strip()}
+    if not usernames or not gifter_username:
+        return False
+    return gifter_username.strip().lower() in usernames
+
+
+def is_test_webhook_payload(
+    payload: dict[str, Any],
+    parsed: ThroneSendPayload | None = None,
+    *,
+    test_gifter_usernames: set[str] | None = None,
+) -> bool:
+    return is_explicit_test_webhook_payload(payload, parsed) or is_known_test_sender((parsed.gifter_username if parsed else None), test_gifter_usernames=test_gifter_usernames)
+
+
 def parse_throne_send_payload(
     *,
     creator_id: str,
@@ -250,6 +250,9 @@ def parse_throne_send_payload(
         payload.get("anonymous"),
     )
     if is_anonymous:
+        gifter_username = "Anonymous"
+
+    if event_type == "gift_crowdfunded" and not gifter_username:
         gifter_username = None
 
     item = {}
@@ -310,6 +313,8 @@ def parse_throne_send_payload(
     else:
         amount_cents = _money_to_cents(
             _first(
+                data.get("price"),
+                payload.get("price"),
                 data.get("amount"),
                 payload.get("amount"),
                 item.get("amount"),
