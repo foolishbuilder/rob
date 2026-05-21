@@ -6,7 +6,7 @@ import discord
 
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
-from rob.ui.cards.leaderboard import leaderboard_embed
+from rob.ui.cards.leaderboard import leaderboard_card
 
 log = logging.getLogger(__name__)
 
@@ -55,13 +55,13 @@ class LeaderboardService:
         dommes = await self.leaderboards.get_top_dommes(guild_id)
         subs = await self.leaderboards.get_top_subs(guild_id)
 
-        dommes_embed = leaderboard_embed(
+        dommes_msg = leaderboard_card(
             title="Dom/me Sends Leaderboard",
             entries=dommes,
             summary=summary,
             footer="To join the leaderboard and make it into the top 10, run /register domme.",
         )
-        subs_embed = leaderboard_embed(
+        subs_msg = leaderboard_card(
             title="Sub Sends Leaderboard",
             entries=subs,
             summary=summary,
@@ -73,14 +73,14 @@ class LeaderboardService:
             channel=channel,
             message_key="dommes",
             leaderboard_type="dommes",
-            embed=dommes_embed,
+            rendered=dommes_msg,
         )
         await self._upsert_message(
             guild_id=guild_id,
             channel=channel,
             message_key="subs",
             leaderboard_type="subs",
-            embed=subs_embed,
+            rendered=subs_msg,
         )
         return True
 
@@ -91,7 +91,7 @@ class LeaderboardService:
         channel: discord.TextChannel,
         message_key: str,
         leaderboard_type: str,
-        embed: discord.Embed,
+        rendered,
     ) -> None:
         ref = await self.leaderboards.get_message(guild_id, message_key)
         message: discord.Message | None = None
@@ -101,9 +101,9 @@ class LeaderboardService:
             except (discord.NotFound, discord.HTTPException):
                 message = None
         if message is None:
-            message = await channel.send(embed=embed)
+            message = await channel.send(**rendered.send_kwargs())
         else:
-            await message.edit(embed=embed)
+            await message.edit(**rendered.edit_kwargs())
         await self.leaderboards.upsert_message(
             guild_id=guild_id,
             message_key=message_key,
