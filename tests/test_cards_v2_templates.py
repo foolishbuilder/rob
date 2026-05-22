@@ -4,7 +4,9 @@ from datetime import datetime, UTC
 
 from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary, SendRecord
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
+from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.send import send_card
+from rob.ui.theme import COLOR_LEADER_ALERT, COLOR_SEND
 from rob.ui.copy import throne_setup_steps
 
 
@@ -21,9 +23,11 @@ def test_setup_step_2_contains_almighty_link():
 def test_send_card_title_and_flying_dutchman():
     msg = send_card(send=_send(None), domme_label="@Domme", sub_label=None, rank=2)
     contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
-    assert "just got a new send" in contents
+    assert "New Send to @Domme" in contents
     assert "The Flying Dutchman" in contents
     assert "Rob Send ID" not in contents
+    assert "rank after this send" not in contents
+    assert msg.view.children[0].accent_color == COLOR_SEND
 
 
 def test_send_card_unclaimed_sender_copy():
@@ -32,9 +36,15 @@ def test_send_card_unclaimed_sender_copy():
     assert "gifter_name with no nickname claimed" in contents
 
 
+def test_send_card_no_footer_text():
+    msg = send_card(send=_send("gifter"), domme_label="@Domme", sub_label="gifter", rank=None)
+    contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
+    assert "Please enjoy this send equally" not in contents
+
+
 def test_leaderboard_main_and_stats_titles_and_separators():
     entries=[LeaderboardEntry("@A",1,12345,7), LeaderboardEntry("@B",2,9000,3), LeaderboardEntry("@C",3,5000,2), LeaderboardEntry("@D",4,2500,1)]
-    summary=LeaderboardSummary(29845,13,4,2)
+    summary=LeaderboardSummary(29845,13,4,2,1,1099)
     main=leaderboard_card(title="ignored",entries=entries,summary=summary)
     stats=leaderboard_stats_card(summary, entries)
     main_children = main.view.children[0].children
@@ -57,11 +67,12 @@ def test_leaderboard_main_and_stats_titles_and_separators():
     assert [type(child).__name__ for child in stats_children] == ["TextDisplay", "Separator", "TextDisplay"]
     assert "🏆 Thy Send Leaderboard | Stats" in stats_contents
     assert "Leaderboard last updated" in stats_contents
+    assert "Unclaimed Sends" in stats_contents
     assert "👑" not in stats_contents and "🦹‍♀️" not in stats_contents and "💸" not in stats_contents
 
 
 def test_leaderboard_empty_state_uses_same_separator_structure():
-    summary = LeaderboardSummary(0, 0, 0, 0)
+    summary = LeaderboardSummary(0, 0, 0, 0, 0, 0)
     main = leaderboard_card(title="ignored", entries=[], summary=summary)
     children = main.view.children[0].children
     assert [type(child).__name__ for child in children] == [
@@ -74,3 +85,12 @@ def test_leaderboard_empty_state_uses_same_separator_structure():
         "TextDisplay",
     ]
     assert "No sends have made it onto the board yet." in children[4].content
+
+
+def test_leader_alert_card_shape_and_color():
+    msg = leader_alert_card("<@123>")
+    children = msg.view.children[0].children
+    assert [type(child).__name__ for child in children] == ["TextDisplay", "Separator", "TextDisplay", "Separator", "TextDisplay"]
+    all_text = "\n".join(str(getattr(ch, "content", "")) for ch in children)
+    assert "👑 NEW LEADER ALERT!" in all_text
+    assert msg.view.children[0].accent_color == COLOR_LEADER_ALERT

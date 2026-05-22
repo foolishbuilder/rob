@@ -175,6 +175,8 @@ class LeaderboardSummary:
     send_count: int
     domme_count: int
     sub_count: int
+    unclaimed_send_count: int = 0
+    unclaimed_total_cents: int = 0
 
 
 @dataclass(frozen=True)

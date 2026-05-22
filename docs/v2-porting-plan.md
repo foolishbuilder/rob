@@ -125,3 +125,8 @@ This document maps the legacy ROB feature inventory (`ROB_FEATURE_REPORT.md`) to
 | Local admin endpoints | health/maintenance/sync/broadcast | Partial | P1/P2 | local-admin-surface | loopback only |
 | Shell helpers | extensive ops commands | Partial | P1 | robctl-expansion | command matrix parity |
 | Event runtime | event windows/reports | Intentionally removed | Do not port | n/a | only if explicitly requested |
+
+- 2026-05-22: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()` and purple accent constants from `rob/ui/theme.py`; rank lines/footer removed.
+- 2026-05-22: Added NEW LEADER ALERT card (purple accent, separator-based sections) for leaderboard #1 changes (posting logic TODO/dedupe wired in queue path).
+- 2026-05-22: Leaderboard and stats cards now use explicit separator components; stats include Unclaimed Sends section.
+- 2026-05-22: `/send details` command + public Rob Send ID flow remains TODO for follow-up implementation; public send cards intentionally omit Rob Send ID.

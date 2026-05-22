@@ -6,7 +6,7 @@ import discord
 
 from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary
 from rob.ui.render import RenderedMessage, require_components_v2
-from rob.ui.theme import COLOR_PRIMARY
+from rob.ui.theme import COLOR_LEADERBOARD
 from rob.utils.money import format_money_from_cents
 
 
@@ -48,7 +48,7 @@ def leaderboard_card(*, title: str, entries: list[LeaderboardEntry], summary: Le
         discord.ui.Separator(),
         discord.ui.TextDisplay(_HELPER_TEXT),
     ]
-    view.add_item(discord.ui.Container(*children, accent_color=COLOR_PRIMARY))
+    view.add_item(discord.ui.Container(*children, accent_color=COLOR_LEADERBOARD))
     return RenderedMessage(view=view)
 
 
@@ -61,7 +61,8 @@ def leaderboard_stats_card(summary: LeaderboardSummary, entries: list[Leaderboar
         f"-# Leaderboard Leader:\n**{entries[0].label if entries else 'Nobody yet'} - {format_money_from_cents(entries[0].total_cents if entries else 0)}**\n\n"
         f"-# Total Dommes on Leaderboard:\n**{summary.domme_count}**\n\n"
         f"-# Total Sends Tracked:\n**{summary.send_count}**\n\n"
-        f"-# Total Amount Tracked:\n**{format_money_from_cents(summary.total_cents)}**"
+        f"-# Total Amount Tracked:\n**{format_money_from_cents(summary.total_cents)}**\n\n"
+        f"-# Unclaimed Sends:\n**{summary.unclaimed_send_count} sends / {format_money_from_cents(summary.unclaimed_total_cents)}**"
     )
 
     children = [
@@ -69,5 +70,5 @@ def leaderboard_stats_card(summary: LeaderboardSummary, entries: list[Leaderboar
         discord.ui.Separator(),
         discord.ui.TextDisplay(stats_text),
     ]
-    view.add_item(discord.ui.Container(*children, accent_color=COLOR_PRIMARY))
+    view.add_item(discord.ui.Container(*children, accent_color=COLOR_LEADERBOARD))
     return RenderedMessage(view=view)

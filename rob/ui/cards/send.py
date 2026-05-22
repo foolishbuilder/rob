@@ -1,24 +1,34 @@
 from __future__ import annotations
 
+import discord
+
 from rob.database.repositories.models import SendRecord
-from rob.ui.components import make_card, render
-from rob.ui.theme import COLOR_INFO
-from rob.utils.money import format_money_with_currency_name
+from rob.ui.render import RenderedMessage, require_components_v2
+from rob.ui.theme import COLOR_SEND
+from rob.utils.money import format_money_from_cents
+
+
+def _sub_display(sub_label: str | None) -> str:
+    if not sub_label:
+        return "The Flying Dutchman"
+    if "<@" in sub_label or sub_label.startswith("@"):
+        return sub_label
+    return f"{sub_label} with no nickname claimed"
 
 
 def send_card(*, send: SendRecord, domme_label: str, sub_label: str | None, rank: int | None = None):
-    sub_display = "The Flying Dutchman" if not sub_label else (f"{sub_label} with no nickname claimed" if sub_label and sub_label.startswith("@") is False and "<@" not in sub_label and "nickname claimed" not in sub_label else sub_label)
-    rank_line = f"{domme_label}'s rank after this send: #{rank}" if rank else "Rob is still doing the rank maths."
-    return render(make_card(
-        title=f"💸 {domme_label} just got a new send! 💸",
-        body=(
-            f"**Item:** {send.item_name or 'Mystery send'}\n\n"
-            f"**Amount:** {format_money_with_currency_name(send.amount_cents, send.currency)}\n\n"
-            f"**Sub:** {sub_display}\n\n"
-            f"{rank_line}"
-        ),
-        color=COLOR_INFO,
-        variant="send",
-        sections=[],
-        image_url=send.item_image_url,
-    ))
+    del rank
+    require_components_v2()
+    view = discord.ui.LayoutView(timeout=1800)
+    body = (
+        f"**Sub:** {_sub_display(sub_label)}\n\n"
+        f"**Amount:** {format_money_from_cents(send.amount_cents)} ({send.currency})\n\n"
+        f"**Item:** {send.item_name or 'Mystery send'}"
+    )
+    children = [
+        discord.ui.TextDisplay(f"## 💸 New Send to {domme_label}! 💸"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(body),
+    ]
+    view.add_item(discord.ui.Container(*children, accent_color=COLOR_SEND))
+    return RenderedMessage(view=view)

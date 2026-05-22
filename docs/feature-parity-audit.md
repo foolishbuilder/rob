@@ -50,3 +50,8 @@ This patch intentionally preserves split webhook/bot services and PostgreSQL-onl
 - Focused on high-impact day-to-day runtime parity only: Components V2 card path, registration setup flow/card copy, send card style parity, and leaderboard main+stats runtime wiring.
 - Explicitly deferred to follow-up PRs: inactivity removal, DM audit forwarding, Carl-bot warn relay, rule helper, and event-window runtime/reporting.
 - Kept architecture guardrails intact: split bot/webhook services, PostgreSQL runtime, no SQLite reintroduction, no legacy single-process bot merge.
+
+- 2026-05-22: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()` and purple accent constants from `rob/ui/theme.py`; rank lines/footer removed.
+- 2026-05-22: Added NEW LEADER ALERT card (purple accent, separator-based sections) for leaderboard #1 changes (posting logic TODO/dedupe wired in queue path).
+- 2026-05-22: Leaderboard and stats cards now use explicit separator components; stats include Unclaimed Sends section.
+- 2026-05-22: `/send details` command + public Rob Send ID flow remains TODO for follow-up implementation; public send cards intentionally omit Rob Send ID.

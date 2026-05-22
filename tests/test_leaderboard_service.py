@@ -64,7 +64,7 @@ class _FakeLeaderboardsRepo:
         self.upserts = []
 
     async def get_summary(self, _):
-        return LeaderboardSummary(total_cents=1000, send_count=2, domme_count=1, sub_count=1)
+        return LeaderboardSummary(total_cents=1000, send_count=2, domme_count=1, sub_count=1, unclaimed_send_count=0, unclaimed_total_cents=0)
 
     async def get_top_dommes(self, _):
         return [LeaderboardEntry(label='@Domme', user_id=1, total_cents=1000, send_count=2)]

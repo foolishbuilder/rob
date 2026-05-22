@@ -35,7 +35,9 @@ class LeaderboardsRepository:
                     COALESCE(SUM(amount_cents), 0) AS total_cents,
                     COUNT(*) AS send_count,
                     COUNT(DISTINCT domme_user_id) AS domme_count,
-                    COUNT(DISTINCT sub_user_id) FILTER (WHERE sub_user_id IS NOT NULL) AS sub_count
+                    COUNT(DISTINCT sub_user_id) FILTER (WHERE sub_user_id IS NOT NULL) AS sub_count,
+                    COUNT(*) FILTER (WHERE sub_user_id IS NULL) AS unclaimed_send_count,
+                    COALESCE(SUM(amount_cents) FILTER (WHERE sub_user_id IS NULL), 0) AS unclaimed_total_cents
                 FROM sends
                 WHERE guild_id = $1
                 AND discord_post_status = 'posted'
@@ -48,6 +50,8 @@ class LeaderboardsRepository:
             send_count=int(row["send_count"] or 0),
             domme_count=int(row["domme_count"] or 0),
             sub_count=int(row["sub_count"] or 0),
+            unclaimed_send_count=int(row["unclaimed_send_count"] or 0),
+            unclaimed_total_cents=int(row["unclaimed_total_cents"] or 0),
         )
 
     async def get_top_dommes(self, guild_id: int, *, limit: int = 10) -> list[LeaderboardEntry]:
