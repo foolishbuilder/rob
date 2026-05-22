@@ -32,15 +32,45 @@ def test_send_card_unclaimed_sender_copy():
     assert "gifter_name with no nickname claimed" in contents
 
 
-def test_leaderboard_main_and_stats_titles():
+def test_leaderboard_main_and_stats_titles_and_separators():
     entries=[LeaderboardEntry("@A",1,12345,7), LeaderboardEntry("@B",2,9000,3), LeaderboardEntry("@C",3,5000,2), LeaderboardEntry("@D",4,2500,1)]
     summary=LeaderboardSummary(29845,13,4,2)
     main=leaderboard_card(title="ignored",entries=entries,summary=summary)
     stats=leaderboard_stats_card(summary, entries)
-    main_contents = "\n".join(str(getattr(ch, "content", "")) for ch in main.view.children[0].children)
-    stats_contents = "\n".join(str(getattr(ch, "content", "")) for ch in stats.view.children[0].children)
+    main_children = main.view.children[0].children
+    stats_children = stats.view.children[0].children
+    main_contents = "\n".join(str(getattr(ch, "content", "")) for ch in main_children)
+    stats_contents = "\n".join(str(getattr(ch, "content", "")) for ch in stats_children)
+
+    assert [type(child).__name__ for child in main_children] == [
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+    ]
     assert "🏆 Thy Send Leaderboard" in main_contents
     assert "🥇" in main_contents and "🥈" in main_contents and "🥉" in main_contents and "#4" in main_contents
+
+    assert [type(child).__name__ for child in stats_children] == ["TextDisplay", "Separator", "TextDisplay"]
     assert "🏆 Thy Send Leaderboard | Stats" in stats_contents
     assert "Leaderboard last updated" in stats_contents
     assert "👑" not in stats_contents and "🦹‍♀️" not in stats_contents and "💸" not in stats_contents
+
+
+def test_leaderboard_empty_state_uses_same_separator_structure():
+    summary = LeaderboardSummary(0, 0, 0, 0)
+    main = leaderboard_card(title="ignored", entries=[], summary=summary)
+    children = main.view.children[0].children
+    assert [type(child).__name__ for child in children] == [
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+    ]
+    assert "No sends have made it onto the board yet." in children[4].content
