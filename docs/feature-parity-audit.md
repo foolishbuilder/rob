@@ -40,3 +40,13 @@ This patch intentionally preserves split webhook/bot services and PostgreSQL-onl
   - errors/snag-paperwork tone
 - Copy intentionally changed:
   - copy was centralized into `rob/ui/copy.py` constants/helpers so cogs stop hardcoding long user-facing blocks.
+
+
+## 2026-05 update
+- Added explicit v2 priority calls: inactivity P1, DM audit P2/P3, Carl warn relay P2, local admin endpoints/shell helpers P1/P2.
+- Event runtime remains intentionally not ported unless explicitly requested.
+
+## Phase 1 implementation scope (current branch)
+- Focused on high-impact day-to-day runtime parity only: Components V2 card path, registration setup flow/card copy, send card style parity, and leaderboard main+stats runtime wiring.
+- Explicitly deferred to follow-up PRs: inactivity removal, DM audit forwarding, Carl-bot warn relay, rule helper, and event-window runtime/reporting.
+- Kept architecture guardrails intact: split bot/webhook services, PostgreSQL runtime, no SQLite reintroduction, no legacy single-process bot merge.

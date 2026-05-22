@@ -45,8 +45,13 @@ class RenderedMessage:
     content: str | None = None
     view: discord.ui.LayoutView | None = None
     mode: Literal["components_v2"] = "components_v2"
-    def send_kwargs(self) -> dict[str, Any]: return {"content": self.content, "view": self.view}
-    def edit_kwargs(self) -> dict[str, Any]: return {"content": None, "embeds": [], "attachments": [], "view": self.view}
+
+    def send_kwargs(self) -> dict[str, Any]:
+        return {"content": self.content, "view": self.view}
+
+    def edit_kwargs(self) -> dict[str, Any]:
+        # Explicitly avoid mixing embed/embeds to prevent discord.py edit errors.
+        return {"content": None, "embeds": [], "attachments": [], "view": self.view}
 
 
 def supports_components_v2() -> bool:

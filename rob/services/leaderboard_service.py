@@ -6,7 +6,7 @@ import discord
 
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
-from rob.ui.cards.leaderboard import leaderboard_card
+from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 
 log = logging.getLogger(__name__)
 
@@ -53,34 +53,22 @@ class LeaderboardService:
 
         summary = await self.leaderboards.get_summary(guild_id)
         dommes = await self.leaderboards.get_top_dommes(guild_id)
-        subs = await self.leaderboards.get_top_subs(guild_id)
-
-        dommes_msg = leaderboard_card(
-            title="Dom/me Sends Leaderboard",
-            entries=dommes,
-            summary=summary,
-            footer="To join the leaderboard and make it into the top 10, run /register domme.",
-        )
-        subs_msg = leaderboard_card(
-            title="Sub Sends Leaderboard",
-            entries=subs,
-            summary=summary,
-            footer="Sub leaderboard updates from tracked sends.",
-        )
+        dommes_msg = leaderboard_card(title="ignored", entries=dommes, summary=summary)
+        stats_msg = leaderboard_stats_card(summary, dommes)
 
         await self._upsert_message(
             guild_id=guild_id,
             channel=channel,
-            message_key="dommes",
-            leaderboard_type="dommes",
+            message_key="leaderboard",
+            leaderboard_type="leaderboard",
             rendered=dommes_msg,
         )
         await self._upsert_message(
             guild_id=guild_id,
             channel=channel,
-            message_key="subs",
-            leaderboard_type="subs",
-            rendered=subs_msg,
+            message_key="leaderboard_stats",
+            leaderboard_type="leaderboard_stats",
+            rendered=stats_msg,
         )
         return True
 

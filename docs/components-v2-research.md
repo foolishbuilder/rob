@@ -21,3 +21,8 @@
 - Rob keeps the card container first, then adds actions via a helper that always wraps buttons in an `ActionRow`.
 - Rob does not place raw top-level `Button` objects in `LayoutView`.
 - This keeps payloads valid and avoids the prior `Invalid Form Body` error.
+
+
+## 2026-05 legacy parity update
+- Adopted container-first card templates with action rows (no raw top-level buttons).
+- Documented fallback policy and old-Rob copy parity targets.

@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from rob.ui.cards.errors import error_card
-from rob.ui.cards.leaderboard import leaderboard_card
+from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 
 if TYPE_CHECKING:
     from rob.discord.client import RobBot
@@ -25,9 +25,7 @@ class LeaderboardsCog(commands.Cog):
 
         summary = await self.bot.leaderboards_repo.get_summary(interaction.guild.id)
         dommes = await self.bot.leaderboards_repo.get_top_dommes(interaction.guild.id)
-        subs = await self.bot.leaderboards_repo.get_top_subs(interaction.guild.id)
-
-        dom_msg = leaderboard_card(title="Dom/me Sends Leaderboard", entries=dommes, summary=summary, footer="To join the leaderboard and make it into the top 10, run /register domme.")
-        sub_msg = leaderboard_card(title="Sub Sends Leaderboard", entries=subs, summary=summary, footer="Sub leaderboard updates from tracked sends.")
+        dom_msg = leaderboard_card(title="ignored", entries=dommes, summary=summary)
+        stats_msg = leaderboard_stats_card(summary, dommes)
         await interaction.response.send_message(**dom_msg.send_kwargs(), ephemeral=True)
-        await interaction.followup.send(**sub_msg.send_kwargs(), ephemeral=True)
+        await interaction.followup.send(**stats_msg.send_kwargs(), ephemeral=True)
