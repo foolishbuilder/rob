@@ -13,6 +13,12 @@ class SendRequestDecision:
     ok: bool
     status: str
     send: SendRecord | None = None
+    request_sub_user_id: int | None = None
+    request_domme_user_id: int | None = None
+    amount_cents: int | None = None
+    method: str | None = None
+    note: str | None = None
+    denial_reason: str | None = None
 
 
 class SendRequestService:
@@ -32,13 +38,39 @@ class SendRequestService:
         )
         return count >= self.RATE_LIMIT
 
-    async def approve(self, *, request_id: int, guild_id: int, domme_id: int | None) -> SendRequestDecision:
+    async def approve(
+        self,
+        *,
+        request_id: int,
+        guild_id: int,
+        domme_id: int | None,
+        acted_by_user_id: int,
+    ) -> SendRequestDecision:
         request = await self.send_requests.get(request_id)
         if request is None:
             return SendRequestDecision(ok=False, status="missing")
         if request.status != "pending":
-            return SendRequestDecision(ok=False, status=request.status)
+            return SendRequestDecision(
+                ok=False,
+                status=request.status,
+                request_sub_user_id=request.sub_user_id,
+                request_domme_user_id=request.domme_user_id,
+                amount_cents=request.amount_cents,
+                method=request.method,
+                note=request.note,
+                denial_reason=request.denial_reason,
+            )
+        if acted_by_user_id != request.domme_user_id:
+            return SendRequestDecision(ok=False, status="forbidden")
 
+        resolved = await self.send_requests.resolve_if_pending(
+            request.id,
+            status="approved",
+            resolved_by_user_id=acted_by_user_id,
+        )
+        if resolved is None:
+            latest = await self.send_requests.get(request_id)
+            return SendRequestDecision(ok=False, status=latest.status if latest is not None else "missing")
         send = await self.send_service.record_manual_send(
             guild_id=guild_id,
             domme_id=domme_id,
@@ -48,15 +80,52 @@ class SendRequestService:
             currency=request.currency,
             method=request.method,
             note=request.note,
+            source="send_request",
         )
-        await self.send_requests.resolve(request.id, status="approved")
-        return SendRequestDecision(ok=True, status="approved", send=send)
+        return SendRequestDecision(
+            ok=send is not None,
+            status="approved" if send is not None else "approved_without_send",
+            send=send,
+            request_sub_user_id=request.sub_user_id,
+            request_domme_user_id=request.domme_user_id,
+            amount_cents=request.amount_cents,
+            method=request.method,
+            note=request.note,
+        )
 
-    async def ignore(self, *, request_id: int) -> SendRequestDecision:
+    async def deny(self, *, request_id: int, reason: str, acted_by_user_id: int) -> SendRequestDecision:
         request = await self.send_requests.get(request_id)
         if request is None:
             return SendRequestDecision(ok=False, status="missing")
         if request.status != "pending":
-            return SendRequestDecision(ok=False, status=request.status)
-        await self.send_requests.resolve(request.id, status="ignored")
-        return SendRequestDecision(ok=True, status="ignored")
+            return SendRequestDecision(
+                ok=False,
+                status=request.status,
+                request_sub_user_id=request.sub_user_id,
+                request_domme_user_id=request.domme_user_id,
+                amount_cents=request.amount_cents,
+                method=request.method,
+                note=request.note,
+                denial_reason=request.denial_reason,
+            )
+        if acted_by_user_id != request.domme_user_id:
+            return SendRequestDecision(ok=False, status="forbidden")
+        resolved = await self.send_requests.resolve_if_pending(
+            request.id,
+            status="denied",
+            denial_reason=reason,
+            resolved_by_user_id=acted_by_user_id,
+        )
+        if resolved is None:
+            latest = await self.send_requests.get(request_id)
+            return SendRequestDecision(ok=False, status=latest.status if latest is not None else "missing")
+        return SendRequestDecision(
+            ok=True,
+            status="denied",
+            request_sub_user_id=request.sub_user_id,
+            request_domme_user_id=request.domme_user_id,
+            amount_cents=request.amount_cents,
+            method=request.method,
+            note=request.note,
+            denial_reason=reason,
+        )

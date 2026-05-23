@@ -19,20 +19,21 @@ export PYTHONPATH="${PYTHONPATH:-${APP_ROOT}}"
 
 usage() {
   cat <<'EOF'
+Rob Control
 Usage:
   robctl status
   robctl logs [bot|webhook]
   robctl restart [bot|webhook|all]
-  robctl maintenance status
-  robctl maintenance on "reason"
-  robctl maintenance off
-  robctl queue status
-  robctl queue flush
-  robctl leaderboard refresh
-  robctl throne invalidate-test-sends
+  robctl maintenance status|on|off
+  robctl queue status|flush
+  robctl leaderboard refresh|status|preview|diagnose|repair-send-dommes [--dry-run]
+  robctl throne dommes|subs|status|invalidate-test-sends
+  robctl sends list [--status pending|posted|failed|queued_maintenance|all] [--guild-id ID]
   robctl sends backfill-public-ids
   robctl count status [--guild-id ID]
   robctl count set NUMBER [--guild-id ID]
+
+Run `robctl <command> --help` for details.
 EOF
 }
 
@@ -51,7 +52,7 @@ service_name() {
 cmd="${1:-}"
 if [[ -z "${cmd}" ]]; then
   usage
-  exit 1
+  exit 0
 fi
 shift || true
 

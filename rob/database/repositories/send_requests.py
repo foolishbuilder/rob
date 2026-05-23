@@ -21,6 +21,8 @@ def _build_send_request(row: Record) -> SendRequestRecord:
         status=str(row["status"]),
         created_at=row["created_at"],
         resolved_at=row["resolved_at"],
+        denial_reason=row["denial_reason"] if "denial_reason" in row else None,
+        resolved_by_user_id=int(row["resolved_by_user_id"]) if ("resolved_by_user_id" in row and row["resolved_by_user_id"] is not None) else None,
     )
 
 
@@ -104,19 +106,60 @@ class SendRequestsRepository:
             return None
         return _build_send_request(row)
 
-    async def resolve(self, request_id: int, *, status: str) -> None:
+    async def resolve(
+        self,
+        request_id: int,
+        *,
+        status: str,
+        denial_reason: str | None = None,
+        resolved_by_user_id: int | None = None,
+    ) -> None:
         async with self.database.acquire() as connection:
             await connection.execute(
                 """
                 UPDATE send_requests
                 SET
                     status = $2,
-                    resolved_at = now()
+                    resolved_at = now(),
+                    denial_reason = $3,
+                    resolved_by_user_id = $4
                 WHERE id = $1
                 """,
                 request_id,
                 status,
+                denial_reason,
+                resolved_by_user_id,
             )
+
+    async def resolve_if_pending(
+        self,
+        request_id: int,
+        *,
+        status: str,
+        denial_reason: str | None = None,
+        resolved_by_user_id: int | None = None,
+    ) -> SendRequestRecord | None:
+        async with self.database.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                UPDATE send_requests
+                SET
+                    status = $2,
+                    resolved_at = now(),
+                    denial_reason = $3,
+                    resolved_by_user_id = $4
+                WHERE id = $1
+                AND status = 'pending'
+                RETURNING *
+                """,
+                request_id,
+                status,
+                denial_reason,
+                resolved_by_user_id,
+            )
+        if row is None:
+            return None
+        return _build_send_request(row)
 
     async def delete(self, request_id: int) -> None:
         async with self.database.acquire() as connection:

@@ -10,6 +10,7 @@ from rob.database.repositories import (
     BotStateRepository,
     CountingRepository,
     GuildSettingsRepository,
+    LeaderboardsRepository,
     SendsRepository,
 )
 from rob.services.maintenance_service import MaintenanceService
@@ -36,9 +37,24 @@ def build_parser() -> argparse.ArgumentParser:
     leaderboard = subparsers.add_parser("leaderboard", help="Leaderboard operations.")
     leaderboard_subparsers = leaderboard.add_subparsers(dest="leaderboard_command", required=True)
     leaderboard_subparsers.add_parser("refresh", help="Request a leaderboard refresh from the bot.")
+    leaderboard_status = leaderboard_subparsers.add_parser("status", help="Show leaderboard status summary.")
+    leaderboard_status.add_argument("--guild-id", type=int, default=None)
+    leaderboard_preview = leaderboard_subparsers.add_parser("preview", help="Preview top leaderboard rows.")
+    leaderboard_preview.add_argument("--guild-id", type=int, default=None)
+    diagnose = leaderboard_subparsers.add_parser("diagnose", help="Diagnose leaderboard send matching.")
+    diagnose.add_argument("--guild-id", type=int, default=None)
+    repair = leaderboard_subparsers.add_parser(
+        "repair-send-dommes",
+        help="Repair sends.domme_user_id from dommes.id matches.",
+    )
+    repair.add_argument("--guild-id", type=int, default=None)
+    repair.add_argument("--dry-run", action="store_true", help="Preview changes without writing.")
 
     throne = subparsers.add_parser("throne", help="Throne send operations.")
     throne_subparsers = throne.add_subparsers(dest="throne_command", required=True)
+    throne_subparsers.add_parser("status", help="Show Throne command support status.")
+    throne_subparsers.add_parser("dommes", help="Show Throne domme helper status.")
+    throne_subparsers.add_parser("subs", help="Show Throne sub helper status.")
     throne_subparsers.add_parser(
         "invalidate-test-sends",
         help="Mark known Throne test-user sends so leaderboards can exclude them.",
@@ -46,10 +62,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     sends = subparsers.add_parser("sends", help="Send record operations.")
     sends_subparsers = sends.add_subparsers(dest="sends_command", required=True)
+    sends_list = sends_subparsers.add_parser("list", help="List recent sends.")
+    sends_list.add_argument(
+        "--status",
+        choices=["pending", "posted", "failed", "queued_maintenance", "ignored", "all"],
+        default="all",
+    )
+    sends_list.add_argument("--guild-id", type=int, default=None)
+    sends_list.add_argument("--limit", type=int, default=25)
     sends_subparsers.add_parser(
         "backfill-public-ids",
         help="Generate and store missing public send IDs.",
     )
+    sends_mark_posted = sends_subparsers.add_parser(
+        "mark-posted",
+        help="Force mark a send as posted.",
+    )
+    sends_mark_posted.add_argument("send_id", type=int)
 
     count = subparsers.add_parser("count", help="Counting operations.")
     count_subparsers = count.add_subparsers(dest="count_command", required=True)
@@ -69,6 +98,7 @@ class OperationsContext:
     bot_state: BotStateRepository
     maintenance: MaintenanceService
     sends: SendsRepository
+    leaderboards: LeaderboardsRepository
     guild_settings: GuildSettingsRepository
     counting: CountingRepository
 
@@ -85,6 +115,7 @@ async def create_context() -> OperationsContext:
         bot_state=bot_state,
         maintenance=MaintenanceService(bot_state),
         sends=SendsRepository(database),
+        leaderboards=LeaderboardsRepository(database),
         guild_settings=GuildSettingsRepository(database),
         counting=CountingRepository(database),
     )
@@ -164,6 +195,80 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
         await ctx.maintenance.request_leaderboard_refresh()
         print("leaderboard_refresh=requested")
         return
+    if args.leaderboard_command == "status":
+        guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+        summary = await ctx.leaderboards.get_summary(
+            guild_id,
+            include_test_sends=ctx.settings.throne_parse_test_sends_as_real_sends,
+            test_gifter_usernames=ctx.settings.throne_test_gifter_usernames,
+            owner_test_user_id=ctx.settings.throne_test_send_leaderboard_owner_user_id,
+        )
+        print(f"guild_id={guild_id}")
+        print(f"registered_dommes={summary.domme_count}")
+        print(f"tracked_sends={summary.send_count}")
+        print(f"tracked_total_cents={summary.total_cents}")
+        return
+    if args.leaderboard_command == "preview":
+        guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+        rows = await ctx.leaderboards.get_top_dommes(
+            guild_id,
+            limit=ctx.settings.leaderboard_limit,
+            include_test_sends=ctx.settings.throne_parse_test_sends_as_real_sends,
+            test_gifter_usernames=ctx.settings.throne_test_gifter_usernames,
+            owner_test_user_id=ctx.settings.throne_test_send_leaderboard_owner_user_id,
+        )
+        print(f"guild_id={guild_id}")
+        print("preview=top_dommes")
+        if not rows:
+            print("rows=none")
+            return
+        for index, row in enumerate(rows, 1):
+            print(
+                f"{index}. user_id={row.user_id or 0} amount_cents={row.total_cents} send_count={row.send_count}"
+            )
+        return
+    if args.leaderboard_command == "diagnose":
+        guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+        report = await ctx.leaderboards.diagnose(
+            guild_id,
+            include_test_sends=ctx.settings.throne_parse_test_sends_as_real_sends,
+            test_gifter_usernames=ctx.settings.throne_test_gifter_usernames,
+            owner_test_user_id=ctx.settings.throne_test_send_leaderboard_owner_user_id,
+            limit=ctx.settings.leaderboard_limit,
+        )
+        print("Leaderboard Diagnose")
+        print(f"Guild ID: {report.guild_id}")
+        print(f"Registered Dommes: {report.registered_dommes}")
+        print(f"Counted sends: {report.counted_sends}")
+        print(f"Excluded sends: {report.excluded_sends}")
+        print("Excluded reasons:")
+        print(f"- not posted: {report.excluded_not_posted}")
+        print(f"- private: {report.excluded_private}")
+        print(f"- test send excluded: {report.excluded_test_send}")
+        print(f"- domme_user_id missing/mismatch: {report.excluded_domme_mismatch}")
+        print(f"- guild mismatch: {report.excluded_guild_mismatch}")
+        print("Domme Rows:")
+        if not report.domme_rows:
+            print("(none)")
+        for row in report.domme_rows:
+            print(f"{row.label} total={row.total_cents} sends={row.send_count}")
+        print("Sends with no matching Domme:")
+        if not report.unmatched_sends:
+            print("(none)")
+        for send_id, domme_user_id, send_guild_id in report.unmatched_sends:
+            print(f"id={send_id} domme_user_id={domme_user_id} guild_id={send_guild_id}")
+        return
+    if args.leaderboard_command == "repair-send-dommes":
+        guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+        candidates, updated = await ctx.sends.repair_send_domme_user_ids(
+            guild_id=guild_id,
+            dry_run=bool(args.dry_run),
+        )
+        print(f"guild_id={guild_id}")
+        print(f"dry_run={bool(args.dry_run)}")
+        print(f"candidates={candidates}")
+        print(f"updated={updated}")
+        return
     raise RuntimeError(f"Unsupported leaderboard command: {args.leaderboard_command}")
 
 
@@ -200,6 +305,9 @@ async def handle_count(ctx: OperationsContext, args: argparse.Namespace) -> None
 
 
 async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> None:
+    if args.throne_command in {"status", "dommes", "subs"}:
+        print(f"{args.throne_command}=planned but not implemented in this robctl release")
+        return
     if args.throne_command == "invalidate-test-sends":
         usernames = list(ctx.settings.throne_test_gifter_usernames)
         updated = await ctx.sends.mark_known_test_sends(test_gifter_usernames=usernames)
@@ -210,8 +318,35 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
 
 
 async def handle_sends(ctx: OperationsContext, args: argparse.Namespace) -> None:
+    if args.sends_command == "list":
+        guild_id = getattr(args, "guild_id", None)
+        if guild_id is None:
+            try:
+                guild_id = await resolve_guild_id(ctx, None)
+            except RuntimeError:
+                guild_id = None
+        rows = await ctx.sends.list_sends(
+            guild_id=guild_id,
+            status=args.status,
+            limit=max(1, int(args.limit)),
+        )
+        print(f"status={args.status}")
+        print(f"guild_id={guild_id if guild_id is not None else 'all'}")
+        print(f"rows={len(rows)}")
+        for send in rows:
+            print(
+                f"id={send.id} guild_id={send.guild_id} domme_user_id={send.domme_user_id} "
+                f"sub_user_id={send.sub_user_id or 0} amount_cents={send.amount_cents} "
+                f"status={send.discord_post_status} is_private={send.is_private} is_test_send={send.is_test_send}"
+            )
+        return
     if args.sends_command == "backfill-public-ids":
         updated = await ctx.sends.backfill_public_send_ids()
+        print(f"updated={updated}")
+        return
+    if args.sends_command == "mark-posted":
+        updated = await ctx.sends.force_mark_posted(args.send_id)
+        print(f"send_id={args.send_id}")
         print(f"updated={updated}")
         return
     raise RuntimeError(f"Unsupported sends command: {args.sends_command}")

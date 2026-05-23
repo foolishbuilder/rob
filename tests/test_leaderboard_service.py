@@ -25,6 +25,8 @@ class _FakeChannel:
         self.sends: list[dict] = []
 
     async def fetch_message(self, message_id: int):
+        if message_id not in self._messages:
+            raise KeyError(message_id)
         return self._messages[message_id]
 
     async def send(self, **kwargs):
@@ -100,7 +102,10 @@ class _FakeLeaderboardsRepo:
 
     async def upsert_message(self, **kwargs):
         self.upserts.append(kwargs)
-        self.refs[(kwargs['guild_id'], kwargs['message_key'])] = SimpleNamespace(message_id=kwargs['message_id'])
+        self.refs[(kwargs['guild_id'], kwargs['message_key'])] = SimpleNamespace(
+            message_id=kwargs['message_id'],
+            channel_id=kwargs['channel_id'],
+        )
 
 
 def _service(
@@ -161,6 +166,40 @@ def test_refresh_uses_new_message_keys_for_upsert(monkeypatch: pytest.MonkeyPatc
 
     asyncio.run(service.refresh_guild(1))
 
+    keys = [u["message_key"] for u in repo.upserts]
+    assert keys == ["leaderboard", "leaderboard_stats"]
+
+
+def test_refresh_edits_existing_messages_when_refs_exist(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
+    channel = _FakeChannel()
+    existing_main = _FakeMessage(101)
+    existing_stats = _FakeMessage(102)
+    channel._messages[101] = existing_main
+    channel._messages[102] = existing_stats
+    repo = _FakeLeaderboardsRepo()
+    repo.refs[(1, "leaderboard")] = SimpleNamespace(message_id=101, channel_id=channel.id)
+    repo.refs[(1, "leaderboard_stats")] = SimpleNamespace(message_id=102, channel_id=channel.id)
+    service = _service(channel, repo=repo)
+
+    asyncio.run(service.refresh_guild(1))
+
+    assert len(channel.sends) == 0
+    assert len(existing_main.edits) == 1
+    assert len(existing_stats.edits) == 1
+
+
+def test_refresh_posts_new_when_referenced_message_missing(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
+    channel = _FakeChannel()
+    repo = _FakeLeaderboardsRepo()
+    repo.refs[(1, "leaderboard")] = SimpleNamespace(message_id=101, channel_id=channel.id)
+    repo.refs[(1, "leaderboard_stats")] = SimpleNamespace(message_id=102, channel_id=channel.id)
+    service = _service(channel, repo=repo)
+
+    asyncio.run(service.refresh_guild(1))
+
+    assert len(channel.sends) == 2
     keys = [u["message_key"] for u in repo.upserts]
     assert keys == ["leaderboard", "leaderboard_stats"]
 

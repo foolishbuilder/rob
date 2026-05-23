@@ -55,4 +55,4 @@ This patch intentionally preserves split webhook/bot services and PostgreSQL-onl
 - 2026-05-23: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()`, thumbnails, friendly currency names, and purple accent constants from `rob/ui/theme.py`; public send IDs stay out of the public announcement card.
 - 2026-05-23: NEW LEADER ALERT posting is now wired live with bot-state dedupe and test-send exclusion.
 - 2026-05-23: Leaderboard and stats cards now use explicit separator components, include registered zero-send Dommes, and show dynamic maintenance/live status on the main board.
-- 2026-05-23: `/send details` now supports stored public Rob Send IDs backed by PostgreSQL plus staff-only raw DB ID fallback.
+- 2026-05-23: Public send IDs are stored in PostgreSQL and can be backfilled via `robctl sends backfill-public-ids`; public send cards still omit IDs.

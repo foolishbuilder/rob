@@ -288,6 +288,92 @@ class SendsRepository:
             ignored=counts["ignored"],
         )
 
+    async def list_sends(
+        self,
+        *,
+        guild_id: int | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[SendRecord]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if guild_id is not None:
+            params.append(guild_id)
+            clauses.append(f"guild_id = ${len(params)}")
+        if status is not None and status != "all":
+            params.append(status)
+            clauses.append(f"discord_post_status = ${len(params)}")
+        params.append(limit)
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        async with self.database.acquire() as connection:
+            rows = await connection.fetch(
+                f"""
+                SELECT *
+                FROM sends
+                {where_sql}
+                ORDER BY received_at DESC, id DESC
+                LIMIT ${len(params)}
+                """,
+                *params,
+            )
+        return [_build_send(row) for row in rows]
+
+    async def force_mark_posted(self, send_id: int) -> int:
+        async with self.database.acquire() as connection:
+            result = await connection.execute(
+                """
+                UPDATE sends
+                SET
+                    discord_post_status = 'posted',
+                    discord_posted_at = COALESCE(discord_posted_at, now()),
+                    discord_post_error = NULL
+                WHERE id = $1
+                """,
+                send_id,
+            )
+        return int(result.rsplit(" ", 1)[-1])
+
+    async def repair_send_domme_user_ids(
+        self,
+        *,
+        guild_id: int,
+        dry_run: bool = True,
+    ) -> tuple[int, int]:
+        async with self.database.transaction() as connection:
+            candidates = await connection.fetch(
+                """
+                SELECT
+                    s.id,
+                    s.domme_user_id AS old_domme_user_id,
+                    d.discord_user_id AS new_domme_user_id
+                FROM sends s
+                JOIN dommes d
+                    ON d.id = s.domme_id
+                WHERE s.guild_id = $1
+                AND d.guild_id = s.guild_id
+                AND s.domme_user_id <> d.discord_user_id
+                ORDER BY s.id ASC
+                """,
+                guild_id,
+            )
+            updated = 0
+            if not dry_run:
+                result = await connection.execute(
+                    """
+                    UPDATE sends s
+                    SET domme_user_id = d.discord_user_id
+                    FROM dommes d
+                    WHERE s.guild_id = $1
+                    AND d.id = s.domme_id
+                    AND d.guild_id = s.guild_id
+                    AND s.domme_user_id <> d.discord_user_id
+                    """,
+                    guild_id,
+                )
+                updated = int(result.rsplit(" ", 1)[-1])
+        return len(candidates), updated
+
     async def ensure_public_send_id(self, send: SendRecord) -> SendRecord:
         if send.stored_public_send_id:
             return send

@@ -23,6 +23,7 @@ from rob.database.repositories import (
 from rob.discord.cogs.counting import CountingCog
 from rob.discord.cogs.leaderboards import LeaderboardsCog
 from rob.discord.cogs.registration import RegistrationCog
+from rob.discord.cogs.reports import ReportsCog
 from rob.discord.cogs.sends import SendsCog
 from rob.services.counting_service import CountingService
 from rob.services.leaderboard_service import LeaderboardService
@@ -84,8 +85,12 @@ class RobBot(commands.Bot):
             owner_test_user_id=self.settings.throne_test_send_leaderboard_owner_user_id,
         )
         self.counting_service = CountingService(
+            bot=self,
             counting=self.counting_repo,
             guild_settings=self.guild_settings_repo,
+            dommes=self.dommes_repo,
+            parse_test_sends_as_real_sends=self.settings.throne_parse_test_sends_as_real_sends,
+            test_gifter_usernames=self.settings.throne_test_gifter_usernames,
         )
         self.registration_service = RegistrationService(
             guild_settings=self.guild_settings_repo,
@@ -113,6 +118,7 @@ class RobBot(commands.Bot):
             guild_settings=self.guild_settings_repo,
             maintenance=self.maintenance_service,
             leaderboard_service=self.leaderboard_service,
+            counting_service=self.counting_service,
             test_gifter_usernames=self.settings.throne_test_gifter_usernames,
         )
 
@@ -120,6 +126,7 @@ class RobBot(commands.Bot):
         await self.add_cog(SendsCog(self))
         await self.add_cog(LeaderboardsCog(self))
         await self.add_cog(CountingCog(self))
+        await self.add_cog(ReportsCog(self))
 
         self.tree.interaction_check = self._global_blacklist_interaction_check
 

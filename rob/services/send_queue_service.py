@@ -7,6 +7,7 @@ import discord
 
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.sends import SendsRepository
+from rob.services.counting_service import CountingService
 from rob.services.leaderboard_service import LeaderboardService
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.send_display import build_sub_display
@@ -24,6 +25,7 @@ class SendQueueService:
         guild_settings: GuildSettingsRepository,
         maintenance: MaintenanceService,
         leaderboard_service: LeaderboardService,
+        counting_service: CountingService | None = None,
         test_gifter_usernames: tuple[str, ...] = (),
         poll_interval_seconds: float = 5.0,
     ) -> None:
@@ -32,6 +34,7 @@ class SendQueueService:
         self.guild_settings = guild_settings
         self.maintenance = maintenance
         self.leaderboard_service = leaderboard_service
+        self.counting_service = counting_service
         self.test_gifter_usernames = test_gifter_usernames
         self.poll_interval_seconds = poll_interval_seconds
         self._task: asyncio.Task[None] | None = None
@@ -71,19 +74,21 @@ class SendQueueService:
                 log.info("Released %s queued maintenance send(s).", released)
 
         pending = await self.sends.fetch_for_status("pending", limit=50)
-        refreshed_guild_ids: set[int] = set()
 
         for send in pending:
             ok = await self._post_send(send)
             if ok:
-                refreshed_guild_ids.add(send.guild_id)
+                try:
+                    await self.leaderboard_service.refresh_guild(send.guild_id)
+                except Exception:
+                    log.exception(
+                        "Leaderboard refresh failed after posted send_id=%s guild_id=%s.",
+                        send.id,
+                        send.guild_id,
+                    )
 
         if await self.maintenance.consume_leaderboard_refresh_request():
             await self.leaderboard_service.refresh_all_guilds()
-            return
-
-        for guild_id in sorted(refreshed_guild_ids):
-            await self.leaderboard_service.refresh_guild(guild_id)
 
     async def _post_send(self, send) -> bool:
         settings = await self.guild_settings.get(send.guild_id)
@@ -124,8 +129,24 @@ class SendQueueService:
             return False
 
         await self.sends.mark_posted(send.id, message_id=message.id)
-        await self.leaderboard_service.maybe_post_leader_alert(
-            send.guild_id,
-            previous_leader_user_id=previous_leader.user_id if previous_leader is not None else None,
-        )
+        if self.counting_service is not None:
+            try:
+                await self.counting_service.process_send_for_count_rescue(send)
+            except Exception:
+                log.exception(
+                    "Count rescue evaluation failed for send_id=%s guild_id=%s.",
+                    send.id,
+                    send.guild_id,
+                )
+        try:
+            await self.leaderboard_service.maybe_post_leader_alert(
+                send.guild_id,
+                previous_leader_user_id=previous_leader.user_id if previous_leader is not None else None,
+            )
+        except Exception:
+            log.exception(
+                "Leader alert failed for send_id=%s guild_id=%s after successful send post.",
+                send.id,
+                send.guild_id,
+            )
         return True

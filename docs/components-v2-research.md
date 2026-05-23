@@ -13,21 +13,26 @@
 - `Section(..., accessory=Button(...))` is valid when you need one accessory button.
 
 ### notpatdev/rob-the-bot findings
-- `notpatdev/rob-the-bot` was not available in this workspace, so it could not be inspected directly.
-- Used `legacy/single-process-bot/` as the local fallback source for tone/copy references.
-- Legacy bot copy is reusable, but its architecture is not the same as the current clean Components V2 renderer.
+- Directly inspected `/Users/patfaint/Documents/rob-the-bot-legacy`.
+- Relevant references:
+  - `bot/ui/components.py`: `action_section(text, button)` uses `Section(..., accessory=Button(...))`.
+  - `bot/event_views.py`: container-first views with section accessories and separators.
+  - `bot/event_cog.py`: `SendRequestDecisionView` and leaderboard upsert flows.
+- Old bot patterns confirm container-first layouts with button accessories were used successfully.
 
 ### Final Rob implementation decision
-- Rob keeps the card container first, then adds actions via a helper that always wraps buttons in an `ActionRow`.
-- Rob does not place raw top-level `Button` objects in `LayoutView`.
-- This keeps payloads valid and avoids the prior `Invalid Form Body` error.
+- Rob keeps container-first cards and never places raw top-level `Button` objects in `LayoutView`.
+- Two validated patterns are used:
+  - `ActionRow` for button groups (`add_card_actions(...)` helper).
+  - `Section(..., accessory=Button(...))` for compact inline action prompts.
+- `/sendrequest` Dom/me review cards currently use the validated `Section` accessory button pattern.
 
 
 ## 2026-05 legacy parity update
 - Adopted container-first card templates with action rows (no raw top-level buttons).
 - Documented fallback policy and old-Rob copy parity targets.
 
-- 2026-05-22: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()` and purple accent constants from `rob/ui/theme.py`; rank lines/footer removed.
-- 2026-05-22: Added NEW LEADER ALERT card (purple accent, separator-based sections) for leaderboard #1 changes (posting logic TODO/dedupe wired in queue path).
-- 2026-05-22: Leaderboard and stats cards now use explicit separator components; stats include Unclaimed Sends section.
-- 2026-05-22: `/send details` command + public Rob Send ID flow remains TODO for follow-up implementation; public send cards intentionally omit Rob Send ID.
+- 2026-05-23: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()` and purple accent constants from `rob/ui/theme.py`; rank lines/footer removed.
+- 2026-05-23: Added NEW LEADER ALERT card (purple accent, separator-based sections) with bot-state dedupe.
+- 2026-05-23: Leaderboard and stats cards now use explicit separator components; stats include Unclaimed Sends section.
+- 2026-05-23: `/sendrequest` DM review cards use container + section accessory buttons; helper support for container + action-row remains available where grouped buttons are preferred.

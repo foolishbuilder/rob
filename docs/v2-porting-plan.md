@@ -129,4 +129,4 @@ This document maps the legacy ROB feature inventory (`ROB_FEATURE_REPORT.md`) to
 - 2026-05-23: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()`, thumbnails, and purple accent constants from `rob/ui/theme.py`; public send IDs remain intentionally absent from the announcement card.
 - 2026-05-23: Added NEW LEADER ALERT runtime posting with bot-state dedupe and maintenance/test-send safeguards.
 - 2026-05-23: Leaderboard and stats cards now use explicit separator components, registered-Domme aggregation, and dynamic live/maintenance status on the main board.
-- 2026-05-23: `/send details` now uses stored PostgreSQL-backed public send IDs, with a `robctl sends backfill-public-ids` path for older rows.
+- 2026-05-23: Stored PostgreSQL-backed public send IDs are available for support/admin workflows, with a `robctl sends backfill-public-ids` path for older rows.

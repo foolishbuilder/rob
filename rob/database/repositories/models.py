@@ -11,6 +11,7 @@ class GuildSettings:
     leaderboard_channel_id: int | None
     send_track_channel_id: int | None
     counting_channel_id: int | None
+    report_channel_id: int | None
     domme_role_id: int | None
     sub_role_id: int | None
     mod_role_id: int | None
@@ -142,6 +143,8 @@ class SendRequestRecord:
     status: str
     created_at: datetime
     resolved_at: datetime | None
+    denial_reason: str | None = None
+    resolved_by_user_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +193,42 @@ class LeaderboardSummary:
     sub_count: int
     unclaimed_send_count: int = 0
     unclaimed_total_cents: int = 0
+
+
+@dataclass(frozen=True)
+class PersonalStatsSummary:
+    total_cents: int
+    send_count: int
+
+
+@dataclass(frozen=True)
+class LatestTrackedSend:
+    id: int
+    domme_user_id: int
+    sub_user_id: int | None
+    sub_name: str | None
+    amount_cents: int
+    currency: str
+    method: str | None
+    source: str
+    item_name: str | None
+    item_image_url: str | None
+    sent_at: datetime
+
+
+@dataclass(frozen=True)
+class LeaderboardDiagnostics:
+    guild_id: int
+    registered_dommes: int
+    counted_sends: int
+    excluded_sends: int
+    excluded_not_posted: int
+    excluded_private: int
+    excluded_test_send: int
+    excluded_domme_mismatch: int
+    excluded_guild_mismatch: int
+    domme_rows: list[LeaderboardEntry]
+    unmatched_sends: list[tuple[int, int, int]]
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from rob.ui.cards.counting import counting_updated_card
+from rob.ui.cards.counting import count_failed_card, counting_same_user_reminder_card, counting_updated_card
 from rob.ui.cards.errors import error_card
 
 if TYPE_CHECKING:
@@ -49,8 +49,31 @@ class CountingCog(commands.Cog):
                 await message.add_reaction("✅")
             except discord.HTTPException:
                 return
-        else:
+            return
+
+        if result.reason == "same_user":
             try:
-                await message.add_reaction("❌")
+                await message.delete()
             except discord.HTTPException:
-                return
+                pass
+            reminder = await message.channel.send(**counting_same_user_reminder_card().send_kwargs())
+            try:
+                await reminder.delete(delay=15)
+            except discord.HTTPException:
+                pass
+            return
+
+        if result.reason == "paused_for_rescue":
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
+            return
+
+        if result.reason == "wrong_number_reset":
+            await message.channel.send(**count_failed_card().send_kwargs())
+
+        try:
+            await message.add_reaction("❌")
+        except discord.HTTPException:
+            return

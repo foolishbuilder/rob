@@ -13,6 +13,7 @@ def _build_guild_settings(row: Record) -> GuildSettings:
         leaderboard_channel_id=row["leaderboard_channel_id"],
         send_track_channel_id=row["send_track_channel_id"],
         counting_channel_id=row["counting_channel_id"],
+        report_channel_id=row["report_channel_id"] if "report_channel_id" in row else None,
         domme_role_id=row["domme_role_id"],
         sub_role_id=row["sub_role_id"],
         mod_role_id=row["mod_role_id"],

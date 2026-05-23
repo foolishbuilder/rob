@@ -6,7 +6,7 @@ from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummar
 from rob.services.leaderboard_status import LeaderboardStatus
 from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
-from rob.ui.cards.send import send_card, send_details_card
+from rob.ui.cards.send import send_card
 from rob.ui.copy import throne_setup_steps
 from rob.ui.theme import COLOR_LEADER_ALERT, COLOR_SEND
 
@@ -97,23 +97,6 @@ def test_send_card_without_image_uses_text_display_and_no_footer():
     ]
     assert "gifter_name with no nickname claimed" in contents
     assert "-#" not in contents
-
-
-def test_send_details_card_shows_public_id_and_internal_fields_when_requested():
-    msg = send_details_card(
-        send=_send("gifter_name"),
-        domme_label="@Domme",
-        sub_display="gifter_name with no nickname claimed",
-        source_label="Throne Webhook",
-        include_internal=True,
-    )
-    container = msg.view.children[0]
-    contents = "\n".join(str(getattr(ch, "content", "")) for ch in container.children)
-
-    assert "## Send Details" in contents
-    assert "**Rob Send ID:** ROB-" in contents
-    assert "Database ID:" in contents
-    assert "Event ID:" in contents
 
 
 def test_leaderboard_main_and_stats_titles_and_separators():

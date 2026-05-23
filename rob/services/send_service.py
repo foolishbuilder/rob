@@ -101,6 +101,7 @@ class SendService:
         currency: str,
         method: str,
         note: str | None,
+        source: str | None = None,
     ) -> SendRecord | None:
         status = "queued_maintenance" if await self.maintenance.is_enabled() else "pending"
         sub_id = None
@@ -121,7 +122,7 @@ class SendService:
                 amount_cents=amount_cents,
                 currency=currency,
                 method=method,
-                source=f"manual:{method}",
+                source=source or f"manual:{method}",
                 item_name=note or f"Manual send via {method}",
                 item_image_url=None,
                 external_id=None,
