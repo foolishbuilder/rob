@@ -37,6 +37,14 @@ def build_parser() -> argparse.ArgumentParser:
     leaderboard = subparsers.add_parser("leaderboard", help="Leaderboard operations.")
     leaderboard_subparsers = leaderboard.add_subparsers(dest="leaderboard_command", required=True)
     leaderboard_subparsers.add_parser("refresh", help="Request a leaderboard refresh from the bot.")
+    leaderboard_adopt = leaderboard_subparsers.add_parser(
+        "adopt",
+        help="Adopt existing Discord leaderboard messages into DB refs.",
+    )
+    leaderboard_adopt.add_argument("--guild-id", type=int, required=True)
+    leaderboard_adopt.add_argument("--leaderboard-channel-id", type=int, required=True)
+    leaderboard_adopt.add_argument("--leaderboard-message-id", type=int, required=True)
+    leaderboard_adopt.add_argument("--stats-message-id", type=int, required=True)
     leaderboard_status = leaderboard_subparsers.add_parser("status", help="Show leaderboard status summary.")
     leaderboard_status.add_argument("--guild-id", type=int, default=None)
     leaderboard_preview = leaderboard_subparsers.add_parser("preview", help="Preview top leaderboard rows.")
@@ -195,6 +203,27 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
         await ctx.maintenance.request_leaderboard_refresh()
         print("leaderboard_refresh=requested")
         return
+    if args.leaderboard_command == "adopt":
+        await ctx.leaderboards.upsert_message(
+            guild_id=args.guild_id,
+            message_key="leaderboard",
+            leaderboard_type="leaderboard",
+            channel_id=args.leaderboard_channel_id,
+            message_id=args.leaderboard_message_id,
+        )
+        await ctx.leaderboards.upsert_message(
+            guild_id=args.guild_id,
+            message_key="leaderboard_stats",
+            leaderboard_type="leaderboard_stats",
+            channel_id=args.leaderboard_channel_id,
+            message_id=args.stats_message_id,
+        )
+        print("leaderboard_adopted=true")
+        print(f"guild_id={args.guild_id}")
+        print(f"channel_id={args.leaderboard_channel_id}")
+        print(f"leaderboard_message_id={args.leaderboard_message_id}")
+        print(f"stats_message_id={args.stats_message_id}")
+        return
     if args.leaderboard_command == "status":
         guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
         summary = await ctx.leaderboards.get_summary(
@@ -238,7 +267,7 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
         )
         print("Leaderboard Diagnose")
         print(f"Guild ID: {report.guild_id}")
-        print(f"Registered Dommes: {report.registered_dommes}")
+        print(f"Registered Dom/mes: {report.registered_dommes}")
         print(f"Counted sends: {report.counted_sends}")
         print(f"Excluded sends: {report.excluded_sends}")
         print("Excluded reasons:")
@@ -247,12 +276,12 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
         print(f"- test send excluded: {report.excluded_test_send}")
         print(f"- domme_user_id missing/mismatch: {report.excluded_domme_mismatch}")
         print(f"- guild mismatch: {report.excluded_guild_mismatch}")
-        print("Domme Rows:")
+        print("Dom/me Rows:")
         if not report.domme_rows:
             print("(none)")
         for row in report.domme_rows:
             print(f"{row.label} total={row.total_cents} sends={row.send_count}")
-        print("Sends with no matching Domme:")
+        print("Sends with no matching Dom/me:")
         if not report.unmatched_sends:
             print("(none)")
         for send_id, domme_user_id, send_guild_id in report.unmatched_sends:

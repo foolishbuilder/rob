@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary, SendRecord
 from rob.services.leaderboard_status import LeaderboardStatus
+from rob.services.send_display import build_sub_display
 from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 from rob.ui.cards.send import send_card
@@ -97,6 +98,46 @@ def test_send_card_without_image_uses_text_display_and_no_footer():
     ]
     assert "gifter_name with no nickname claimed" in contents
     assert "-#" not in contents
+
+
+def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():
+    now = datetime.now(timezone.utc)
+    send = SendRecord(
+        9,
+        1,
+        None,
+        10,
+        None,
+        42,
+        None,
+        2499,
+        "USD",
+        "paypal",
+        "send_request",
+        "Thanks",
+        None,
+        None,
+        None,
+        None,
+        False,
+        False,
+        now,
+        now,
+        "posted",
+        None,
+        None,
+        None,
+        now,
+    )
+    msg = send_card(
+        send=send,
+        domme_label="@Dom/me",
+        sub_display=build_sub_display(send),
+    )
+    contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
+    assert "**Sub:** <@42>" in contents
+    assert "**Service:** paypal" in contents
+    assert "Rob Send ID" not in contents
 
 
 def test_leaderboard_main_and_stats_titles_and_separators():

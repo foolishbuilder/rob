@@ -96,29 +96,40 @@ class SendService:
         guild_id: int,
         domme_id: int | None,
         domme_user_id: int,
-        sub_name: str | None,
         amount_cents: int,
         currency: str,
         method: str,
         note: str | None,
+        sub_name: str | None = None,
+        sub_user_id: int | None = None,
+        sub_id: int | None = None,
         source: str | None = None,
     ) -> SendRecord | None:
         status = "queued_maintenance" if await self.maintenance.is_enabled() else "pending"
-        sub_id = None
-        sub_user_id = None
-        if sub_name:
-            sub = await self.subs.get_by_name(guild_id, sub_name)
+        resolved_sub_id = sub_id
+        resolved_sub_user_id = sub_user_id
+        resolved_sub_name = sub_name
+
+        if resolved_sub_user_id is not None:
+            sub = await self.subs.get_by_user_id(guild_id, resolved_sub_user_id)
             if sub is not None:
-                sub_id = sub.id
-                sub_user_id = sub.discord_user_id
+                resolved_sub_id = sub.id
+                if not resolved_sub_name:
+                    resolved_sub_name = sub.send_name
+        elif resolved_sub_name:
+            sub = await self.subs.get_by_name(guild_id, resolved_sub_name)
+            if sub is not None:
+                resolved_sub_id = sub.id
+                resolved_sub_user_id = sub.discord_user_id
+
         return await self.sends.insert(
             NewSend(
                 guild_id=guild_id,
                 domme_id=domme_id,
                 domme_user_id=domme_user_id,
-                sub_id=sub_id,
-                sub_user_id=sub_user_id,
-                sub_name=sub_name,
+                sub_id=resolved_sub_id,
+                sub_user_id=resolved_sub_user_id,
+                sub_name=resolved_sub_name,
                 amount_cents=amount_cents,
                 currency=currency,
                 method=method,

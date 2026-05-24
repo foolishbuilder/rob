@@ -26,7 +26,7 @@ Usage:
   robctl restart [bot|webhook|all]
   robctl maintenance status|on|off
   robctl queue status|flush
-  robctl leaderboard refresh|status|preview|diagnose|repair-send-dommes [--dry-run]
+  robctl leaderboard refresh|adopt|status|preview|diagnose|repair-send-dommes [--dry-run]
   robctl throne dommes|subs|status|invalidate-test-sends
   robctl sends list [--status pending|posted|failed|queued_maintenance|all] [--guild-id ID]
   robctl sends backfill-public-ids

@@ -145,6 +145,7 @@ def test_wrong_sub_number_starts_rescue_and_valid_send_restores(monkeypatch: pyt
         domme_user_id=20,
         sub_user_id=10,
         sub_name="real",
+        source="manual:paypal",
         is_private=False,
         is_test_send=False,
     )
@@ -152,6 +153,35 @@ def test_wrong_sub_number_starts_rescue_and_valid_send_restores(monkeypatch: pyt
     assert restored is True
     assert repo.state.pending_restore is False
     assert repo.state.current_number == 7
+
+
+def test_send_request_send_can_rescue_when_sub_user_is_known(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.counting_service.discord.Member", _FakeMember)
+    repo = _FakeCountingRepo()
+    repo.state.current_number = 12
+    repo.state.last_user_id = 9
+    channel = _FakeChannel()
+    service = _service(counting_repo=repo, tick_seconds=1, rescue_seconds=60)
+    message = _FakeMessageEvent(author=_FakeMember(10, [22]), content="99", channel=channel)
+
+    start = asyncio.run(service.process_message(message))
+    assert start is not None
+    assert start.reason == "wrong_number_sub_rescue"
+    assert repo.state.pending_restore is True
+
+    send = SimpleNamespace(
+        guild_id=1,
+        domme_user_id=20,
+        sub_user_id=10,
+        sub_name=None,
+        source="send_request",
+        is_private=False,
+        is_test_send=False,
+    )
+    restored = asyncio.run(service.process_send_for_count_rescue(send))
+    assert restored is True
+    assert repo.state.pending_restore is False
+    assert repo.state.current_number == 12
 
 
 def test_test_send_does_not_rescue(monkeypatch: pytest.MonkeyPatch):

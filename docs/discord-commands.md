@@ -10,7 +10,7 @@ Rob keeps Discord commands user-facing and narrow.
 - `/leaderboard`
 - `/report`
 
-## Domme Commands
+## Dom/me Commands
 
 - `/add`
 
@@ -32,7 +32,8 @@ Maintenance mode, queue management, service restarts, database checks, and leade
 
 ## Command Behavior Notes
 
-- `/leaderboard` now responds with **ephemeral personal stats** only (Dom/me and/or Sub sections based on registration).
+- `/leaderboard` is now a **non-ephemeral** stats response and supports viewing another member with the optional `user` argument.
+- `/leaderboard` renders Dom/me and/or Sub sections based on the target member's configured server roles (`domme_role_id` and `sub_role_id`).
 - Public leaderboard channel messages are updated by the send queue and `robctl leaderboard refresh`, not by `/leaderboard`.
 - `/sendrequest` is restricted to users with the configured `sub_role_id` in `guild_settings`.
 - `/report` opens a modal for Rob issue reports and requires acknowledgement that the report is about Rob (not member moderation reports).

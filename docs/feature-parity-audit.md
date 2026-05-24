@@ -6,7 +6,7 @@
 | `/add` | manual send logging | available | available with current architecture | Complete |
 | `/sendrequest` | DM approve/ignore buttons | DM with suggested `/add` only | still DM-only suggestion (button parity pending) | Partial |
 | send request approve/ignore buttons | present | missing | missing | Missing |
-| Domme registration | setup DM flow and webhook guidance | simple registration response with URL | new DM setup flow and hidden URL in command response | Partial |
+| Dom/me registration | setup DM flow and webhook guidance | simple registration response with URL | new DM setup flow and hidden URL in command response | Partial |
 | Sub registration | available | available | available | Complete |
 | Throne webhook tracking | tracked webhook events | tracked webhook events | tracked webhook events | Complete |
 | leaderboards | top leaderboard formatting | generic summary format | top-10 Dom/me formatting and cleaner totals | Partial |
@@ -54,5 +54,5 @@ This patch intentionally preserves split webhook/bot services and PostgreSQL-onl
 
 - 2026-05-23: Public send card now uses compact Components V2 layout with real `discord.ui.Separator()`, thumbnails, friendly currency names, and purple accent constants from `rob/ui/theme.py`; public send IDs stay out of the public announcement card.
 - 2026-05-23: NEW LEADER ALERT posting is now wired live with bot-state dedupe and test-send exclusion.
-- 2026-05-23: Leaderboard and stats cards now use explicit separator components, include registered zero-send Dommes, and show dynamic maintenance/live status on the main board.
+- 2026-05-23: Leaderboard and stats cards now use explicit separator components, include registered zero-send Dom/mes, and show dynamic maintenance/live status on the main board.
 - 2026-05-23: Public send IDs are stored in PostgreSQL and can be backfilled via `robctl sends backfill-public-ids`; public send cards still omit IDs.

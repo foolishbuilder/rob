@@ -28,7 +28,7 @@ def send_request_sent_card(*, domme_mention: str) -> RenderedMessage:
 def send_request_domme_review_card(
     *,
     sub_mention: str,
-    sub_display_name: str,
+    domme_display_name: str,
     amount_cents: int,
     currency: str,
     service: str,
@@ -50,7 +50,7 @@ def send_request_domme_review_card(
         discord.ui.TextDisplay(f"## New Send Track Request from {sub_mention}"),
         discord.ui.Separator(),
         discord.ui.TextDisplay(
-            f"Hello **{sub_display_name}**,\n"
+            f"Hello **{domme_display_name}**,\n"
             f"{sub_mention} has requested for a send made to you to be tracked by Rob. Here are the submitted details:\n"
             "-# If these are correct: please use the buttons below to accept or deny the send!"
         ),
@@ -156,7 +156,7 @@ def send_request_resolution_card(*, title: str, body: str) -> RenderedMessage:
 def send_request_review_card(request: SendRequestRecord, domme_display_name: str) -> RenderedMessage:
     return send_request_domme_review_card(
         sub_mention=f"<@{request.sub_user_id}>",
-        sub_display_name=domme_display_name,
+        domme_display_name=domme_display_name,
         amount_cents=request.amount_cents,
         currency=request.currency,
         service=request.method,

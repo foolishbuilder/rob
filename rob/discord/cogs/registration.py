@@ -75,7 +75,7 @@ class YesButton(discord.ui.Button):
                 summary="Rob only stores the information needed to track and display Throne sends inside this Discord server.",
                 details=[
                     ("Collected information", "- Your Discord user ID\n- Your Throne handle and creator ID\n- Public wishlist item names\n- Public wishlist item prices\n- Public wishlist item images, when available\n- Send/purchase amounts provided by Throne webhook events\n- Item names and item images from send events\n- Sender/display names provided by Throne, when available\n- Webhook status details, such as when Rob last received a successful event"),
-                    ("How it is used", "- To post send notifications in the configured send tracking channel\n- To update Domme/Sub leaderboards\n- To prevent duplicate webhook events being counted twice\n- To help server staff troubleshoot tracking issues\n- To let you rebuild your webhook URL if it needs to be rotated"),
+                    ("How it is used", "- To post send notifications in the configured send tracking channel\n- To update Dom/me/Sub leaderboards\n- To prevent duplicate webhook events being counted twice\n- To help server staff troubleshoot tracking issues\n- To let you rebuild your webhook URL if it needs to be rotated"),
                     ("Important notes", "- Rob does not need your Throne password.\n- Rob cannot access private Throne account settings.\n- Your webhook URL should be treated like a secret.\n- If you think your webhook URL was shared accidentally, ask staff to rebuild it."),
                 ],
             )
@@ -99,7 +99,7 @@ class NotYetButton(discord.ui.Button):
 
 
 class RegistrationCog(commands.Cog):
-    register_group = app_commands.Group(name="register", description="Register as a Domme or Sub.")
+    register_group = app_commands.Group(name="register", description="Register as a Dom/me or Sub.")
 
     def __init__(self, bot: RobBot) -> None:
         self.bot = bot
@@ -124,7 +124,7 @@ class RegistrationCog(commands.Cog):
             return False
         return True
 
-    @register_group.command(name="domme", description="Register a Domme Throne profile.")
+    @register_group.command(name="domme", description="Register a Dom/me Throne profile.")
     @app_commands.describe(throne="Your Throne profile URL or username.")
     async def register_domme(self, interaction: discord.Interaction, throne: str) -> None:
         if interaction.guild is None or interaction.user is None:
@@ -142,7 +142,7 @@ class RegistrationCog(commands.Cog):
         try:
             result = await self.bot.registration_service.register_domme(guild_id=interaction.guild.id, discord_user_id=interaction.user.id, throne_input=throne)
         except ValueError as exc:
-            await interaction.followup.send(**error_card("Domme registration could not be completed.", str(exc)).send_kwargs(), ephemeral=True)
+            await interaction.followup.send(**error_card("Dom/me registration could not be completed.", str(exc)).send_kwargs(), ephemeral=True)
             return
 
         if not result.webhook_url:

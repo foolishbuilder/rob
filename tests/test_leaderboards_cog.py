@@ -16,35 +16,28 @@ class _FakeResponse:
         self.messages.append(kwargs)
 
 
-class _FakeInteraction:
-    def __init__(self, *, user_id: int = 10):
-        self.guild = SimpleNamespace(id=1, get_member=self._get_member)
-        self.user = SimpleNamespace(id=user_id, display_name="Pat", mention=f"<@{user_id}>")
-        self.response = _FakeResponse()
-        self._members = {
-            10: SimpleNamespace(display_name="Pat"),
-            20: SimpleNamespace(display_name="Alex"),
-            30: SimpleNamespace(display_name="Sam"),
-        }
+class _FakeMember:
+    def __init__(self, *, user_id: int, display_name: str, role_ids: list[int]):
+        self.id = user_id
+        self.display_name = display_name
+        self.mention = f"<@{user_id}>"
+        self.roles = [SimpleNamespace(id=role_id) for role_id in role_ids]
 
-    def _get_member(self, user_id: int):
+
+class _FakeGuild:
+    def __init__(self, members: dict[int, _FakeMember]):
+        self.id = 1
+        self._members = members
+
+    def get_member(self, user_id: int):
         return self._members.get(user_id)
 
 
-class _FakeDommesRepo:
-    def __init__(self, present: bool):
-        self.present = present
-
-    async def get_by_user_id(self, _guild_id: int, _user_id: int):
-        return SimpleNamespace(id=1) if self.present else None
-
-
-class _FakeSubsRepo:
-    def __init__(self, present: bool):
-        self.present = present
-
-    async def get_by_user_id(self, _guild_id: int, _user_id: int):
-        return SimpleNamespace(id=2) if self.present else None
+class _FakeInteraction:
+    def __init__(self, *, user: _FakeMember, guild: _FakeGuild):
+        self.guild = guild
+        self.user = user
+        self.response = _FakeResponse()
 
 
 class _FakeLeaderboardsRepo:
@@ -97,48 +90,74 @@ class _FakeLeaderboardsRepo:
 
 
 class _FakeBot:
-    def __init__(self, *, domme_present: bool, sub_present: bool):
+    def __init__(self, *, domme_role_id: int | None, sub_role_id: int | None):
         self.settings = SimpleNamespace(
             throne_parse_test_sends_as_real_sends=False,
             throne_test_gifter_usernames=("marie_123",),
             throne_test_send_leaderboard_owner_user_id=None,
         )
-        self.dommes_repo = _FakeDommesRepo(domme_present)
-        self.subs_repo = _FakeSubsRepo(sub_present)
+        self.guild_settings_repo = SimpleNamespace(
+            get=self._get_settings,
+        )
         self.leaderboards_repo = _FakeLeaderboardsRepo()
+        self._domme_role_id = domme_role_id
+        self._sub_role_id = sub_role_id
+
+    async def _get_settings(self, _guild_id: int):
+        return SimpleNamespace(
+            domme_role_id=self._domme_role_id,
+            sub_role_id=self._sub_role_id,
+        )
 
 
-def test_leaderboard_is_ephemeral_stats_only_for_registered_domme_and_sub():
-    interaction = _FakeInteraction(user_id=10)
-    cog = LeaderboardsCog(_FakeBot(domme_present=True, sub_present=True))
-
-    asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction))
-
-    assert len(interaction.response.messages) == 1
-    payload = interaction.response.messages[0]
-    assert payload["ephemeral"] is True
+def _message_text(payload: dict) -> str:
     view = payload["view"]
-    text = "\n".join(
+    return "\n".join(
         str(getattr(item, "content", ""))
         for container in view.children
         for item in getattr(container, "children", [])
     )
+
+
+def test_leaderboard_is_not_ephemeral_for_member_with_both_roles():
+    viewer = _FakeMember(user_id=10, display_name="Pat", role_ids=[11, 22])
+    guild = _FakeGuild({10: viewer, 20: _FakeMember(user_id=20, display_name="Alex", role_ids=[22]), 30: _FakeMember(user_id=30, display_name="Sam", role_ids=[11])})
+    interaction = _FakeInteraction(user=viewer, guild=guild)
+    cog = LeaderboardsCog(_FakeBot(domme_role_id=11, sub_role_id=22))
+
+    asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction, user=None))
+
+    payload = interaction.response.messages[0]
+    assert payload["ephemeral"] is False
+    text = _message_text(payload)
     assert "Send Stats | Dom/me" in text
     assert "Send Stats | Sub" in text
     assert "👑 #1" in text
 
 
-def test_leaderboard_unregistered_user_gets_registration_help():
-    interaction = _FakeInteraction(user_id=999)
-    cog = LeaderboardsCog(_FakeBot(domme_present=False, sub_present=False))
+def test_leaderboard_can_show_another_members_role_based_stats():
+    viewer = _FakeMember(user_id=99, display_name="Viewer", role_ids=[])
+    target = _FakeMember(user_id=20, display_name="Alex", role_ids=[22])
+    guild = _FakeGuild({99: viewer, 20: target, 30: _FakeMember(user_id=30, display_name="Sam", role_ids=[11])})
+    interaction = _FakeInteraction(user=viewer, guild=guild)
+    cog = LeaderboardsCog(_FakeBot(domme_role_id=11, sub_role_id=22))
 
-    asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction))
+    asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction, user=target))
+
+    text = _message_text(interaction.response.messages[0])
+    assert "Alex's Send Stats | Sub" in text
+    assert "Send Stats | Dom/me" not in text
+
+
+def test_leaderboard_member_without_roles_gets_role_guidance():
+    viewer = _FakeMember(user_id=999, display_name="NoRoles", role_ids=[])
+    guild = _FakeGuild({999: viewer})
+    interaction = _FakeInteraction(user=viewer, guild=guild)
+    cog = LeaderboardsCog(_FakeBot(domme_role_id=11, sub_role_id=22))
+
+    asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction, user=None))
 
     payload = interaction.response.messages[0]
-    assert payload["ephemeral"] is True
-    text = "\n".join(
-        str(getattr(item, "content", ""))
-        for item in payload["view"].children[0].children
-    )
-    assert "/register domme" in text
-    assert "/register sub" in text
+    assert payload["ephemeral"] is False
+    text = _message_text(payload)
+    assert "could not find Dom/me or Sub roles" in text

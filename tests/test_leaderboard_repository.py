@@ -135,3 +135,31 @@ def test_message_upserts_use_singular_leaderboard_message_table():
     assert "INSERT INTO leaderboard_message" in query
     assert "leaderboard_messages" not in query
     assert params == (1, "leaderboard", "dommes", 123, 456)
+
+
+def test_sub_stats_query_counts_by_sub_user_id_without_source_filter():
+    connection = _FakeConnection(
+        fetchrow_row={
+            "total_cents": 3300,
+            "send_count": 2,
+        }
+    )
+    repo = LeaderboardsRepository(_FakeDatabase(connection))
+
+    summary = asyncio.run(
+        repo.get_sub_stats(
+            1,
+            sub_user_id=20,
+            include_test_sends=False,
+            test_gifter_usernames=("marie_123",),
+            owner_test_user_id=None,
+        )
+    )
+
+    query, params = connection.fetchrow_calls[0]
+    assert "FROM valid_sends" in query
+    assert "WHERE sub_user_id = $5" in query
+    assert "source =" not in query
+    assert params == (1, False, ["marie_123"], None, 20)
+    assert summary.total_cents == 3300
+    assert summary.send_count == 2

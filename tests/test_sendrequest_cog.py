@@ -231,6 +231,12 @@ def test_sendrequest_sends_ephemeral_confirmation_and_domme_dm(monkeypatch: pyte
         if type(child).__name__ == "Section"
     ]
     assert any(isinstance(accessory, discord.ui.Button) for accessory in section_accessories)
+    dm_text = "\n".join(
+        str(getattr(child, "content", ""))
+        for child in dm_view.children[0].children
+    )
+    assert "Hello **DommeUser**" in dm_text
+    assert "Hello **SubUser**" not in dm_text
 
 
 def test_sendrequest_buttons_only_target_domme_can_act(monkeypatch: pytest.MonkeyPatch):

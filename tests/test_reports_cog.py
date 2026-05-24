@@ -53,6 +53,7 @@ def test_report_command_opens_modal():
     asyncio.run(ReportsCog.report.callback(cog, interaction, screenshot=None))
 
     assert interaction.response.modal is not None
+    assert len(interaction.response.modal.children) == 2
 
 
 def test_report_requires_yes_acknowledgement():

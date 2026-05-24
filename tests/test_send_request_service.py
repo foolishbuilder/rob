@@ -47,8 +47,12 @@ class _FakeSendRequestsRepo:
 
 
 class _FakeSendService:
+    def __init__(self):
+        self.calls: list[dict] = []
+
     async def record_manual_send(self, **kwargs):
-        return SendRecord(1, kwargs['guild_id'], kwargs.get('domme_id'), kwargs['domme_user_id'], None, None, None, kwargs['amount_cents'], kwargs['currency'], kwargs['method'], 'manual', kwargs['note'], None, None, None, None, False, False, datetime.now(timezone.utc), datetime.now(timezone.utc), 'pending', None, None, None, datetime.now(timezone.utc))
+        self.calls.append(kwargs)
+        return SendRecord(1, kwargs['guild_id'], kwargs.get('domme_id'), kwargs['domme_user_id'], kwargs.get('sub_id'), kwargs.get('sub_user_id'), kwargs.get('sub_name'), kwargs['amount_cents'], kwargs['currency'], kwargs['method'], 'manual', kwargs['note'], None, None, None, None, False, False, datetime.now(timezone.utc), datetime.now(timezone.utc), 'pending', None, None, None, datetime.now(timezone.utc))
 
 
 def _request() -> SendRequestRecord:
@@ -65,13 +69,15 @@ def test_sendrequest_rate_limit_works():
 
 def test_sendrequest_approve_inserts_send_and_resolves():
     repo = _FakeSendRequestsRepo(_request())
-    svc = SendRequestService(send_requests=repo, send_service=_FakeSendService())
+    send_service = _FakeSendService()
+    svc = SendRequestService(send_requests=repo, send_service=send_service)
     out = asyncio.run(
         svc.approve(request_id=11, guild_id=1, domme_id=7, acted_by_user_id=3)
     )
     assert out.ok is True
     assert out.send is not None
     assert repo.resolved == ['approved']
+    assert send_service.calls[0]["sub_user_id"] == 2
 
 
 def test_sendrequest_deny_resolves_with_reason():

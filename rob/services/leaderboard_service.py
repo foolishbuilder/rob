@@ -80,7 +80,7 @@ class LeaderboardService:
             owner_test_user_id=self.owner_test_user_id,
         )
         log.info(
-            "Registered Dommes loaded=%s guild_id=%s",
+            "Registered Dom/mes loaded=%s guild_id=%s",
             summary.domme_count,
             guild_id,
         )

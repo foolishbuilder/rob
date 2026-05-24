@@ -74,7 +74,7 @@ def leaderboard_stats_card(
     stats_text = (
         f"-# Leaderboard last updated: <t:{now}:R> / <t:{now}:f>\n\n"
         f"-# Leaderboard Leader:\n**{entries[0].label if entries else 'Nobody yet'} - {format_money_from_cents(entries[0].total_cents if entries else 0)}**\n\n"
-        f"-# Total Dommes on Leaderboard:\n**{summary.domme_count}**\n\n"
+        f"-# Total Dom/mes on Leaderboard:\n**{summary.domme_count}**\n\n"
         f"-# Total Sends Tracked:\n**{summary.send_count}**\n\n"
         f"-# Total Amount Tracked:\n**{format_money_from_cents(summary.total_cents)}**\n\n"
         f"-# Unclaimed Sends:\n**{summary.unclaimed_send_count} sends / {format_money_from_cents(summary.unclaimed_total_cents)}**"

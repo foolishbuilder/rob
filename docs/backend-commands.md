@@ -20,6 +20,7 @@ scripts/robctl queue status
 scripts/robctl queue flush
 
 scripts/robctl leaderboard refresh
+scripts/robctl leaderboard adopt --guild-id 123 --leaderboard-channel-id 456 --leaderboard-message-id 789 --stats-message-id 790
 scripts/robctl leaderboard status --guild-id 123
 scripts/robctl leaderboard preview --guild-id 123
 scripts/robctl leaderboard diagnose --guild-id 123
@@ -40,7 +41,22 @@ scripts/robctl count set 123
 
 ## Notes
 
+- Example bash aliases/functions for daily ops:
+
+```bash
+alias robctl='scripts/robctl'
+alias rob-lb-refresh='scripts/robctl leaderboard refresh'
+alias rob-lb-status='scripts/robctl leaderboard status'
+alias rob-maint-on='scripts/robctl maintenance on'
+alias rob-maint-off='scripts/robctl maintenance off'
+alias rob-queue='scripts/robctl queue status'
+alias rob-queue-flush='scripts/robctl queue flush'
+alias rob-sends='scripts/robctl sends list --status all --guild-id 123 --limit 25'
+alias rob-sends-backfill='scripts/robctl sends backfill-public-ids'
+```
+
 - `maintenance on/off`, `queue status`, `queue flush`, `leaderboard refresh`, and `count` commands talk directly to PostgreSQL through `scripts.ops`.
+- `leaderboard adopt` lets you attach existing Discord message IDs to `leaderboard_message` refs (`leaderboard` + `leaderboard_stats`) so refresh/edit paths can resume without reposting.
 - `maintenance on` now requests a leaderboard refresh automatically so the main leaderboard status switches to `🟠 Paused (Maintenance)` on the next bot refresh cycle.
 - `maintenance off` now clears maintenance mode, releases queued maintenance sends back to `pending`, and requests a leaderboard refresh so the main leaderboard can return to `🟢 Live`.
 - `throne invalidate-test-sends` marks previously recorded sends from usernames in `THRONE_TEST_GIFTER_USERNAMES` as `is_test_send=true` so they stop affecting leaderboard totals when test parsing is disabled again.

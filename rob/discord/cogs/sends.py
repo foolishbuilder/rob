@@ -295,7 +295,7 @@ class SendsCog(commands.Cog):
         )
         if domme is None:
             await interaction.response.send_message(
-                **error_card("Only registered Dommes can use `/add`.").send_kwargs(),
+                **error_card("Only registered Dom/mes can use `/add`.").send_kwargs(),
                 ephemeral=True,
             )
             return
@@ -413,7 +413,7 @@ class SendsCog(commands.Cog):
             deny_button = _DenySendRequestButton(bot=self.bot, request_id=request_record.id)
             domme_msg = send_request_domme_review_card(
                 sub_mention=interaction.user.mention,
-                sub_display_name=interaction.user.display_name,
+                domme_display_name=domme.display_name,
                 amount_cents=request_record.amount_cents,
                 currency=request_record.currency,
                 service=request_record.method,

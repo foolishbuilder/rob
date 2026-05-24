@@ -84,7 +84,7 @@ class RegistrationService:
             creator_info.throne_handle,
         )
         if existing_by_handle is not None and existing_by_handle.discord_user_id != discord_user_id:
-            raise ValueError("That Throne account is already linked to another Domme.")
+            raise ValueError("That Throne account is already linked to another Dom/me.")
         existing_by_creator_id = await self.throne_creators.get_by_creator_id(
             creator_info.creator_id
         )
@@ -93,7 +93,7 @@ class RegistrationService:
                 existing_creator.guild_id == guild_id
                 and existing_creator.discord_user_id != discord_user_id
             ):
-                raise ValueError("That Throne creator is already linked to another Domme.")
+                raise ValueError("That Throne creator is already linked to another Dom/me.")
 
         domme = await self.dommes.upsert(
             guild_id=guild_id,

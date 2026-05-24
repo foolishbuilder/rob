@@ -75,11 +75,11 @@ class SendRequestService:
             guild_id=guild_id,
             domme_id=domme_id,
             domme_user_id=request.domme_user_id,
-            sub_name=None,
             amount_cents=request.amount_cents,
             currency=request.currency,
             method=request.method,
             note=request.note,
+            sub_user_id=request.sub_user_id,
             source="send_request",
         )
         return SendRequestDecision(

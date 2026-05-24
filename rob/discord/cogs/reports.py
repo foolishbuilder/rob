@@ -41,15 +41,9 @@ class _ReportModal(discord.ui.Modal, title="Report an issue with Rob"):
         )
         self.add_item(self.issue)
         self.add_item(self.acknowledgement)
-        self.file_upload: Optional[discord.ui.FileUpload] = None
-        if hasattr(discord.ui, "FileUpload"):
-            self.file_upload = discord.ui.FileUpload(
-                custom_id="report_screenshot",
-                required=False,
-                min_values=0,
-                max_values=1,
-            )
-            self.add_item(self.file_upload)
+        # Discord currently rejects FileUpload inside modal components in this deployment path.
+        # Use the slash-command attachment option as the supported screenshot fallback.
+        self.file_upload = None
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         attachment: Optional[discord.Attachment] = self.fallback_attachment
