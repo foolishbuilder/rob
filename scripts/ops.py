@@ -281,10 +281,22 @@ def parse_user_ref(value: str) -> int | None:
     return None
 
 
+def print_header(title: str) -> None:
+    print(f"Rob Control | {title}")
+
+
+def print_field(label: str, value: object) -> None:
+    print(f"- {label}: {value}")
+
+
 async def handle_status(ctx: OperationsContext) -> None:
     healthy = await ctx.database.health_check()
     maintenance = await ctx.maintenance.get_state()
     queue = await ctx.sends.count_statuses()
+    print_header("Status")
+    print_field("Database", "ok" if healthy else "failed")
+    print_field("Maintenance", "on" if maintenance.enabled else "off")
+    print_field("Queue", f"pending={queue.pending}, queued_maintenance={queue.queued_maintenance}, posted={queue.posted}, failed={queue.failed}, ignored={queue.ignored}")
     print(f"database_ok={healthy}")
     print(f"maintenance_mode={'on' if maintenance.enabled else 'off'}")
     print(f"maintenance_reason={maintenance.reason or ''}")
@@ -301,11 +313,17 @@ async def handle_status(ctx: OperationsContext) -> None:
 async def handle_maintenance(ctx: OperationsContext, args: argparse.Namespace) -> None:
     if args.maintenance_command == "status":
         state = await ctx.maintenance.get_state()
+        print_header("Maintenance")
+        print_field("Mode", "on" if state.enabled else "off")
+        print_field("Reason", state.reason or "(none)")
         print(f"maintenance_mode={'on' if state.enabled else 'off'}")
         print(f"maintenance_reason={state.reason or ''}")
         return
     if args.maintenance_command == "on":
         await ctx.maintenance.enable(reason=args.reason or "")
+        print_header("Maintenance")
+        print_field("Mode", "on")
+        print_field("Leaderboard Refresh", "requested")
         print("maintenance_mode=on")
         if args.reason:
             print(f"maintenance_reason={args.reason}")
@@ -314,6 +332,10 @@ async def handle_maintenance(ctx: OperationsContext, args: argparse.Namespace) -
     if args.maintenance_command == "off":
         await ctx.maintenance.disable()
         released = await ctx.sends.release_queued_maintenance()
+        print_header("Maintenance")
+        print_field("Mode", "off")
+        print_field("Released", released)
+        print_field("Leaderboard Refresh", "requested")
         print("maintenance_mode=off")
         print(f"released={released}")
         print("leaderboard_refresh=requested")
@@ -324,6 +346,12 @@ async def handle_maintenance(ctx: OperationsContext, args: argparse.Namespace) -
 async def handle_queue(ctx: OperationsContext, args: argparse.Namespace) -> None:
     if args.queue_command == "status":
         queue = await ctx.sends.count_statuses()
+        print_header("Queue")
+        print_field("Pending", queue.pending)
+        print_field("Queued Maintenance", queue.queued_maintenance)
+        print_field("Posted", queue.posted)
+        print_field("Failed", queue.failed)
+        print_field("Ignored", queue.ignored)
         print(f"pending={queue.pending}")
         print(f"queued_maintenance={queue.queued_maintenance}")
         print(f"posted={queue.posted}")
@@ -334,6 +362,8 @@ async def handle_queue(ctx: OperationsContext, args: argparse.Namespace) -> None
         if await ctx.maintenance.is_enabled():
             raise RuntimeError("Maintenance mode is still on. Disable it before flushing the queue.")
         released = await ctx.sends.release_queued_maintenance()
+        print_header("Queue Flush")
+        print_field("Released", released)
         print(f"released={released}")
         return
     raise RuntimeError(f"Unsupported queue command: {args.queue_command}")
@@ -341,10 +371,15 @@ async def handle_queue(ctx: OperationsContext, args: argparse.Namespace) -> None
 
 async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -> None:
     if args.leaderboard_command == "refresh":
+        print_header("Leaderboard Refresh")
+        print_field("Status", "requested")
         await ctx.maintenance.request_leaderboard_refresh()
         print("leaderboard_refresh=requested")
         return
     if args.leaderboard_command == "adopt":
+        print_header("Leaderboard Adopt")
+        print_field("Guild ID", args.guild_id)
+        print_field("Channel ID", args.leaderboard_channel_id)
         await ctx.leaderboards.upsert_message(
             guild_id=args.guild_id,
             message_key="leaderboard",
@@ -373,6 +408,11 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
             test_gifter_usernames=ctx.settings.throne_test_gifter_usernames,
             owner_test_user_id=ctx.settings.throne_test_send_leaderboard_owner_user_id,
         )
+        print_header("Leaderboard Status")
+        print_field("Guild ID", guild_id)
+        print_field("Registered Dom/mes", summary.domme_count)
+        print_field("Tracked Sends", summary.send_count)
+        print_field("Tracked Total Cents", summary.total_cents)
         print(f"guild_id={guild_id}")
         print(f"registered_dommes={summary.domme_count}")
         print(f"tracked_sends={summary.send_count}")
@@ -387,6 +427,9 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
             test_gifter_usernames=ctx.settings.throne_test_gifter_usernames,
             owner_test_user_id=ctx.settings.throne_test_send_leaderboard_owner_user_id,
         )
+        print_header("Leaderboard Preview")
+        print_field("Guild ID", guild_id)
+        print_field("Rows", len(rows))
         print(f"guild_id={guild_id}")
         print("preview=top_dommes")
         if not rows:
@@ -447,9 +490,17 @@ async def handle_count(ctx: OperationsContext, args: argparse.Namespace) -> None
     if args.count_command == "status":
         state = await ctx.counting.get(guild_id)
         if state is None:
+            print_header("Count Status")
+            print_field("Guild ID", guild_id)
+            print_field("State", "missing")
             print(f"guild_id={guild_id}")
             print("counting_state=missing")
             return
+        print_header("Count Status")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", state.is_enabled)
+        print_field("Channel ID", state.channel_id or 0)
+        print_field("Current Number", state.current_number)
         print(f"guild_id={guild_id}")
         print(f"enabled={state.is_enabled}")
         print(f"channel_id={state.channel_id or 0}")
@@ -468,6 +519,9 @@ async def handle_count(ctx: OperationsContext, args: argparse.Namespace) -> None
             is_enabled=is_enabled,
             pending_restore=False,
         )
+        print_header("Count Set")
+        print_field("Guild ID", guild_id)
+        print_field("Current Number", max(0, int(args.number)))
         print(f"guild_id={guild_id}")
         print(f"current_number={max(0, int(args.number))}")
         return
@@ -476,6 +530,9 @@ async def handle_count(ctx: OperationsContext, args: argparse.Namespace) -> None
 
 async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> None:
     if args.throne_command == "refresh":
+        print_header("Throne Refresh")
+        print_field("Tracking Mode", "webhook_only")
+        print_field("Legacy Polling", "disabled")
         print("tracking_mode=webhook_only")
         print("legacy_polling=disabled")
         print("action=Use Throne webhook integrations and run a test webhook.")
@@ -487,10 +544,19 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
         if handle:
             creator = await ctx.throne_creators.get_by_handle(guild_id, handle)
             if creator is None:
+                print_header("Throne Status")
+                print_field("Guild ID", guild_id)
+                print_field("Handle", f"@{handle}")
+                print_field("Found", "false")
                 print(f"guild_id={guild_id}")
                 print(f"handle=@{handle}")
                 print("found=false")
                 return
+            print_header("Throne Status")
+            print_field("Guild ID", guild_id)
+            print_field("Handle", f"@{creator.throne_handle}")
+            print_field("Found", "true")
+            print_field("Creator ID", creator.throne_creator_id)
             print(f"guild_id={guild_id}")
             print(f"handle=@{creator.throne_handle}")
             print("found=true")
@@ -504,6 +570,10 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
 
         creators = await ctx.throne_creators.list_for_guild(guild_id)
         setup_verified = sum(1 for row in creators if row.setup_verified_at is not None)
+        print_header("Throne Status")
+        print_field("Guild ID", guild_id)
+        print_field("Registered Creators", len(creators))
+        print_field("Setup Verified", setup_verified)
         print(f"guild_id={guild_id}")
         print(f"registered_creators={len(creators)}")
         print(f"setup_verified={setup_verified}")
@@ -512,6 +582,9 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
     if args.throne_command in {"dommes", "list"}:
         guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
         creators = await ctx.throne_creators.list_for_guild(guild_id)
+        print_header("Throne Dom/mes")
+        print_field("Guild ID", guild_id)
+        print_field("Rows", len(creators))
         print(f"guild_id={guild_id}")
         print(f"rows={len(creators)}")
         for row in creators:
@@ -529,12 +602,21 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             raise RuntimeError("Could not parse user ref. Use a mention like <@123> or raw Discord user ID.")
         creator = await ctx.throne_creators.get_by_user_id(guild_id, user_id)
         if creator is None:
+            print_header("Throne Search")
+            print_field("Guild ID", guild_id)
+            print_field("User ID", user_id)
+            print_field("Found", "false")
             print(f"guild_id={guild_id}")
             print(f"user_id={user_id}")
             print("found=false")
             return
         latest_sends = await ctx.sends.list_sends_for_domme(guild_id, user_id, limit=1)
         latest = latest_sends[0] if latest_sends else None
+        print_header("Throne Search")
+        print_field("Guild ID", guild_id)
+        print_field("User ID", user_id)
+        print_field("Found", "true")
+        print_field("Creator ID", creator.throne_creator_id)
         print(f"guild_id={guild_id}")
         print(f"user_id={user_id}")
         print("found=true")
@@ -563,6 +645,10 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             raise RuntimeError("Could not parse user ref. Use a mention like <@123> or raw Discord user ID.")
         creator = await ctx.throne_creators.get_by_user_id(guild_id, user_id)
         if creator is None:
+            print_header("Throne Webhook Refresh")
+            print_field("Guild ID", guild_id)
+            print_field("User ID", user_id)
+            print_field("Found", "false")
             print(f"guild_id={guild_id}")
             print(f"user_id={user_id}")
             print("found=false")
@@ -579,6 +665,10 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             webhook_secret=new_secret,
             webhook_secret_hash=hash_webhook_secret(new_secret),
         )
+        print_header("Throne Webhook Refresh")
+        print_field("Guild ID", guild_id)
+        print_field("User ID", user_id)
+        print_field("Rotated", "true")
         print(f"guild_id={guild_id}")
         print(f"user_id={user_id}")
         print("found=true")
@@ -611,8 +701,13 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             source="manual:robctl_throne_addsend",
         )
         if send is None:
+            print_header("Throne Add Send")
+            print_field("Recorded", "false")
             print("recorded=false")
             return
+        print_header("Throne Add Send")
+        print_field("Recorded", "true")
+        print_field("Public Send ID", send.public_send_id)
         print("recorded=true")
         print(f"send_id={send.id}")
         print(f"public_send_id={send.public_send_id}")
@@ -632,6 +727,10 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             discord_user_id=user_id,
             send_name=cleaned_name,
         )
+        print_header("Throne Add Sub")
+        print_field("Guild ID", guild_id)
+        print_field("User ID", sub.discord_user_id)
+        print_field("Send Name", sub.send_name)
         print(f"guild_id={guild_id}")
         print(f"user_id={sub.discord_user_id}")
         print(f"sub_id={sub.id}")
@@ -648,6 +747,10 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
             discord_user_id=user_id,
             throne_input=str(args.throne_input),
         )
+        print_header("Throne Add Dom/me")
+        print_field("Guild ID", guild_id)
+        print_field("User ID", user_id)
+        print_field("Creator ID", result.creator.throne_creator_id)
         print(f"guild_id={guild_id}")
         print(f"user_id={user_id}")
         print(f"domme_id={result.domme.id}")
@@ -660,6 +763,9 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
     if args.throne_command == "subs":
         guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
         subs = await ctx.subs.list_for_guild(guild_id)
+        print_header("Throne Subs")
+        print_field("Guild ID", guild_id)
+        print_field("Rows", len(subs))
         print(f"guild_id={guild_id}")
         print(f"rows={len(subs)}")
         for row in subs:
@@ -671,6 +777,9 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
     if args.throne_command == "invalidate-test-sends":
         usernames = list(ctx.settings.throne_test_gifter_usernames)
         updated = await ctx.sends.mark_known_test_sends(test_gifter_usernames=usernames)
+        print_header("Invalidate Test Sends")
+        print_field("Updated", updated)
+        print_field("Usernames", ",".join(usernames))
         print(f"updated={updated}")
         print(f"usernames={','.join(usernames)}")
         return
@@ -685,16 +794,25 @@ async def handle_inactivity(ctx: OperationsContext, args: argparse.Namespace) ->
             key,
             default=ctx.settings.inactivity_enabled_default,
         )
+        print_header("Inactivity Status")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", "true" if enabled else "false")
         print(f"guild_id={guild_id}")
         print(f"enabled={'true' if enabled else 'false'}")
         return
     if args.inactivity_command == "on":
         await ctx.bot_state.set_value(key, "true")
+        print_header("Inactivity")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", "true")
         print(f"guild_id={guild_id}")
         print("enabled=true")
         return
     if args.inactivity_command == "off":
         await ctx.bot_state.set_value(key, "false")
+        print_header("Inactivity")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", "false")
         print(f"guild_id={guild_id}")
         print("enabled=false")
         return
@@ -741,6 +859,10 @@ async def handle_sends(ctx: OperationsContext, args: argparse.Namespace) -> None
             status=args.status,
             limit=max(1, int(args.limit)),
         )
+        print_header("Sends List")
+        print_field("Status", args.status)
+        print_field("Guild ID", guild_id if guild_id is not None else "all")
+        print_field("Rows", len(rows))
         print(f"status={args.status}")
         print(f"guild_id={guild_id if guild_id is not None else 'all'}")
         print(f"rows={len(rows)}")
@@ -753,10 +875,15 @@ async def handle_sends(ctx: OperationsContext, args: argparse.Namespace) -> None
         return
     if args.sends_command == "backfill-public-ids":
         updated = await ctx.sends.backfill_public_send_ids()
+        print_header("Backfill Public Send IDs")
+        print_field("Updated", updated)
         print(f"updated={updated}")
         return
     if args.sends_command == "mark-posted":
         updated = await ctx.sends.force_mark_posted(args.send_id)
+        print_header("Mark Send Posted")
+        print_field("Send ID", args.send_id)
+        print_field("Updated", updated)
         print(f"send_id={args.send_id}")
         print(f"updated={updated}")
         return

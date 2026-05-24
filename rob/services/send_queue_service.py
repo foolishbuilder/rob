@@ -39,6 +39,7 @@ class SendQueueService:
         self.poll_interval_seconds = poll_interval_seconds
         self._task: asyncio.Task[None] | None = None
         self._stopping = False
+        self._startup_leaderboard_refresh_done = False
 
     async def start(self) -> None:
         if self._task is not None:
@@ -58,6 +59,7 @@ class SendQueueService:
 
     async def _run(self) -> None:
         await self.bot.wait_until_ready()
+        await self._refresh_leaderboards_on_startup()
         while not self._stopping:
             try:
                 await self.process_cycle()
@@ -66,6 +68,16 @@ class SendQueueService:
             except Exception:
                 log.exception("Send queue cycle failed.")
             await asyncio.sleep(self.poll_interval_seconds)
+
+    async def _refresh_leaderboards_on_startup(self) -> None:
+        if self._startup_leaderboard_refresh_done:
+            return
+        self._startup_leaderboard_refresh_done = True
+        try:
+            log.info("Refreshing all leaderboard messages on bot startup.")
+            await self.leaderboard_service.refresh_all_guilds()
+        except Exception:
+            log.exception("Startup leaderboard refresh failed.")
 
     async def process_cycle(self) -> None:
         if not await self.maintenance.is_enabled():

@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import discord
+
 from rob.discord.cogs.reports import ReportsCog
 
 
@@ -50,10 +52,16 @@ def test_report_command_opens_modal():
     cog = ReportsCog(bot)
     interaction = _FakeInteraction()
 
-    asyncio.run(ReportsCog.report.callback(cog, interaction, screenshot=None))
+    asyncio.run(ReportsCog.report.callback(cog, interaction))
 
     assert interaction.response.modal is not None
-    assert len(interaction.response.modal.children) == 2
+    assert len(interaction.response.modal.children) == 3
+    assert any(type(child).__name__ == "Label" for child in interaction.response.modal.children)
+    assert any(
+        isinstance(getattr(child, "component", None), discord.ui.FileUpload)
+        for child in interaction.response.modal.children
+        if type(child).__name__ == "Label"
+    )
 
 
 def test_report_requires_yes_acknowledgement():
@@ -97,3 +105,31 @@ def test_report_posts_to_configured_destination_and_confirms_user():
 
     assert bot.destination.messages
     assert interaction.response.messages[0]["ephemeral"] is True
+
+
+def test_report_modal_upload_is_forwarded_when_present():
+    bot = _FakeBot()
+    cog = ReportsCog(bot)
+    interaction = _FakeInteraction()
+
+    async def _destination(_interaction):
+        return bot.destination
+
+    cog._resolve_destination = _destination  # type: ignore[method-assign]
+
+    class _FakeAttachment:
+        url = "https://example.test/screenshot.png"
+
+        async def to_file(self):
+            return object()
+
+    asyncio.run(
+        cog.submit_report(
+            interaction,
+            issue_text="counting issue",
+            acknowledgement="YES",
+            attachment=_FakeAttachment(),
+        )
+    )
+
+    assert "files" in bot.destination.messages[0]

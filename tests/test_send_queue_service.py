@@ -196,3 +196,21 @@ def test_send_queue_does_not_refresh_for_failed_send_post():
     asyncio.run(service.process_cycle())
 
     assert leaderboard.refresh_calls == []
+
+
+def test_send_queue_refreshes_all_leaderboards_once_on_startup():
+    sends = _FakeSends()
+    leaderboard = _FakeLeaderboard()
+    service = SendQueueService(
+        bot=_FakeBot(),
+        sends=sends,
+        guild_settings=_FakeSettingsRepo(),
+        maintenance=_FakeMaintenance(),
+        leaderboard_service=leaderboard,
+        counting_service=_FakeCounting(),
+    )
+
+    asyncio.run(service._refresh_leaderboards_on_startup())
+    asyncio.run(service._refresh_leaderboards_on_startup())
+
+    assert leaderboard.refresh_all_calls == 1

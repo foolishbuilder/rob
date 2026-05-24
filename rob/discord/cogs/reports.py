@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 from rob.ui.cards.errors import error_card
@@ -18,15 +17,9 @@ log = logging.getLogger(__name__)
 
 
 class _ReportModal(discord.ui.Modal, title="Report an issue with Rob"):
-    def __init__(
-        self,
-        *,
-        cog: "ReportsCog",
-        fallback_attachment: Optional[discord.Attachment],
-    ) -> None:
+    def __init__(self, *, cog: "ReportsCog") -> None:
         super().__init__()
         self.cog = cog
-        self.fallback_attachment = fallback_attachment
         self.issue = discord.ui.TextInput(
             label="What seems to be wrong?",
             style=discord.TextStyle.paragraph,
@@ -39,20 +32,25 @@ class _ReportModal(discord.ui.Modal, title="Report an issue with Rob"):
             required=True,
             max_length=3,
         )
+        self.file_upload = discord.ui.FileUpload(
+            custom_id="report_upload",
+            required=False,
+            min_values=0,
+            max_values=1,
+        )
         self.add_item(self.issue)
         self.add_item(self.acknowledgement)
-        # Discord currently rejects FileUpload inside modal components in this deployment path.
-        # Use the slash-command attachment option as the supported screenshot fallback.
-        self.file_upload = None
+        self.add_item(
+            discord.ui.Label(
+                text="Optional screenshot or file",
+                description="Add one screenshot or file that helps explain the issue.",
+                component=self.file_upload,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        attachment: Optional[discord.Attachment] = self.fallback_attachment
-        if self.file_upload is not None:
-            values = list(getattr(self.file_upload, "values", []) or [])
-            if values:
-                first = values[0]
-                if isinstance(first, discord.Attachment):
-                    attachment = first
+        values = list(getattr(self.file_upload, "values", []) or [])
+        attachment = values[0] if values else None
         await self.cog.submit_report(
             interaction,
             issue_text=str(self.issue.value).strip(),
@@ -65,23 +63,14 @@ class ReportsCog(commands.Cog):
     def __init__(self, bot: RobBot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="report", description="Report an issue with Rob.")
-    @app_commands.describe(
-        screenshot="Optional screenshot to include with your report.",
-    )
-    async def report(
-        self,
-        interaction: discord.Interaction,
-        screenshot: Optional[discord.Attachment] = None,
-    ) -> None:
-        await interaction.response.send_modal(
-            _ReportModal(cog=self, fallback_attachment=screenshot)
-        )
+    @discord.app_commands.command(name="report", description="Report an issue with Rob.")
+    async def report(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(_ReportModal(cog=self))
 
     async def _resolve_destination(
         self,
         interaction: discord.Interaction,
-    ) -> Optional[discord.abc.Messageable]:
+    ) -> discord.abc.Messageable | None:
         if interaction.guild is not None:
             settings = await self.bot.guild_settings_repo.get(interaction.guild.id)
             channel_id = settings.report_channel_id if settings is not None else None
@@ -108,7 +97,7 @@ class ReportsCog(commands.Cog):
         *,
         issue_text: str,
         acknowledgement: str,
-        attachment: Optional[discord.Attachment],
+        attachment: discord.Attachment | None,
     ) -> None:
         if not issue_text:
             await interaction.response.send_message(

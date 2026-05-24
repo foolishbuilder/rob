@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+import io
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -30,41 +32,48 @@ _STYLE_TO_COLOR = {
     "leaderboard": COLOR_LEADERBOARD,
 }
 
-_PING_TO_CONTENT = {
-    "none": None,
-    "everyone": "@everyone",
-    "here": "@here",
-}
+_STYLE_OPTIONS = [
+    discord.SelectOption(label="Rob Purple", value="purple", description="General Rob purple card."),
+    discord.SelectOption(label="Info Blue", value="info", description="Informational update."),
+    discord.SelectOption(label="Success Green", value="success", description="Success or celebration."),
+    discord.SelectOption(label="Warning Gold", value="warning", description="Heads-up or warning."),
+    discord.SelectOption(label="Danger Red", value="danger", description="Urgent or serious notice."),
+    discord.SelectOption(label="Leaderboard Purple", value="leaderboard", description="Leaderboard-style card."),
+]
+
+_DM_ALL_ALIASES = {"all-members", "dm-all", "all", "members"}
+
+
+@dataclass(frozen=True)
+class _AttachmentPayload:
+    filename: str
+    data: bytes
+    content_type: str | None
+    description: str | None
+
+    def to_file(self) -> discord.File:
+        return discord.File(
+            io.BytesIO(self.data),
+            filename=self.filename,
+            description=self.description,
+        )
+
+    @property
+    def is_image(self) -> bool:
+        return bool(self.content_type and self.content_type.startswith("image/"))
 
 
 class _BroadcastModal(discord.ui.Modal, title="Owner Broadcast"):
-    def __init__(
-        self,
-        *,
-        cog: "BroadcastCog",
-        style: str,
-        ping: str,
-        image_url: str | None,
-    ) -> None:
+    def __init__(self, *, cog: "BroadcastCog") -> None:
         super().__init__()
         self.cog = cog
-        self.style = style
-        self.ping = ping
-        self.image_url = image_url
 
-        self.guild_id = discord.ui.TextInput(
-            label="Guild ID",
+        self.target_input = discord.ui.TextInput(
+            label="Target",
             style=discord.TextStyle.short,
             required=True,
-            max_length=20,
-            placeholder="123456789012345678",
-        )
-        self.channel_id = discord.ui.TextInput(
-            label="Channel ID",
-            style=discord.TextStyle.short,
-            required=True,
-            max_length=20,
-            placeholder="123456789012345678",
+            max_length=80,
+            placeholder="guild_id:channel_id or guild_id:all-members",
         )
         self.title_input = discord.ui.TextInput(
             label="Card title",
@@ -78,30 +87,48 @@ class _BroadcastModal(discord.ui.Modal, title="Owner Broadcast"):
             required=True,
             max_length=2000,
         )
-        self.helper_input = discord.ui.TextInput(
-            label="Helper line (optional)",
-            style=discord.TextStyle.paragraph,
-            required=False,
-            max_length=500,
-            placeholder="Optional helper/footer line",
+        self.style_select = discord.ui.Select(
+            custom_id="broadcast_style",
+            placeholder="Choose a card style",
+            options=_STYLE_OPTIONS,
+            required=True,
         )
-        self.add_item(self.guild_id)
-        self.add_item(self.channel_id)
+        self.upload = discord.ui.FileUpload(
+            custom_id="broadcast_upload",
+            required=False,
+            min_values=0,
+            max_values=1,
+        )
+
+        self.add_item(self.target_input)
         self.add_item(self.title_input)
         self.add_item(self.body_input)
-        self.add_item(self.helper_input)
+        self.add_item(
+            discord.ui.Label(
+                text="Card style",
+                description="Pick the Rob card accent/style for this broadcast.",
+                component=self.style_select,
+            )
+        )
+        self.add_item(
+            discord.ui.Label(
+                text="Optional upload",
+                description="Add one image or file to include with the broadcast.",
+                component=self.upload,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        style = self.style_select.values[0] if self.style_select.values else "purple"
+        uploads = list(self.upload.values) if self.upload.values else []
+        attachment = uploads[0] if uploads else None
         await self.cog.submit_broadcast(
             interaction,
-            guild_id_raw=str(self.guild_id.value).strip(),
-            channel_id_raw=str(self.channel_id.value).strip(),
+            target_raw=str(self.target_input.value).strip(),
             title=str(self.title_input.value).strip(),
             body=str(self.body_input.value).strip(),
-            helper=(str(self.helper_input.value).strip() or None),
-            style=self.style,
-            ping=self.ping,
-            image_url=self.image_url,
+            style=style,
+            attachment=attachment,
         )
 
 
@@ -125,41 +152,86 @@ class BroadcastCog(commands.Cog):
         if getattr(owner, "id", None) == user_id:
             return True
 
-        # Team-owned applications can expose member IDs through owner.members.
         members = getattr(owner, "members", None) or []
         return any(getattr(member, "id", None) == user_id for member in members)
+
+    @staticmethod
+    def _parse_target(target_raw: str) -> tuple[int, int | None, bool] | None:
+        raw = target_raw.strip()
+        if ":" not in raw:
+            return None
+        guild_raw, destination_raw = raw.split(":", 1)
+        guild_raw = guild_raw.strip()
+        destination_raw = destination_raw.strip().lower()
+        if not guild_raw.isdigit():
+            return None
+        if destination_raw in _DM_ALL_ALIASES:
+            return int(guild_raw), None, True
+        if destination_raw.isdigit():
+            return int(guild_raw), int(destination_raw), False
+        return None
+
+    async def _materialize_attachment(
+        self,
+        attachment: discord.Attachment | None,
+    ) -> _AttachmentPayload | None:
+        if attachment is None:
+            return None
+        return _AttachmentPayload(
+            filename=attachment.filename,
+            data=await attachment.read(use_cached=True),
+            content_type=getattr(attachment, "content_type", None),
+            description=getattr(attachment, "description", None),
+        )
+
+    def _build_broadcast_send_kwargs(
+        self,
+        *,
+        title: str,
+        body: str,
+        style: str,
+        attachment_payload: _AttachmentPayload | None,
+    ) -> dict:
+        image_url = None
+        files: list[discord.File] = []
+        if attachment_payload is not None:
+            files.append(attachment_payload.to_file())
+            if attachment_payload.is_image:
+                image_url = f"attachment://{attachment_payload.filename}"
+
+        rendered = render(
+            make_card(
+                title=title,
+                body=body,
+                color=_STYLE_TO_COLOR.get(style, COLOR_ROB_PURPLE),
+                image_url=image_url,
+            )
+        )
+        send_kwargs = rendered.send_kwargs()
+        if files:
+            send_kwargs["files"] = files
+        return send_kwargs
+
+    async def _list_human_members(self, guild: discord.Guild) -> list[discord.abc.User]:
+        cached = [member for member in getattr(guild, "members", []) if not getattr(member, "bot", False)]
+        if cached:
+            return cached
+
+        fetch_members = getattr(guild, "fetch_members", None)
+        if fetch_members is None:
+            return []
+
+        members: list[discord.abc.User] = []
+        async for member in fetch_members(limit=None):
+            if not getattr(member, "bot", False):
+                members.append(member)
+        return members
 
     @app_commands.command(
         name="broadcast",
         description="Owner-only DM broadcast form for Rob cards.",
     )
-    @app_commands.describe(
-        style="Card style/accent to use.",
-        ping="Optional ping content for the broadcast message.",
-        image_url="Optional image URL to include in the card.",
-    )
-    @app_commands.choices(
-        style=[
-            app_commands.Choice(name="Rob Purple", value="purple"),
-            app_commands.Choice(name="Info Blue", value="info"),
-            app_commands.Choice(name="Success Green", value="success"),
-            app_commands.Choice(name="Warning Gold", value="warning"),
-            app_commands.Choice(name="Danger Red", value="danger"),
-            app_commands.Choice(name="Leaderboard Purple", value="leaderboard"),
-        ],
-        ping=[
-            app_commands.Choice(name="No ping", value="none"),
-            app_commands.Choice(name="@everyone", value="everyone"),
-            app_commands.Choice(name="@here", value="here"),
-        ],
-    )
-    async def broadcast(
-        self,
-        interaction: discord.Interaction,
-        style: app_commands.Choice[str],
-        ping: Optional[app_commands.Choice[str]] = None,
-        image_url: Optional[str] = None,
-    ) -> None:
+    async def broadcast(self, interaction: discord.Interaction) -> None:
         if interaction.user is None:
             await interaction.response.send_message(
                 **error_card("Rob could not resolve your user identity.").send_kwargs(),
@@ -178,27 +250,17 @@ class BroadcastCog(commands.Cog):
             )
             return
 
-        await interaction.response.send_modal(
-            _BroadcastModal(
-                cog=self,
-                style=style.value,
-                ping=ping.value if ping is not None else "none",
-                image_url=(image_url or "").strip() or None,
-            )
-        )
+        await interaction.response.send_modal(_BroadcastModal(cog=self))
 
     async def submit_broadcast(
         self,
         interaction: discord.Interaction,
         *,
-        guild_id_raw: str,
-        channel_id_raw: str,
+        target_raw: str,
         title: str,
         body: str,
-        helper: str | None,
         style: str,
-        ping: str,
-        image_url: str | None,
+        attachment: discord.Attachment | None,
     ) -> None:
         if interaction.user is None or not await self._is_owner(interaction.user.id):
             await interaction.response.send_message(
@@ -206,9 +268,12 @@ class BroadcastCog(commands.Cog):
             )
             return
 
-        if not guild_id_raw.isdigit() or not channel_id_raw.isdigit():
+        parsed = self._parse_target(target_raw)
+        if parsed is None:
             await interaction.response.send_message(
-                **error_card("Guild ID and Channel ID must be numeric Discord IDs.").send_kwargs(),
+                **error_card(
+                    "Broadcast target must look like `guild_id:channel_id` or `guild_id:all-members`."
+                ).send_kwargs(),
             )
             return
         if not title or not body:
@@ -217,9 +282,7 @@ class BroadcastCog(commands.Cog):
             )
             return
 
-        guild_id = int(guild_id_raw)
-        channel_id = int(channel_id_raw)
-
+        guild_id, channel_id, dm_all = parsed
         guild = self.bot.get_guild(guild_id)
         if guild is None:
             await interaction.response.send_message(
@@ -227,39 +290,68 @@ class BroadcastCog(commands.Cog):
             )
             return
 
+        attachment_payload = await self._materialize_attachment(attachment)
+
+        if dm_all:
+            await interaction.response.defer()
+            members = await self._list_human_members(guild)
+            sent = 0
+            failed = 0
+            for member in members:
+                try:
+                    await member.send(
+                        **self._build_broadcast_send_kwargs(
+                            title=title,
+                            body=body,
+                            style=style,
+                            attachment_payload=attachment_payload,
+                        )
+                    )
+                    sent += 1
+                except discord.HTTPException:
+                    failed += 1
+
+            confirmation = render(
+                make_card(
+                    title="Broadcast Sent",
+                    body=(
+                        f"Guild: **{guild.name}** (`{guild.id}`)\n"
+                        f"Mode: **DM all members**\n"
+                        f"Sent: **{sent}**\n"
+                        f"Failed: **{failed}**"
+                    ),
+                    color=COLOR_SUCCESS if failed == 0 else COLOR_WARNING,
+                )
+            )
+            await interaction.followup.send(**confirmation.send_kwargs())
+            return
+
+        assert channel_id is not None
         channel = guild.get_channel(channel_id)
         if channel is None:
             try:
-                fetched = await self.bot.fetch_channel(channel_id)
+                channel = await self.bot.fetch_channel(channel_id)
             except (discord.NotFound, discord.HTTPException):
-                fetched = None
-            channel = fetched
+                channel = None
 
         if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild_id:
             await interaction.response.send_message(
                 **error_card(
                     "Target channel was not found as a text channel in that guild.",
-                    "Check the guild/channel IDs and try again.",
+                    "Check the target field and try again.",
                 ).send_kwargs(),
             )
             return
 
-        color = _STYLE_TO_COLOR.get(style, COLOR_ROB_PURPLE)
-        card = make_card(
-            title=title,
-            body=body,
-            color=color,
-            footer=helper,
-            image_url=image_url,
-        )
-        rendered = render(card)
-        send_kwargs = rendered.send_kwargs()
-        ping_content = _PING_TO_CONTENT.get(ping, None)
-        if ping_content:
-            send_kwargs["content"] = ping_content
-
         try:
-            message = await channel.send(**send_kwargs)
+            message = await channel.send(
+                **self._build_broadcast_send_kwargs(
+                    title=title,
+                    body=body,
+                    style=style,
+                    attachment_payload=attachment_payload,
+                )
+            )
         except discord.HTTPException:
             await interaction.response.send_message(
                 **error_card("Broadcast failed to send to that channel.").send_kwargs(),
@@ -275,7 +367,6 @@ class BroadcastCog(commands.Cog):
                     f"Message ID: `{message.id}`"
                 ),
                 color=COLOR_SUCCESS,
-                footer="Rob delivered the broadcast.",
             )
         )
         await interaction.response.send_message(**confirmation.send_kwargs())
