@@ -14,6 +14,8 @@ def _build_domme(row: Record) -> Domme:
         guild_id=int(row["guild_id"]),
         discord_user_id=int(row["discord_user_id"]),
         throne_url=str(row["throne_url"]),
+        public_display_name=row["public_display_name"],
+        public_display_name_updated_at=row["public_display_name_updated_at"],
         registered_at=row["registered_at"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -107,3 +109,19 @@ class DommesRepository:
                 guild_id,
             )
         return int(value or 0)
+
+    async def set_public_display_name(self, *, guild_id: int, discord_user_id: int, label: str) -> None:
+        async with self.database.acquire() as connection:
+            await connection.execute(
+                """
+                UPDATE dommes
+                SET public_display_name = $3,
+                    public_display_name_updated_at = now(),
+                    updated_at = now()
+                WHERE guild_id = $1
+                  AND discord_user_id = $2
+                """,
+                guild_id,
+                discord_user_id,
+                label,
+            )

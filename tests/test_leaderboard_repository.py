@@ -181,6 +181,6 @@ def test_public_data_freshness_query_does_not_reference_updated_at_and_uses_exis
 
     query, params = connection.fetchrow_calls[0]
     assert "updated_at" not in query
-    assert "COALESCE(v.discord_posted_at, v.sent_at, v.created_at)" in query
+    assert "COALESCE(v.sent_at, v.created_at)" in query
     assert params == (1, False, ["marie_123"], None)
     assert freshness is latest

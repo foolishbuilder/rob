@@ -67,7 +67,8 @@ def test_public_route_renders_polished_html_and_freshness(monkeypatch):
     assert "Leaderboard data updated:" in text
     assert "Page refreshed:" in text
     assert "2026-05-20 12:30 UTC" in text
-    assert "$10,424.81 sent" in text
+    assert "Tracked send total" in text
+    assert "$10,424.81" in text
     assert "18 sends" in text
     assert "Registered Dom/me 2" in text
 

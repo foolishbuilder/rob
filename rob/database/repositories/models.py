@@ -28,6 +28,8 @@ class Domme:
     guild_id: int
     discord_user_id: int
     throne_url: str
+    public_display_name: str | None
+    public_display_name_updated_at: datetime | None
     registered_at: datetime
     created_at: datetime
     updated_at: datetime

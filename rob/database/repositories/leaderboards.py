@@ -206,7 +206,11 @@ class LeaderboardsRepository:
                 f"""
                 {_valid_sends_cte()}
                 SELECT
-                    COALESCE(NULLIF(TRIM(tc.throne_handle), ''), 'Registered Dom/me') AS public_label,
+                    COALESCE(
+                        NULLIF(TRIM(d.public_display_name), ''),
+                        NULLIF(TRIM(tc.throne_handle), ''),
+                        'Registered Dom/me'
+                    ) AS public_label,
                     d.discord_user_id AS user_id,
                     COALESCE(SUM(v.amount_cents), 0) AS total_cents,
                     COUNT(v.id) AS send_count
@@ -218,7 +222,7 @@ class LeaderboardsRepository:
                     ON v.guild_id = d.guild_id
                     AND v.recipient_user_id = d.discord_user_id
                 WHERE d.guild_id = $1
-                GROUP BY d.discord_user_id, tc.throne_handle
+                GROUP BY d.discord_user_id, d.public_display_name, tc.throne_handle
                 ORDER BY total_cents DESC, send_count DESC, d.discord_user_id ASC
                 LIMIT $5
                 """,
@@ -253,7 +257,7 @@ class LeaderboardsRepository:
                 f"""
                 {_valid_sends_cte()}
                 SELECT
-                    MAX(COALESCE(v.discord_posted_at, v.sent_at, v.created_at)) AS latest_counted_send_at
+                    MAX(COALESCE(v.sent_at, v.created_at)) AS latest_counted_send_at
                 FROM valid_sends v
                 """,
                 guild_id,

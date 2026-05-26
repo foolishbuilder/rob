@@ -28,19 +28,22 @@ def _public_leaderboard_html(*, title: str, entries: list[dict[str, str]], data_
     if entries:
         rows = "\n".join(
             (
-                '<article class="entry">'
-                f'<div class="rank">#{i}</div>'
+                '<article class="leaderboard-entry">'
+                f'<div class="entry-rank">#{i}</div>'
                 '<div>'
-                f'<div class="name">{escape(e["name"])}</div>'
-                f'<div class="meta">{escape(e["amount"])} sent</div>'
-                f'<div class="meta">{escape(e["count"])} sends</div>'
+                f'<div class="entry-name">{escape(e["name"])}</div>'
+                '<div class="entry-meta">Tracked send total</div>'
+                '</div>'
+                '<div>'
+                f'<div class="entry-total">{escape(e["amount"])}</div>'
+                f'<div class="entry-sends">{escape(e["count"])} sends</div>'
                 '</div>'
                 '</article>'
             )
             for i, e in enumerate(entries, 1)
         )
     else:
-        rows = '<div class="empty">No tracked sends are available yet.</div>'
+        rows = '<div class="empty-state">No tracked sends are available yet.</div>'
     return f"""<!doctype html>
 <html lang=\"en\">
 <head>
@@ -51,30 +54,19 @@ def _public_leaderboard_html(*, title: str, entries: list[dict[str, str]], data_
     html, body {{ margin:0; padding:0; background:#000; color:#b40000; font-family:\"Times New Roman\", Times, serif; }}
     body {{ min-height:100vh; }}
     .leaderboard-page {{ box-sizing:border-box; min-height:100vh; padding:28px; background:radial-gradient(circle at top, rgba(120,0,0,0.18), transparent 34%), linear-gradient(180deg, #050000 0%, #000 58%, #050000 100%); }}
-    .leaderboard-panel {{ box-sizing:border-box; width:100%; max-width:820px; margin:0 auto; padding:24px; border:1px solid #5c0000; background:rgba(12,0,0,0.82); box-shadow:0 0 28px rgba(120,0,0,0.18); }}
-    .header {{ padding-bottom:16px; border-bottom:1px solid #5c0000; }}
-    h1 {{ margin:0; color:#d00000; font-size:36px; line-height:1.05; font-weight:bold; letter-spacing:0.03em; }}
-    .subtitle {{ margin-top:8px; color:#8f0000; font-size:15px; }}
-    .entries {{ margin-top:8px; }}
-    .entry {{ display:grid; grid-template-columns:70px 1fr; gap:16px; padding:16px 0; border-bottom:1px solid #360000; }}
-    .entry:last-child {{ border-bottom:none; }}
-    .rank {{ color:#d00000; font-size:24px; font-weight:bold; }}
-    .name {{ color:#c40000; font-size:24px; line-height:1.1; font-weight:bold; word-break:break-word; }}
-    .meta {{ margin-top:6px; color:#950000; font-size:16px; line-height:1.25; }}
-    .stats {{ margin-top:18px; padding-top:14px; border-top:1px solid #5c0000; color:#850000; font-size:14px; line-height:1.5; }}
-    .empty {{ margin-top:18px; padding:16px 0; color:#950000; border-bottom:1px solid #360000; }}
-    @media (max-width:560px) {{ .leaderboard-page {{ padding:16px; }} .leaderboard-panel {{ padding:18px; }} h1 {{ font-size:30px; }} .entry {{ grid-template-columns:52px 1fr; gap:12px; }} .rank, .name {{ font-size:21px; }} }}
+    .leaderboard-panel {{ box-sizing:border-box; width:min(900px,100%); margin:0 auto; padding:28px; border:1px solid #640000; background:linear-gradient(180deg, rgba(18,0,0,0.94), rgba(5,0,0,0.96)); box-shadow:0 0 36px rgba(120,0,0,0.22), inset 0 0 24px rgba(80,0,0,0.12); }}
+    .leaderboard-header {{ padding-bottom:18px; border-bottom:1px solid #640000; }} .leaderboard-title {{ margin:0; color:#d00000; font-size:clamp(34px,5vw,52px); line-height:1; font-weight:bold; letter-spacing:0.045em; }} .leaderboard-subtitle {{ margin-top:10px; color:#9a0000; font-size:16px; letter-spacing:0.02em; }} .leaderboard-entries {{ margin-top:6px; }} .leaderboard-entry {{ display:grid; grid-template-columns:82px 1fr auto; gap:18px; align-items:baseline; padding:18px 0; border-bottom:1px solid #360000; }} .leaderboard-entry:last-child {{ border-bottom:none; }} .entry-rank {{ color:#d00000; font-size:28px; font-weight:bold; line-height:1; }} .entry-name {{ color:#c80000; font-size:28px; font-weight:bold; line-height:1.08; word-break:break-word; }} .entry-meta {{ margin-top:7px; color:#980000; font-size:17px; line-height:1.3; }} .entry-total {{ color:#c00000; font-size:20px; font-weight:bold; white-space:nowrap; text-align:right; }} .entry-sends {{ margin-top:7px; color:#870000; font-size:15px; text-align:right; }} .leaderboard-footer {{ margin-top:18px; padding-top:16px; border-top:1px solid #640000; color:#820000; font-size:14px; line-height:1.55; }} .empty-state {{ margin-top:18px; padding:20px 0; color:#980000; border-bottom:1px solid #360000; font-size:18px; }} @media (max-width:680px) {{ .leaderboard-page {{ padding:18px; }} .leaderboard-panel {{ padding:20px; }} .leaderboard-entry {{ grid-template-columns:58px 1fr; gap:12px; }} .entry-total {{ grid-column:2; text-align:left; margin-top:6px; }} .entry-sends {{ text-align:left; }} .entry-rank, .entry-name {{ font-size:24px; }} }}
   </style>
 </head>
 <body>
   <main class=\"leaderboard-page\">
     <section class=\"leaderboard-panel\">
-      <header class=\"header\">
-        <h1>{escape(title)}</h1>
-        <div class=\"subtitle\">Tracked send leaderboard</div>
+      <header class=\"leaderboard-header\">
+        <h1 class=\"leaderboard-title\">{escape(title)}</h1>
+        <div class=\"leaderboard-subtitle\">Tracked send leaderboard</div>
       </header>
-      <section class=\"entries\">{rows}</section>
-      <footer class=\"stats\">
+      <section class=\"leaderboard-entries\">{rows}</section>
+      <footer class=\"leaderboard-footer\">
         <div>Leaderboard data updated: {escape(data_updated_at)}</div>
         <div>Page refreshed: {escape(page_refreshed_at)}</div>
       </footer>

@@ -156,6 +156,8 @@ def build_parser() -> argparse.ArgumentParser:
     lb_public_enable.add_argument("--token", type=str, required=True)
     lb_public_rotate = leaderboard_public_subparsers.add_parser("rotate-token", help="Rotate a public leaderboard token.")
     lb_public_rotate.add_argument("--token", type=str, required=True)
+    lb_public_refresh_names = leaderboard_public_subparsers.add_parser("refresh-names", help="Refresh cached public Discord display names.")
+    lb_public_refresh_names.add_argument("--guild-id", type=int, required=True)
     diagnose.add_argument("--guild-id", type=int, default=None)
     repair = leaderboard_subparsers.add_parser(
         "repair-send-dommes",
@@ -543,6 +545,27 @@ async def fetch_live_guild_scan_from_bot_ops(guild_id: int) -> LiveGuildScanResu
     )
 
 
+async def request_public_name_refresh_from_bot_ops(guild_id: int) -> bool:
+    host = (os.getenv("ROB_OPS_HOST") or "127.0.0.1").strip()
+    raw_port = (os.getenv("ROB_OPS_PORT") or "8811").strip()
+    secret = (os.getenv("ROB_OPS_SECRET") or "").strip()
+    try:
+        port = int(raw_port)
+    except ValueError:
+        return False
+    headers = {"User-Agent": "RobOps/1.0 (+https://github.com/PlainStack2/rob-dev)"}
+    if secret:
+        headers["X-Rob-Ops-Secret"] = secret
+    url = f"http://{host}:{port}/guilds/{guild_id}/leaderboard/public/refresh-names"
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.post(url) as response:
+                return response.status < 400
+    except (aiohttp.ClientError, TimeoutError):
+        return False
+
+
 async def fetch_live_guild_scan_from_discord_rest(guild_id: int) -> LiveGuildScanResult:
     token = (os.getenv("DISCORD_TOKEN") or "").strip()
     if not token:
@@ -859,6 +882,13 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
             print_header("Public Leaderboard Token Rotated")
             print_line("URL:")
             print_line(f"{base_url}/public/leaderboard/{row.public_token}")
+            return
+        if args.leaderboard_public_command == "refresh-names":
+            if not await request_public_name_refresh_from_bot_ops(args.guild_id):
+                print_line("The running bot is required to refresh Discord display names.")
+                return
+            print_header("Public Display Names Refreshed")
+            print_field("Guild ID", args.guild_id)
             return
     if args.leaderboard_command == "repair-send-dommes":
         guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
