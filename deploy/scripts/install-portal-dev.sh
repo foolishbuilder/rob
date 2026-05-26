@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -euo pipefail
 
 # Rob Portal Dev - First-Time Installer
 #
@@ -14,17 +14,20 @@ set -Eeuo pipefail
 # This script does NOT configure Nginx automatically.
 # This script does NOT print secrets.
 
-APP_PARENT="${APP_PARENT:-/opt/rob-portal}"
-APP_DIR="${APP_DIR:-${APP_PARENT}/app}"
+APP_ROOT="${APP_ROOT:-/opt/rob-portal}"
+APP_DIR="${APP_DIR:-${APP_ROOT}/app}"
 REPO_URL="${REPO_URL:-https://github.com/PlainStack2/rob-dev.git}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 SERVICE_NAME="${SERVICE_NAME:-rob-portal-dev.service}"
-SERVICE_USER="${SERVICE_USER:-deployuser}"
-SERVICE_GROUP="${SERVICE_GROUP:-deployuser}"
+DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-}}"
+RUNTIME_USER="${RUNTIME_USER:-rob}"
+RUNTIME_GROUP="${RUNTIME_GROUP:-rob}"
 PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/.venv/bin/python}"
 PIP_BIN="${PIP_BIN:-${APP_DIR}/.venv/bin/pip}"
 SYSTEMD_SOURCE="${SYSTEMD_SOURCE:-${APP_DIR}/deploy/systemd/rob-portal-dev.service}"
 SYSTEMD_TARGET="/etc/systemd/system/${SERVICE_NAME}"
+DEPLOY_SCRIPT_SOURCE_REL="${DEPLOY_SCRIPT_SOURCE_REL:-deploy/scripts/deploy-portal-dev.sh}"
+DEPLOY_SCRIPT_LINK="${DEPLOY_SCRIPT_LINK:-${APP_ROOT}/deploy-portal-dev.sh}"
 
 print_step() {
   printf '\n[%s] %s\n' "$1" "$2"
@@ -35,24 +38,44 @@ fail() {
   exit 1
 }
 
-require_root_or_sudo() {
-  if [[ "${EUID}" -ne 0 ]] && ! sudo -n true 2>/dev/null; then
-    fail "This installer needs sudo access for package installation and systemd setup."
+run_as_deploy() {
+  runuser -u "${DEPLOY_USER}" -- "$@"
+}
+
+ensure_root() {
+  if [[ "${EUID}" -ne 0 ]]; then
+    fail "Run this script with sudo or as root."
   fi
 }
 
-ensure_user_exists() {
-  if ! id "${SERVICE_USER}" >/dev/null 2>&1; then
-    print_step "INFO" "Creating service user ${SERVICE_USER}"
-    sudo adduser --system --group --home "${APP_PARENT}" "${SERVICE_USER}"
+ensure_deploy_user() {
+  if [[ -z "${DEPLOY_USER}" ]]; then
+    fail "DEPLOY_USER is empty. Run via sudo or set DEPLOY_USER explicitly."
+  fi
+
+  if ! id "${DEPLOY_USER}" >/dev/null 2>&1; then
+    print_step "INFO" "Creating deploy user ${DEPLOY_USER}"
+    useradd --create-home --shell /bin/bash "${DEPLOY_USER}"
+  fi
+}
+
+ensure_runtime_user() {
+  if ! getent group "${RUNTIME_GROUP}" >/dev/null 2>&1; then
+    print_step "INFO" "Creating runtime group ${RUNTIME_GROUP}"
+    groupadd --system "${RUNTIME_GROUP}"
+  fi
+
+  if ! id "${RUNTIME_USER}" >/dev/null 2>&1; then
+    print_step "INFO" "Creating runtime user ${RUNTIME_USER}"
+    useradd --system --gid "${RUNTIME_GROUP}" --home-dir "${APP_ROOT}" --shell /usr/sbin/nologin "${RUNTIME_USER}"
   fi
 }
 
 install_packages() {
   print_step "1/11" "Installing required OS packages"
 
-  sudo apt-get update -y
-  sudo apt-get install -y \
+  apt-get update -y
+  apt-get install -y \
     python3 \
     python3-venv \
     python3-pip \
@@ -62,21 +85,22 @@ install_packages() {
 }
 
 prepare_directories() {
-  print_step "2/11" "Preparing ${APP_PARENT}"
-
-  sudo mkdir -p "${APP_PARENT}"
-  sudo chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${APP_PARENT}"
+  print_step "2/11" "Preparing ${APP_ROOT}"
+  local deploy_group
+  deploy_group="$(id -gn "${DEPLOY_USER}")"
+  install -d -m 0755 -o "${DEPLOY_USER}" -g "${deploy_group}" "${APP_ROOT}"
 }
 
 clone_or_update_repo() {
   print_step "3/11" "Cloning or updating repository"
 
   if [[ -d "${APP_DIR}/.git" ]]; then
-    sudo -u "${SERVICE_USER}" git -C "${APP_DIR}" fetch origin --prune
-    sudo -u "${SERVICE_USER}" git -C "${APP_DIR}" checkout "${DEPLOY_BRANCH}"
-    sudo -u "${SERVICE_USER}" git -C "${APP_DIR}" reset --hard "origin/${DEPLOY_BRANCH}"
+    chown -R "${DEPLOY_USER}:$(id -gn "${DEPLOY_USER}")" "${APP_DIR}"
+    run_as_deploy git -C "${APP_DIR}" fetch origin --prune
+    run_as_deploy git -C "${APP_DIR}" checkout "${DEPLOY_BRANCH}"
+    run_as_deploy git -C "${APP_DIR}" reset --hard "origin/${DEPLOY_BRANCH}"
   else
-    sudo -u "${SERVICE_USER}" git clone --branch "${DEPLOY_BRANCH}" "${REPO_URL}" "${APP_DIR}"
+    run_as_deploy git clone --branch "${DEPLOY_BRANCH}" "${REPO_URL}" "${APP_DIR}"
   fi
 }
 
@@ -84,7 +108,7 @@ create_venv() {
   print_step "4/11" "Creating Python virtual environment"
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
-    sudo -u "${SERVICE_USER}" python3 -m venv "${APP_DIR}/.venv"
+    run_as_deploy python3 -m venv "${APP_DIR}/.venv"
   else
     printf 'Virtual environment already exists.\n'
   fi
@@ -93,8 +117,8 @@ create_venv() {
 install_python_dependencies() {
   print_step "5/11" "Installing Python dependencies"
 
-  sudo -u "${SERVICE_USER}" "${PYTHON_BIN}" -m pip install --upgrade pip
-  sudo -u "${SERVICE_USER}" "${PIP_BIN}" install -r "${APP_DIR}/requirements.txt" -r "${APP_DIR}/portal/requirements.txt"
+  run_as_deploy "${PYTHON_BIN}" -m pip install --upgrade pip
+  run_as_deploy "${PIP_BIN}" install -r "${APP_DIR}/requirements.txt" -r "${APP_DIR}/portal/requirements.txt"
 }
 
 create_env_if_missing() {
@@ -106,9 +130,9 @@ create_env_if_missing() {
   fi
 
   if [[ -f "${APP_DIR}/.env.example" ]]; then
-    sudo -u "${SERVICE_USER}" cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
+    run_as_deploy cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
   else
-    sudo -u "${SERVICE_USER}" touch "${APP_DIR}/.env"
+    run_as_deploy touch "${APP_DIR}/.env"
   fi
 
   cat <<EOF
@@ -148,25 +172,26 @@ patch_systemd_unit_if_needed() {
   tmp_unit="$(mktemp)"
 
   sed \
-    -e "s#User=deployuser#User=${SERVICE_USER}#g" \
-    -e "s#Group=deployuser#Group=${SERVICE_GROUP}#g" \
+    -e "s#User=deployuser#User=${RUNTIME_USER}#g" \
+    -e "s#Group=deployuser#Group=${RUNTIME_GROUP}#g" \
     -e "s#WorkingDirectory=/opt/rob-portal/app/portal#WorkingDirectory=${APP_DIR}/portal#g" \
     -e "s#EnvironmentFile=/opt/rob-portal/app/.env#EnvironmentFile=${APP_DIR}/.env#g" \
     -e "s#ExecStart=/opt/rob-portal/app/.venv/bin/gunicorn rob_portal.wsgi:application --bind 127.0.0.1:8090#ExecStart=${APP_DIR}/.venv/bin/gunicorn rob_portal.wsgi:application --bind 127.0.0.1:8090#g" \
     "${SYSTEMD_SOURCE}" > "${tmp_unit}"
 
-  sudo cp "${tmp_unit}" "${SYSTEMD_TARGET}"
+  cp "${tmp_unit}" "${SYSTEMD_TARGET}"
   rm -f "${tmp_unit}"
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable "${SERVICE_NAME}"
+  systemctl daemon-reload
+  systemctl enable "${SERVICE_NAME}"
+  ln -sfn "${APP_DIR}/${DEPLOY_SCRIPT_SOURCE_REL}" "${DEPLOY_SCRIPT_LINK}"
 }
 
 compile_check() {
   print_step "8/11" "Running compile check"
 
   cd "${APP_DIR}"
-  sudo -u "${SERVICE_USER}" env PYTHONPATH=. "${PYTHON_BIN}" -m compileall apps rob scripts portal
+  run_as_deploy env PYTHONPATH=. "${PYTHON_BIN}" -m compileall apps rob scripts portal
 }
 
 check_env_configured() {
@@ -246,16 +271,16 @@ run_deploy_if_configured() {
     source "${APP_DIR}/.env"
     set +a
 
-    sudo -u "${SERVICE_USER}" env PYTHONPATH=. "${PYTHON_BIN}" -m scripts.run_migrations
-    sudo -u "${SERVICE_USER}" env PYTHONPATH=. "${PYTHON_BIN}" -m scripts.check_db
+    run_as_deploy env PYTHONPATH=. "${PYTHON_BIN}" -m scripts.run_migrations
+    run_as_deploy env PYTHONPATH=. "${PYTHON_BIN}" -m scripts.check_db
 
     cd "${APP_DIR}/portal"
-    sudo -u "${SERVICE_USER}" "${PYTHON_BIN}" manage.py migrate --noinput
-    sudo -u "${SERVICE_USER}" "${PYTHON_BIN}" manage.py collectstatic --noinput
-    sudo -u "${SERVICE_USER}" "${PYTHON_BIN}" manage.py check
+    run_as_deploy "${PYTHON_BIN}" manage.py migrate --noinput
+    run_as_deploy "${PYTHON_BIN}" manage.py collectstatic --noinput
+    run_as_deploy "${PYTHON_BIN}" manage.py check
 
-    sudo systemctl restart "${SERVICE_NAME}"
-    sudo systemctl --no-pager --full status "${SERVICE_NAME}" | sed -n '1,14p'
+    systemctl restart "${SERVICE_NAME}"
+    systemctl --no-pager --full status "${SERVICE_NAME}" | sed -n '1,14p'
   fi
 }
 
@@ -326,8 +351,9 @@ EOF
 }
 
 main() {
-  require_root_or_sudo
-  ensure_user_exists
+  ensure_root
+  ensure_deploy_user
+  ensure_runtime_user
   install_packages
   prepare_directories
   clone_or_update_repo

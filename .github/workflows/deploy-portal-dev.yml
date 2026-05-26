@@ -27,7 +27,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Run portal deploy over SSH
+      - name: Run portal deploy over SSH (shared webhook server credentials)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.WEBHOOK_DEV_HOST }}

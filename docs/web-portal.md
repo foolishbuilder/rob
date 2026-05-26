@@ -233,3 +233,9 @@ Deliberately not shipped in this phase:
 - If Discord login fails: verify OAuth client ID/secret/redirect URI and trusted origins.
 - If actions fail with 403 from bot-ops: verify `ROB_OPS_SECRET` matches bot service env.
 - If admin pages fail with table errors: run Rob SQL migrations (including `010_portal_audit_log`).
+
+## Installation & Deployment Guide
+
+For full server install + deploy setup steps, use `docs/deployment-portal-dev.md`.
+
+Portal deploy uses the same SSH secrets/host as webhook deploy in GitHub Actions (`WEBHOOK_DEV_HOST`, `WEBHOOK_DEV_USER`, `WEBHOOK_DEV_SSH_KEY`, `WEBHOOK_DEV_PORT`) so both services can deploy to the same server.
