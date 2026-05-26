@@ -31,7 +31,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.WEBHOOK_DEV_HOST }}
-          username: ${{ secrets.RWEBHOOK_DEV_USER }}
+          username: ${{ secrets.WEBHOOK_DEV_USER }}
           key: ${{ secrets.WEBHOOK_DEV_SSH_KEY }}
           port: ${{ secrets.WEBHOOK_DEV_PORT }}
           script: |
