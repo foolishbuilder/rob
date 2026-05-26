@@ -59,7 +59,6 @@ class InactivityCog(commands.Cog):
         notice_type=[
             app_commands.Choice(name="All notices", value="all"),
             app_commands.Choice(name="First notice", value="first"),
-            app_commands.Choice(name="Warning notice", value="warning"),
             app_commands.Choice(name="Final notice", value="final"),
         ]
     )
@@ -88,18 +87,16 @@ class InactivityCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        remove_at = datetime.now(timezone.utc) + timedelta(days=self.bot.settings.inactivity_assignment_grace_days)
+        remove_at = datetime.now(timezone.utc) + timedelta(days=21)
         value = notice_type.value
         messages: list[str] = []
         if value in {"all", "first"}:
-            messages.append(self.bot.inactivity_service._build_first_notice(member, remove_at))
-        if value in {"all", "warning"}:
-            messages.append(self.bot.inactivity_service._build_warning_notice(member, remove_at))
+            messages.append(self.bot.inactivity_service._build_first_notice(member, remove_at, interaction.guild.name))
         if value in {"all", "final"}:
-            messages.append(self.bot.inactivity_service._build_final_notice(member, remove_at))
+            messages.append(self.bot.inactivity_service._build_final_notice(member, remove_at, interaction.guild.name))
 
         for message in messages:
-            await member.send(message)
+            await member.send(**message)
 
         await interaction.response.send_message(
             f"Sent {len(messages)} inactivity test message(s) to your DMs.",

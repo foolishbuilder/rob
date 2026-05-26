@@ -37,18 +37,19 @@ class _FakeGuildSettingsRepo:
 
 
 class _FakeMember:
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, *, joined_at: datetime | None = None):
         self.id = user_id
         self.bot = False
         self.nick = None
         self.display_name = f"User{user_id}"
         self.name = f"User{user_id}"
         self.mention = f"<@{user_id}>"
-        self.dm_messages: list[str] = []
+        self.dm_messages: list[dict[str, object]] = []
         self.kicked = False
+        self.joined_at = joined_at
 
-    async def send(self, message: str):
-        self.dm_messages.append(message)
+    async def send(self, content=None, view=None, **kwargs):
+        self.dm_messages.append({"content": content, "view": view, **kwargs})
 
     async def kick(self, *, reason: str):
         del reason
@@ -62,9 +63,10 @@ class _FakeRole:
 
 
 class _FakeGuild:
-    def __init__(self, guild_id: int, role: _FakeRole):
+    def __init__(self, guild_id: int, role: _FakeRole, *, name: str = "VIB"):
         self.id = guild_id
         self._role = role
+        self.name = name
 
     def get_role(self, role_id: int):
         if self._role.id == role_id:
@@ -77,6 +79,7 @@ def _service(*, bot_state: _FakeBotState, inactive_role_id: int | None):
         bot_state=bot_state,
         guild_settings=_FakeGuildSettingsRepo(inactive_role_id),
         enabled_default=False,
+        new_member_grace_days=7,
         assignment_grace_days=14,
         bootstrap_grace_days=21,
         final_notice_days=7,
@@ -84,31 +87,31 @@ def _service(*, bot_state: _FakeBotState, inactive_role_id: int | None):
     )
 
 
-def test_inactivity_disabled_by_default_no_processing():
-    member = _FakeMember(10)
-    guild = _FakeGuild(1, _FakeRole(99, [member]))
-    bot_state = _FakeBotState()
-    service = _service(bot_state=bot_state, inactive_role_id=99)
-
-    snapshots = asyncio.run(service.process_guild(guild, send_notifications=False, perform_kicks=False))
-
-    assert snapshots == []
-
-
-def test_inactivity_enabled_creates_member_schedule():
-    member = _FakeMember(10)
+def test_new_member_grace_no_immediate_warning():
+    joined_at = datetime.now(timezone.utc)
+    member = _FakeMember(10, joined_at=joined_at)
     guild = _FakeGuild(1, _FakeRole(99, [member]))
     bot_state = _FakeBotState()
     service = _service(bot_state=bot_state, inactive_role_id=99)
     asyncio.run(service.set_enabled(1, True))
 
-    snapshots = asyncio.run(service.process_guild(guild, send_notifications=False, perform_kicks=False))
+    snapshots = asyncio.run(service.process_guild(guild, send_notifications=True, perform_kicks=False))
 
     assert len(snapshots) == 1
-    assert snapshots[0].member.id == 10
-    key_prefix = "inactivity:1:user:10"
-    assert f"{key_prefix}:assigned_at" in bot_state.values
-    assert f"{key_prefix}:remove_at" in bot_state.values
+    assert member.dm_messages == []
+
+
+def test_new_member_warning_after_seven_days_contains_timestamps():
+    joined_at = datetime.now(timezone.utc) - timedelta(days=8)
+    member = _FakeMember(10, joined_at=joined_at)
+    guild = _FakeGuild(1, _FakeRole(99, [member]))
+    bot_state = _FakeBotState()
+    service = _service(bot_state=bot_state, inactive_role_id=99)
+    asyncio.run(service.set_enabled(1, True))
+
+    asyncio.run(service.process_guild(guild, send_notifications=True, perform_kicks=False))
+
+    assert len(member.dm_messages) == 1
 
 
 def test_inactivity_kicks_when_expired():
@@ -130,4 +133,3 @@ def test_inactivity_kicks_when_expired():
 
     assert snapshots == []
     assert member.kicked is True
-    assert f"{key_prefix}:assigned_at" not in bot_state.values

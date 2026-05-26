@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
@@ -19,22 +19,82 @@ from rob.services.maintenance_service import MaintenanceService
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import is_explicit_test_webhook_payload, is_known_test_sender, is_supported_event_type, parse_throne_send_payload
-from rob.throne.security import (
-    build_signed_message,
-    secret_matches,
-    validate_timestamp_header,
-    verify_ed25519_signature,
-)
+from rob.throne.security import build_signed_message, secret_matches, validate_timestamp_header, verify_ed25519_signature
 
 log = logging.getLogger(__name__)
 
 
-def _public_leaderboard_html(*, title: str, entries: list[dict[str, str]], updated: str) -> str:
-    rows = "\n".join(
-        f'<section class="entry"><div class="rank">#{i}</div><div class="name">{escape(e["name"])}</div><div class="meta">{escape(e["amount"])} sent</div><div class="meta">{escape(e["count"])}</div></section>'
-        for i, e in enumerate(entries, 1)
-    )
-    return f"""<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{escape(title)}</title><style>html,body{{margin:0;padding:0;background:#000;color:#b00000;font-family:\"Times New Roman\",Times,serif;}}.leaderboard{{width:100%;box-sizing:border-box;padding:24px;background:#000;color:#b00000;}}h1{{margin:0 0 18px;font-size:32px;font-weight:bold;color:#cc0000;}}.entry{{border-top:1px solid #5a0000;padding:12px 0;}}.rank{{font-size:22px;font-weight:bold;}}.name{{font-size:22px;font-weight:bold;}}.meta{{font-size:16px;margin-top:4px;}}.updated{{border-top:1px solid #5a0000;margin-top:18px;padding-top:10px;font-size:13px;}}</style></head><body><main class=\"leaderboard\"><h1>{escape(title)}</h1>{rows}<div class=\"updated\">Last updated: {escape(updated)} UTC</div></main></body></html>"""
+def _public_leaderboard_html(*, title: str, entries: list[dict[str, str]], data_updated_at: str, page_refreshed_at: str) -> str:
+    if entries:
+        rows = "\n".join(
+            (
+                '<article class="entry">'
+                f'<div class="rank">#{i}</div>'
+                '<div>'
+                f'<div class="name">{escape(e["name"])}</div>'
+                f'<div class="meta">{escape(e["amount"])} sent</div>'
+                f'<div class="meta">{escape(e["count"])} sends</div>'
+                '</div>'
+                '</article>'
+            )
+            for i, e in enumerate(entries, 1)
+        )
+    else:
+        rows = '<div class="empty">No tracked sends are available yet.</div>'
+    return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <title>{escape(title)}</title>
+  <style>
+    html, body {{ margin:0; padding:0; background:#000; color:#b40000; font-family:\"Times New Roman\", Times, serif; }}
+    body {{ min-height:100vh; }}
+    .leaderboard-page {{ box-sizing:border-box; min-height:100vh; padding:28px; background:radial-gradient(circle at top, rgba(120,0,0,0.18), transparent 34%), linear-gradient(180deg, #050000 0%, #000 58%, #050000 100%); }}
+    .leaderboard-panel {{ box-sizing:border-box; width:100%; max-width:820px; margin:0 auto; padding:24px; border:1px solid #5c0000; background:rgba(12,0,0,0.82); box-shadow:0 0 28px rgba(120,0,0,0.18); }}
+    .header {{ padding-bottom:16px; border-bottom:1px solid #5c0000; }}
+    h1 {{ margin:0; color:#d00000; font-size:36px; line-height:1.05; font-weight:bold; letter-spacing:0.03em; }}
+    .subtitle {{ margin-top:8px; color:#8f0000; font-size:15px; }}
+    .entries {{ margin-top:8px; }}
+    .entry {{ display:grid; grid-template-columns:70px 1fr; gap:16px; padding:16px 0; border-bottom:1px solid #360000; }}
+    .entry:last-child {{ border-bottom:none; }}
+    .rank {{ color:#d00000; font-size:24px; font-weight:bold; }}
+    .name {{ color:#c40000; font-size:24px; line-height:1.1; font-weight:bold; word-break:break-word; }}
+    .meta {{ margin-top:6px; color:#950000; font-size:16px; line-height:1.25; }}
+    .stats {{ margin-top:18px; padding-top:14px; border-top:1px solid #5c0000; color:#850000; font-size:14px; line-height:1.5; }}
+    .empty {{ margin-top:18px; padding:16px 0; color:#950000; border-bottom:1px solid #360000; }}
+    @media (max-width:560px) {{ .leaderboard-page {{ padding:16px; }} .leaderboard-panel {{ padding:18px; }} h1 {{ font-size:30px; }} .entry {{ grid-template-columns:52px 1fr; gap:12px; }} .rank, .name {{ font-size:21px; }} }}
+  </style>
+</head>
+<body>
+  <main class=\"leaderboard-page\">
+    <section class=\"leaderboard-panel\">
+      <header class=\"header\">
+        <h1>{escape(title)}</h1>
+        <div class=\"subtitle\">Tracked send leaderboard</div>
+      </header>
+      <section class=\"entries\">{rows}</section>
+      <footer class=\"stats\">
+        <div>Leaderboard data updated: {escape(data_updated_at)}</div>
+        <div>Page refreshed: {escape(page_refreshed_at)}</div>
+      </footer>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _dedupe_fallback_labels(entries: list[dict[str, str]]) -> list[dict[str, str]]:
+    out = []
+    seen = 0
+    for e in entries:
+        name = e["name"]
+        if name == "Registered Dom/me":
+            seen += 1
+            if seen > 1:
+                name = f"Registered Dom/me {seen}"
+        out.append({**e, "name": name})
+    return out
 
 
 async def handle_public_leaderboard(request: web.Request) -> web.Response:
@@ -54,12 +114,21 @@ async def handle_public_leaderboard(request: web.Request) -> web.Response:
         owner_test_user_id=settings.throne_test_send_leaderboard_owner_user_id,
     )
     entries = [
-        {"name": item.label or "Registered Dom/me", "amount": f"${(item.total_cents / 100):,.2f}", "count": f"{item.send_count} sends"}
+        {"name": (item.label or "Registered Dom/me"), "amount": f"${(item.total_cents / 100):,.2f}", "count": str(item.send_count)}
         for item in top
     ]
-    html = _public_leaderboard_html(title=row.title, entries=entries, updated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M"))
+    entries = _dedupe_fallback_labels(entries)
+    latest = await leaderboards.get_public_data_freshness(
+        row.guild_id,
+        include_test_sends=settings.throne_parse_test_sends_as_real_sends,
+        test_gifter_usernames=settings.throne_test_gifter_usernames,
+        owner_test_user_id=settings.throne_test_send_leaderboard_owner_user_id,
+    )
+    page_refreshed = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    data_updated = latest.strftime("%Y-%m-%d %H:%M UTC") if latest else "No tracked sends yet"
+    html = _public_leaderboard_html(title=row.title, entries=entries, data_updated_at=data_updated, page_refreshed_at=page_refreshed)
     response = web.Response(text=html, content_type="text/html")
-    response.headers["Cache-Control"] = "public, max-age=60"
+    response.headers["Cache-Control"] = f"public, max-age={settings.public_leaderboard_cache_seconds}"
     return response
 
 

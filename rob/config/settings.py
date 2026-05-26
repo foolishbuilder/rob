@@ -20,8 +20,11 @@ class BaseSettings:
     throne_test_gifter_usernames: tuple[str, ...]
     throne_test_send_leaderboard_owner_user_id: int | None
     leaderboard_limit: int
+    send_queue_loop_seconds: int
+    public_leaderboard_cache_seconds: int
     inactivity_enabled_default: bool
     inactivity_loop_minutes: int
+    inactivity_new_member_grace_days: int
     inactivity_assignment_grace_days: int
     inactivity_bootstrap_grace_days: int
     inactivity_final_notice_days: int
@@ -131,8 +134,11 @@ def load_base_settings(env_file: str | Path | None = None) -> BaseSettings:
             "THRONE_TEST_SEND_LEADERBOARD_OWNER_USER_ID"
         ),
         leaderboard_limit=_env_int("LEADERBOARD_LIMIT", 10, minimum=1),
+        send_queue_loop_seconds=_env_int("SEND_QUEUE_LOOP_SECONDS", 10, minimum=1),
+        public_leaderboard_cache_seconds=_env_int("PUBLIC_LEADERBOARD_CACHE_SECONDS", 60, minimum=1),
         inactivity_enabled_default=_env_bool("INACTIVITY_ENABLED_DEFAULT", False),
         inactivity_loop_minutes=_env_int("INACTIVITY_LOOP_MINUTES", 60, minimum=1),
+        inactivity_new_member_grace_days=_env_int("INACTIVITY_NEW_MEMBER_GRACE_DAYS", 7, minimum=1),
         inactivity_assignment_grace_days=_env_int("INACTIVITY_ASSIGNMENT_GRACE_DAYS", 14, minimum=1),
         inactivity_bootstrap_grace_days=_env_int("INACTIVITY_BOOTSTRAP_GRACE_DAYS", 21, minimum=1),
         inactivity_final_notice_days=_env_int("INACTIVITY_FINAL_NOTICE_DAYS", 7, minimum=1),
@@ -155,8 +161,11 @@ def load_webhook_settings(env_file: str | Path | None = None) -> WebhookSettings
         throne_test_gifter_usernames=base.throne_test_gifter_usernames,
         throne_test_send_leaderboard_owner_user_id=base.throne_test_send_leaderboard_owner_user_id,
         leaderboard_limit=base.leaderboard_limit,
+        send_queue_loop_seconds=base.send_queue_loop_seconds,
+        public_leaderboard_cache_seconds=base.public_leaderboard_cache_seconds,
         inactivity_enabled_default=base.inactivity_enabled_default,
         inactivity_loop_minutes=base.inactivity_loop_minutes,
+        inactivity_new_member_grace_days=base.inactivity_new_member_grace_days,
         inactivity_assignment_grace_days=base.inactivity_assignment_grace_days,
         inactivity_bootstrap_grace_days=base.inactivity_bootstrap_grace_days,
         inactivity_final_notice_days=base.inactivity_final_notice_days,
@@ -211,8 +220,11 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         throne_test_gifter_usernames=base.throne_test_gifter_usernames,
         throne_test_send_leaderboard_owner_user_id=base.throne_test_send_leaderboard_owner_user_id,
         leaderboard_limit=base.leaderboard_limit,
+        send_queue_loop_seconds=base.send_queue_loop_seconds,
+        public_leaderboard_cache_seconds=base.public_leaderboard_cache_seconds,
         inactivity_enabled_default=base.inactivity_enabled_default,
         inactivity_loop_minutes=base.inactivity_loop_minutes,
+        inactivity_new_member_grace_days=base.inactivity_new_member_grace_days,
         inactivity_assignment_grace_days=base.inactivity_assignment_grace_days,
         inactivity_bootstrap_grace_days=base.inactivity_bootstrap_grace_days,
         inactivity_final_notice_days=base.inactivity_final_notice_days,

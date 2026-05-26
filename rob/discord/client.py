@@ -103,6 +103,7 @@ class RobBot(commands.Bot):
             bot_state=self.bot_state_repo,
             guild_settings=self.guild_settings_repo,
             enabled_default=self.settings.inactivity_enabled_default,
+            new_member_grace_days=self.settings.inactivity_new_member_grace_days,
             assignment_grace_days=self.settings.inactivity_assignment_grace_days,
             bootstrap_grace_days=self.settings.inactivity_bootstrap_grace_days,
             final_notice_days=self.settings.inactivity_final_notice_days,

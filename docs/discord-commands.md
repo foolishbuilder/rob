@@ -56,3 +56,10 @@ Maintenance mode, queue management, service restarts, database checks, and leade
 
 ## Public Embeddable Leaderboards
 Public leaderboard pages are served by the webhook HTTP server at `/public/leaderboard/{token}` for Google Sites embedding. They are read-only and show aggregate Dom/me leaderboard totals only (no Discord IDs, no sub names, no send-level details, no images/emojis).
+
+
+## Inactivity timing
+- New inactive members now use a 7-day no-warning grace period (`INACTIVITY_NEW_MEMBER_GRACE_DAYS`, default `7`).
+- First warning sends at ~day 7 and includes Discord relative/full removal timestamps (`<t:...:R> / <t:...:f>`).
+- Final warning sends at ~day 14 (`INACTIVITY_FINAL_NOTICE_DAYS` before removal) and clarifies removal is not a ban.
+- Removal runs at ~day 21 of inactivity by default.

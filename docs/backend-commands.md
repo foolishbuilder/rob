@@ -125,3 +125,18 @@ deployuser ALL=(root) NOPASSWD: ROB_BOT_CTL, ROB_WEBHOOK_CTL
 - Public page shows only rank, display name, total amount, send count, and last updated timestamp.
 - Public page intentionally excludes Discord IDs, sub names, send-level details, images, and emojis.
 - The public leaderboard route is iframe-safe for Google Sites embedding: it does not set `X-Frame-Options: DENY`/`SAMEORIGIN` and does not apply a CSP `frame-ancestors` block.
+
+
+## Inactivity timing
+- New inactive members now use a 7-day no-warning grace period (`INACTIVITY_NEW_MEMBER_GRACE_DAYS`, default `7`).
+- First warning sends at ~day 7 and includes Discord relative/full removal timestamps (`<t:...:R> / <t:...:f>`).
+- Final warning sends at ~day 14 (`INACTIVITY_FINAL_NOTICE_DAYS` before removal) and clarifies removal is not a ban.
+- Removal runs at ~day 21 of inactivity by default.
+
+
+## Public leaderboard freshness and embed notes
+- Public leaderboard rows only include valid posted sends (`discord_post_status=posted`), excluding private sends and excluded test sends.
+- Footer shows **Leaderboard data updated** (timestamp of newest counted send) and **Page refreshed** (current page render time).
+- Use `PUBLIC_LEADERBOARD_CACHE_SECONDS` (default `60`) to tune response cache max-age for dev testing (for example `15`).
+- If Google Sites embedding fails, verify reverse-proxy/CDN headers do not inject restrictive iframe headers such as `X-Frame-Options` or `Content-Security-Policy: frame-ancestors`.
+- Send posting latency is governed by `SEND_QUEUE_LOOP_SECONDS` (default `10`) in bot service queue cycles.

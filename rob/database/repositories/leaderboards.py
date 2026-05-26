@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from asyncpg import Record
 
 from rob.database.connection import Database
@@ -236,6 +238,32 @@ class LeaderboardsRepository:
             for row in rows
         ]
 
+
+    async def get_public_data_freshness(
+        self,
+        guild_id: int,
+        *,
+        include_test_sends: bool = False,
+        test_gifter_usernames: tuple[str, ...] | list[str] = (),
+        owner_test_user_id: int | None = None,
+    ) -> datetime | None:
+        usernames = _normalized_test_usernames(test_gifter_usernames)
+        async with self.database.acquire() as connection:
+            row = await connection.fetchrow(
+                f"""
+                {_valid_sends_cte()}
+                SELECT
+                    MAX(COALESCE(v.discord_posted_at, v.sent_at, v.created_at, v.updated_at)) AS latest_counted_send_at
+                FROM valid_sends v
+                """,
+                guild_id,
+                include_test_sends,
+                usernames,
+                owner_test_user_id,
+            )
+        if row is None:
+            return None
+        return row["latest_counted_send_at"]
     async def get_top_subs(
         self,
         guild_id: int,

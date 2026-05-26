@@ -85,12 +85,16 @@ class SendQueueService:
             if released:
                 log.info("Released %s queued maintenance send(s).", released)
 
+        log.info("Send queue cycle started.")
         pending = await self.sends.fetch_for_status("pending", limit=50)
+        log.info("Pending sends found: %s", len(pending))
 
         for send in pending:
             ok = await self._post_send(send)
             if ok:
+                log.info("Posted send id=%s guild_id=%s", send.id, send.guild_id)
                 try:
+                    log.info("Refreshing leaderboard for guild_id=%s", send.guild_id)
                     await self.leaderboard_service.refresh_guild(send.guild_id)
                 except Exception:
                     log.exception(
@@ -141,6 +145,7 @@ class SendQueueService:
             return False
 
         await self.sends.mark_posted(send.id, message_id=message.id)
+        log.info("Marked send posted id=%s message_id=%s", send.id, message.id)
         if self.counting_service is not None:
             try:
                 await self.counting_service.process_send_for_count_rescue(send)
