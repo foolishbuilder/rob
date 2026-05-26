@@ -50,6 +50,12 @@ def test_resolve_migration_database_url_falls_back_to_database_url(monkeypatch):
     assert run_migrations.resolve_migration_database_url(settings) == "postgresql://runtime/db"
 
 
+def test_resolve_migration_database_url_uses_runtime_env_without_settings(monkeypatch):
+    monkeypatch.delenv("MIGRATION_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://runtime/db")
+    assert run_migrations.resolve_migration_database_url(None) == "postgresql://runtime/db"
+
+
 def test_run_migrations_uses_migration_database_url_when_set(monkeypatch, tmp_path):
     migration_file = tmp_path / "001_example.sql"
     migration_file.write_text("SELECT 1;\n", encoding="utf-8")
@@ -68,3 +74,24 @@ def test_run_migrations_uses_migration_database_url_when_set(monkeypatch, tmp_pa
     asyncio.run(run_migrations.main())
 
     assert _FakeDatabase.created_urls == ["postgresql://migrator/db"]
+
+
+def test_run_migrations_works_with_only_migration_database_url(monkeypatch, tmp_path):
+    migration_file = tmp_path / "001_example.sql"
+    migration_file.write_text("SELECT 1;\n", encoding="utf-8")
+
+    _FakeDatabase.created_urls = []
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://migrator-only/db")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(run_migrations, "MIGRATIONS_DIR", tmp_path)
+
+    def _raise_missing_database_url():
+        raise RuntimeError("Missing required environment variable: DATABASE_URL")
+
+    monkeypatch.setattr(run_migrations, "load_base_settings", _raise_missing_database_url)
+    monkeypatch.setattr(run_migrations, "configure_logging", lambda _level: None)
+    monkeypatch.setattr(run_migrations, "Database", _FakeDatabase)
+
+    asyncio.run(run_migrations.main())
+
+    assert _FakeDatabase.created_urls == ["postgresql://migrator-only/db"]
