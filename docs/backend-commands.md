@@ -10,6 +10,10 @@ scripts/install-rob-global.sh
 
 The installer prefers a real system-wide binary link in `/usr/local/bin` when it has permission, and otherwise falls back to `~/.local/bin`.
 
+## Database bootstrap/admin
+
+For production-readiness database setup (dev/prod role separation, ownership repair, grants, and cleanup), use the SQL admin pack in [`scripts/db/`](../scripts/db/README.md).
+
 ## Supported commands
 
 ```bash
@@ -83,6 +87,7 @@ alias rob-sends-backfill='scripts/rob sends backfill-public-ids'
 ```
 
 - `maintenance on/off`, `queue status`, `queue flush`, `leaderboard refresh`, and `count` commands talk directly to PostgreSQL through `scripts.ops`.
+- `scripts/run_migrations.py` now prefers `MIGRATION_DATABASE_URL` and falls back to `DATABASE_URL` only when migration URL is not set.
 - `rob` is a bash-native global wrapper; it delegates data operations to Python (`python -m scripts.ops`) so ops logic remains versioned and testable in the app codebase.
 - `robctl` remains available as a compatibility shim that forwards to `rob`.
 - `rob` supports short aliases to simplify typing:

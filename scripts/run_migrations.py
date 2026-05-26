@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from rob.config.settings import configure_logging, load_base_settings
@@ -8,11 +9,19 @@ from rob.database.connection import Database
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "rob" / "database" / "migrations"
 
+
+def resolve_migration_database_url(settings: object) -> str:
+    value = (os.getenv("MIGRATION_DATABASE_URL") or "").strip()
+    if value:
+        return value
+    return str(settings.database_url)
+
+
 async def main() -> None:
     settings = load_base_settings()
     configure_logging(settings.log_level)
 
-    database = Database(settings.database_url)
+    database = Database(resolve_migration_database_url(settings))
     await database.connect()
 
     try:
