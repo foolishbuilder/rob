@@ -37,6 +37,11 @@ build/
 dist/
 *.egg-info/
 
+# Keep Rob DB build SQL scripts tracked.
+!scripts/db/build/
+!scripts/db/build/*.sql
+!scripts/db/build/README.md
+
 # OS/editor files
 .DS_Store
 .vscode/
