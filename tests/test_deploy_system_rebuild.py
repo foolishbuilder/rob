@@ -21,8 +21,8 @@ def test_deploy_workflow_rebuild():
     assert 'precheck-bot.sh is not present yet. Running bootstrap-safe fallback checks.' in text
     assert 'precheck-webhook.sh is not present yet. Running bootstrap-safe fallback checks.' in text
     for secret in [
-        'ROB_DEV_BOT_HOST', 'ROB_DEV_BOT_USER', 'ROB_DEV_BOT_SSH_KEY', 'ROB_DEV_BOT_SSH_PORT',
-        'ROB_DEV_WEBHOOK_HOST', 'ROB_DEV_WEBHOOK_USER', 'ROB_DEV_WEBHOOK_SSH_KEY', 'ROB_DEV_WEBHOOK_SSH_PORT',
+        'BOT_DEV_HOST', 'BOT_DEV_USER', 'BOT_DEV_SSH_KEY', 'BOT_DEV_PORT',
+        'WEBHOOK_DEV_HOST', 'WEBHOOK_DEV_USER', 'WEBHOOK_DEV_SSH_KEY', 'WEBHOOK_DEV_PORT',
         'ROB_PROD_BOT_HOST', 'ROB_PROD_BOT_USER', 'ROB_PROD_BOT_SSH_KEY', 'ROB_PROD_BOT_SSH_PORT',
         'ROB_PROD_WEBHOOK_HOST', 'ROB_PROD_WEBHOOK_USER', 'ROB_PROD_WEBHOOK_SSH_KEY', 'ROB_PROD_WEBHOOK_SSH_PORT',
     ]:

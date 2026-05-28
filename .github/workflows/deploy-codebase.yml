@@ -144,10 +144,10 @@ jobs:
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.ROB_DEV_BOT_HOST }}
-          username: ${{ secrets.ROB_DEV_BOT_USER }}
-          key: ${{ secrets.ROB_DEV_BOT_SSH_KEY }}
-          port: ${{ secrets.ROB_DEV_BOT_SSH_PORT != '' && secrets.ROB_DEV_BOT_SSH_PORT || '22' }}
+          host: ${{ secrets.BOT_DEV_HOST }}
+          username: ${{ secrets.BOT_DEV_USER }}
+          key: ${{ secrets.BOT_DEV_SSH_KEY }}
+          port: ${{ secrets.BOT_DEV_PORT != '' && secrets.BOT_DEV_PORT || '22' }}
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
@@ -212,10 +212,10 @@ jobs:
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.ROB_DEV_WEBHOOK_HOST }}
-          username: ${{ secrets.ROB_DEV_WEBHOOK_USER }}
-          key: ${{ secrets.ROB_DEV_WEBHOOK_SSH_KEY }}
-          port: ${{ secrets.ROB_DEV_WEBHOOK_SSH_PORT != '' && secrets.ROB_DEV_WEBHOOK_SSH_PORT || '22' }}
+          host: ${{ secrets.WEBHOOK_DEV_HOST }}
+          username: ${{ secrets.WEBHOOK_DEV_USER }}
+          key: ${{ secrets.WEBHOOK_DEV_SSH_KEY }}
+          port: ${{ secrets.WEBHOOK_DEV_PORT != '' && secrets.WEBHOOK_DEV_PORT || '22' }}
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
@@ -271,10 +271,10 @@ jobs:
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.ROB_DEV_BOT_HOST }}
-          username: ${{ secrets.ROB_DEV_BOT_USER }}
-          key: ${{ secrets.ROB_DEV_BOT_SSH_KEY }}
-          port: ${{ secrets.ROB_DEV_BOT_SSH_PORT != '' && secrets.ROB_DEV_BOT_SSH_PORT || '22' }}
+          host: ${{ secrets.BOT_DEV_HOST }}
+          username: ${{ secrets.BOT_DEV_USER }}
+          key: ${{ secrets.BOT_DEV_SSH_KEY }}
+          port: ${{ secrets.BOT_DEV_PORT != '' && secrets.BOT_DEV_PORT || '22' }}
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
@@ -317,10 +317,10 @@ jobs:
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.ROB_DEV_WEBHOOK_HOST }}
-          username: ${{ secrets.ROB_DEV_WEBHOOK_USER }}
-          key: ${{ secrets.ROB_DEV_WEBHOOK_SSH_KEY }}
-          port: ${{ secrets.ROB_DEV_WEBHOOK_SSH_PORT != '' && secrets.ROB_DEV_WEBHOOK_SSH_PORT || '22' }}
+          host: ${{ secrets.WEBHOOK_DEV_HOST }}
+          username: ${{ secrets.WEBHOOK_DEV_USER }}
+          key: ${{ secrets.WEBHOOK_DEV_SSH_KEY }}
+          port: ${{ secrets.WEBHOOK_DEV_PORT != '' && secrets.WEBHOOK_DEV_PORT || '22' }}
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
