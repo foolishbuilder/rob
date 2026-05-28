@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 
 from rob.database.repositories.achievements import AchievementsRepository
@@ -57,6 +58,8 @@ def test_unlock_query_uses_on_conflict_do_nothing():
     assert "ON CONFLICT (guild_id, discord_user_id, achievement_key)" in query
     assert "DO NOTHING" in query
     assert params[:3] == (1, 2, "count_10")
+    assert isinstance(params[4], str)
+    assert json.loads(params[4]) == {"x": 1}
 
 
 def test_list_keys_and_event_recording():
@@ -76,4 +79,6 @@ def test_list_keys_and_event_recording():
 
     assert "count_10" in keys
     assert connection.execute_calls
-
+    _, params = connection.execute_calls[0]
+    assert isinstance(params[5], str)
+    assert json.loads(params[5]) == {}

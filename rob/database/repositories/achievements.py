@@ -1,9 +1,26 @@
 from __future__ import annotations
 
+import json
+
 from asyncpg import Record
 
 from rob.database.connection import Database
 from rob.database.repositories.models import UserAchievement
+
+
+def _parse_metadata(value: object) -> dict:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
 
 
 def _build_user_achievement(row: Record) -> UserAchievement:
@@ -14,7 +31,7 @@ def _build_user_achievement(row: Record) -> UserAchievement:
         achievement_key=str(row["achievement_key"]),
         unlocked_at=row["unlocked_at"],
         source=row["source"],
-        metadata=dict(row["metadata"] or {}),
+        metadata=_parse_metadata(row["metadata"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -52,7 +69,7 @@ class AchievementsRepository:
                 discord_user_id,
                 achievement_key,
                 source,
-                metadata or {},
+                json.dumps(metadata or {}),
             )
         return row is not None
 
@@ -142,6 +159,5 @@ class AchievementsRepository:
                 achievement_key,
                 event_type,
                 source,
-                metadata or {},
+                json.dumps(metadata or {}),
             )
-
