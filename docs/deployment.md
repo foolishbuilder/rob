@@ -39,6 +39,15 @@ If schema build/grants are required, run manually (admin action):
 
 SQLite data migration remains separate and is not part of deployment.
 
+## Dev v2 database target
+
+For dev deploys, ensure both server `.env` files point to `rob_dev_v2`:
+
+- Bot server (`/opt/rob-bot/app/.env`): `DATABASE_URL=.../rob_dev_v2?...`
+- Webhook server (`/opt/rob-webhook/app/.env`): `DATABASE_URL=.../rob_dev_v2?...`
+
+If either service still points at an older database, `scripts/check_db.py` will fail because Rob v2 expects `db_build_version` and the new v2 schema tables.
+
 ## Infrastructure hostnames
 
 - `bot-01.robthebot.com`

@@ -136,7 +136,7 @@ jobs:
               test -n "${DATABASE_URL:-}"
               test -n "${DISCORD_TOKEN:-}"
               test -n "${BOT_NAME:-}"
-              PYTHONPATH=. .venv/bin/python scripts/check_db.py
+              echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-bot.sh."
               systemctl is-active 'rob-bot.service' || true
             fi
 
@@ -165,7 +165,7 @@ jobs:
               test -n "${DATABASE_URL:-}"
               test -n "${DISCORD_TOKEN:-}"
               test -n "${BOT_NAME:-}"
-              PYTHONPATH=. .venv/bin/python scripts/check_db.py
+              echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-bot.sh."
               systemctl is-active 'rob-bot-dev.service' || true
             fi
 
@@ -200,7 +200,7 @@ jobs:
               test -n "${DATABASE_URL:-}"
               test -n "${THRONE_WEBHOOK_HOST:-}"
               test -n "${THRONE_WEBHOOK_PORT:-}"
-              PYTHONPATH=. .venv/bin/python scripts/check_db.py
+              echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-webhook.sh."
               state="$(systemctl is-active 'rob-webhook.service' || true)"
               echo "$state"
               if [[ "$state" == "active" ]]; then
@@ -233,7 +233,7 @@ jobs:
               test -n "${DATABASE_URL:-}"
               test -n "${THRONE_WEBHOOK_HOST:-}"
               test -n "${THRONE_WEBHOOK_PORT:-}"
-              PYTHONPATH=. .venv/bin/python scripts/check_db.py
+              echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-webhook.sh."
               state="$(systemctl is-active 'rob-webhook-dev.service' || true)"
               echo "$state"
               if [[ "$state" == "active" ]]; then

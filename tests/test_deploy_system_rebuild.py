@@ -20,6 +20,8 @@ def test_deploy_workflow_rebuild():
     assert "if: ${{ needs.resolve_deploy_context.outputs.deploy_webhook == 'true' }}" in text
     assert 'precheck-bot.sh is not present yet. Running bootstrap-safe fallback checks.' in text
     assert 'precheck-webhook.sh is not present yet. Running bootstrap-safe fallback checks.' in text
+    assert 'Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-bot.sh.' in text
+    assert 'Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-webhook.sh.' in text
     for secret in [
         'BOT_DEV_HOST', 'BOT_DEV_USER', 'BOT_DEV_SSH_KEY', 'BOT_DEV_PORT',
         'WEBHOOK_DEV_HOST', 'WEBHOOK_DEV_USER', 'WEBHOOK_DEV_SSH_KEY', 'WEBHOOK_DEV_PORT',
