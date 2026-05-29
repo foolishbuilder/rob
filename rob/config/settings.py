@@ -54,6 +54,10 @@ class BotSettings(BaseSettings):
 
 
 def _load_env_file(env_file: str | Path | None) -> None:
+    disable_dotenv = os.getenv("PYTHON_DOTENV_DISABLED", "").strip().lower()
+    if disable_dotenv in {"1", "true", "yes", "on"}:
+        return
+
     if env_file is not None:
         load_dotenv(env_file)
         return

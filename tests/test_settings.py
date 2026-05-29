@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import rob.config.settings as settings_module
 from rob.config.settings import load_base_settings, load_bot_settings, load_webhook_settings
 from rob.services.registration_service import sanitize_webhook_base_url
 
@@ -75,3 +76,16 @@ def test_load_base_settings_supports_test_sender_and_leaderboard_env(monkeypatch
     assert settings.throne_test_send_leaderboard_owner_user_id == 42
     assert settings.leaderboard_limit == 15
     assert settings.rob_public_base_url == "https://example.com"
+
+
+def test_load_base_settings_skips_dotenv_when_disabled(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+    monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "1")
+
+    def _raise_if_called(*_args, **_kwargs):
+        raise RuntimeError("load_dotenv should not be called when disabled")
+
+    monkeypatch.setattr(settings_module, "load_dotenv", _raise_if_called)
+
+    settings = load_base_settings()
+    assert settings.database_url == "postgresql://example/db"

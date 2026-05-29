@@ -74,7 +74,7 @@ require_env DISCORD_TOKEN
 require_env BOT_NAME
 
 echo "[6/7] Running database check"
-PYTHON_DOTENV_DISABLED=1 PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py
+PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=bot PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py
 
 echo "[7/7] Checking current service state"
 systemctl is-active "$SERVICE_NAME" || true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from rob.config.settings import configure_logging, load_base_settings
@@ -273,6 +274,14 @@ WEBHOOK_RUNTIME_SEQUENCES = (
 
 
 def _runtime_profile(current_user: str) -> str:
+    override = os.getenv("ROB_CHECK_DB_PROFILE", "").strip().lower()
+    if override:
+        if override in {"bot", "webhook", "generic"}:
+            return override
+        raise RuntimeError(
+            "Invalid ROB_CHECK_DB_PROFILE value. Expected one of: bot, webhook, generic."
+        )
+
     if current_user.endswith("_webhook"):
         return "webhook"
     if current_user.endswith("_bot"):

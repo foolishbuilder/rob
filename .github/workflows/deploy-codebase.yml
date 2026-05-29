@@ -123,10 +123,24 @@ jobs:
             set -Eeuo pipefail
             cd /opt/rob-bot/app
             deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
-            git fetch origin --prune main >/dev/null 2>&1 || true
-            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
-              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
               chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh precheck scripts from deploy ref; using local copies."
             fi
             if [[ -x ./deploy/scripts/precheck-bot.sh ]]; then
               SERVICE_NAME='rob-bot.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/precheck-bot.sh
@@ -155,10 +169,24 @@ jobs:
             set -Eeuo pipefail
             cd /opt/rob-bot/app
             deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
-            git fetch origin --prune main >/dev/null 2>&1 || true
-            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
-              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
               chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh precheck scripts from deploy ref; using local copies."
             fi
             if [[ -x ./deploy/scripts/precheck-bot.sh ]]; then
               SERVICE_NAME='rob-bot-dev.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/precheck-bot.sh
@@ -193,10 +221,24 @@ jobs:
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
             deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
-            git fetch origin --prune main >/dev/null 2>&1 || true
-            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
-              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
               chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh precheck scripts from deploy ref; using local copies."
             fi
             if [[ -x ./deploy/scripts/precheck-webhook.sh ]]; then
               SERVICE_NAME='rob-webhook.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/precheck-webhook.sh
@@ -229,10 +271,24 @@ jobs:
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
             deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
-            git fetch origin --prune main >/dev/null 2>&1 || true
-            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
-              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
               chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh precheck scripts from deploy ref; using local copies."
             fi
             if [[ -x ./deploy/scripts/precheck-webhook.sh ]]; then
               SERVICE_NAME='rob-webhook-dev.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/precheck-webhook.sh
@@ -270,14 +326,27 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
-            if [[ ! -x ./deploy/scripts/deploy-bot.sh ]]; then
-              echo "deploy-bot.sh is not present yet. Bootstrapping script files from deploy ref."
-              git fetch origin --prune main
-              git fetch origin '${{ needs.resolve_deploy_context.outputs.deploy_ref }}' || true
-              git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
-              chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh deploy scripts from deploy ref; using local copies."
             fi
-            DEPLOY_BRANCH=main DEPLOY_REF='${{ needs.resolve_deploy_context.outputs.deploy_ref }}' SERVICE_NAME='rob-bot.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/deploy-bot.sh
+            chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            DEPLOY_BRANCH=main DEPLOY_REF="${deploy_ref}" SERVICE_NAME='rob-bot.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/deploy-bot.sh
 
       - name: Deploy bot over SSH (dev)
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
@@ -290,14 +359,27 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
-            if [[ ! -x ./deploy/scripts/deploy-bot.sh ]]; then
-              echo "deploy-bot.sh is not present yet. Bootstrapping script files from deploy ref."
-              git fetch origin --prune main
-              git fetch origin '${{ needs.resolve_deploy_context.outputs.deploy_ref }}' || true
-              git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
-              chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh deploy scripts from deploy ref; using local copies."
             fi
-            DEPLOY_BRANCH=main DEPLOY_REF='${{ needs.resolve_deploy_context.outputs.deploy_ref }}' SERVICE_NAME='rob-bot-dev.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/deploy-bot.sh
+            chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            DEPLOY_BRANCH=main DEPLOY_REF="${deploy_ref}" SERVICE_NAME='rob-bot-dev.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/deploy-bot.sh
 
   deploy_webhook:
     if: ${{ needs.resolve_deploy_context.outputs.deploy_webhook == 'true' }}
@@ -316,14 +398,27 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
-            if [[ ! -x ./deploy/scripts/deploy-webhook.sh ]]; then
-              echo "deploy-webhook.sh is not present yet. Bootstrapping script files from deploy ref."
-              git fetch origin --prune main
-              git fetch origin '${{ needs.resolve_deploy_context.outputs.deploy_ref }}' || true
-              git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
-              chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh deploy scripts from deploy ref; using local copies."
             fi
-            DEPLOY_BRANCH=main DEPLOY_REF='${{ needs.resolve_deploy_context.outputs.deploy_ref }}' SERVICE_NAME='rob-webhook.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/deploy-webhook.sh
+            chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            DEPLOY_BRANCH=main DEPLOY_REF="${deploy_ref}" SERVICE_NAME='rob-webhook.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/deploy-webhook.sh
 
       - name: Deploy webhook over SSH (dev)
         if: ${{ needs.resolve_deploy_context.outputs.deploy_env != 'prod' }}
@@ -336,11 +431,24 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
-            if [[ ! -x ./deploy/scripts/deploy-webhook.sh ]]; then
-              echo "deploy-webhook.sh is not present yet. Bootstrapping script files from deploy ref."
-              git fetch origin --prune main
-              git fetch origin '${{ needs.resolve_deploy_context.outputs.deploy_ref }}' || true
-              git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
-              chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            run_git() {
+              if git "$@"; then
+                return 0
+              fi
+              owner="$(stat -c '%U' .git 2>/dev/null || true)"
+              if [[ -n "${owner:-}" && "${owner}" != "$(id -un)" ]]; then
+                echo "Git command failed as $(id -un); retrying as ${owner}."
+                sudo -n -u "${owner}" git "$@"
+                return $?
+              fi
+              return 1
+            }
+            run_git fetch origin --prune main >/dev/null 2>&1 || true
+            if run_git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              run_git checkout FETCH_HEAD -- deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            else
+              echo "WARNING: Could not refresh deploy scripts from deploy ref; using local copies."
             fi
-            DEPLOY_BRANCH=main DEPLOY_REF='${{ needs.resolve_deploy_context.outputs.deploy_ref }}' SERVICE_NAME='rob-webhook-dev.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/deploy-webhook.sh
+            chmod +x deploy/scripts/deploy-bot.sh deploy/scripts/deploy-webhook.sh deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            DEPLOY_BRANCH=main DEPLOY_REF="${deploy_ref}" SERVICE_NAME='rob-webhook-dev.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/deploy-webhook.sh

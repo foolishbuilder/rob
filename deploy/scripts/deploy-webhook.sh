@@ -120,7 +120,7 @@ if [[ -z "${THRONE_WEBHOOK_BASE_URL:-}" ]]; then
 fi
 
 echo "[10/13] Run database checks"
-if ! PYTHON_DOTENV_DISABLED=1 PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py; then
+if ! PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=webhook PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py; then
   echo "Database check failed."
   echo "This database has not been built for Rob v2 yet, or runtime grants are incomplete."
   echo

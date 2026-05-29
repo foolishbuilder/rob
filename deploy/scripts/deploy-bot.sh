@@ -113,7 +113,7 @@ for key in DATABASE_URL DISCORD_TOKEN BOT_NAME; do
 done
 
 echo "[10/12] Run database checks"
-if ! PYTHON_DOTENV_DISABLED=1 PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py; then
+if ! PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=bot PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py; then
   echo "Database check failed."
   echo "This database has not been built for Rob v2 yet, or runtime grants are incomplete."
   echo
