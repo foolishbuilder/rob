@@ -36,9 +36,8 @@ load_env_file() {
       continue
     fi
 
-    echo "ERROR: Invalid .env syntax on line ${line_no}: ${line}"
-    echo "Hint: Use KEY=value format and prefix comments with #."
-    exit 1
+    echo "WARNING: Invalid .env syntax on line ${line_no}; ignoring: ${line}" >&2
+    echo "Hint: Use KEY=value format and prefix comments with #." >&2
   done < "${env_file}"
 }
 
