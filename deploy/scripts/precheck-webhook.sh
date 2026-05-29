@@ -76,7 +76,19 @@ require_env THRONE_WEBHOOK_HOST
 require_env THRONE_WEBHOOK_PORT
 
 echo "[6/8] Running database check"
-PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=webhook PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py
+if ! PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=webhook PYTHONPATH=. "$PYTHON_BIN" scripts/check_db.py; then
+  echo "Database check failed."
+  echo "Manual fix:"
+  echo "1. Open pgAdmin4 / psql as doadmin."
+  echo "2. Select the target database."
+  echo "3. Run scripts/db/build/001_core_schema.sql."
+  echo "4. Run scripts/db/build/002_indexes.sql."
+  echo "5. Run scripts/db/build/003_achievements.sql."
+  echo "6. Run scripts/db/build/004_sub_send_names.sql."
+  echo "7. Run scripts/db/build/005_count_recovery.sql."
+  echo "8. Run the correct grants file from scripts/db/grants/."
+  exit 1
+fi
 
 echo "[7/8] Checking current service state"
 STATE="$(systemctl is-active "$SERVICE_NAME" || true)"
