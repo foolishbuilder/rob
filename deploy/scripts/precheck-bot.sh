@@ -9,6 +9,37 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "ERROR: Required command not found: $1"; exit 1; }
 }
 
+load_env_file() {
+  local env_file="$1"
+  local line=""
+  local line_no=0
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line_no=$((line_no + 1))
+    line="${line%$'\r'}"
+
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+
+    if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      local key="${BASH_REMATCH[2]}"
+      local value="${BASH_REMATCH[3]}"
+      value="${value#"${value%%[![:space:]]*}"}"
+
+      if [[ ! "${value}" =~ ^\".*\"$ && ! "${value}" =~ ^\'.*\'$ ]]; then
+        value="$(printf '%s' "${value}" | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//')"
+      fi
+
+      export "${key}=${value}"
+      continue
+    fi
+
+    echo "ERROR: Invalid .env syntax on line ${line_no}: ${line}"
+    echo "Hint: Use KEY=value format and prefix comments with #."
+    exit 1
+  done < "${env_file}"
+}
+
 require_env() {
   local key="$1"
   if [[ -z "${!key:-}" ]]; then
@@ -38,9 +69,7 @@ if ! systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1; then
 fi
 
 echo "[5/7] Loading environment"
-set -a
-source .env
-set +a
+load_env_file ".env"
 require_env DATABASE_URL
 require_env DISCORD_TOKEN
 require_env BOT_NAME

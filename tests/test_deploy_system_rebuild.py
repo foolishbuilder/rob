@@ -52,6 +52,9 @@ def test_deploy_scripts_and_docs():
     assert 'scripts/check_db.py' in pre_bot and 'scripts/check_db.py' in pre_webhook
     assert 'systemctl restart' not in pre_bot and 'systemctl restart' not in pre_webhook
     assert 'echo .env' not in pre_bot and 'echo .env' not in pre_webhook
+    assert 'source .env' not in pre_bot and 'source .env' not in pre_webhook
+    assert 'load_env_file ".env"' in pre_bot and 'load_env_file ".env"' in pre_webhook
+    assert 'Invalid .env syntax on line' in pre_bot and 'Invalid .env syntax on line' in pre_webhook
     assert 'exec "${SCRIPT_DIR}/deploy-bot.sh" "$@"' in bot_dev
     assert 'exec "${SCRIPT_DIR}/deploy-webhook.sh" "$@"' in webhook_dev
     assert 'scripts/db/build/001_core_schema.sql' in deploy_bot
