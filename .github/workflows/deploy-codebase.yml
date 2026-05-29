@@ -122,6 +122,12 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            git fetch origin --prune main >/dev/null 2>&1 || true
+            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+              chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            fi
             if [[ -x ./deploy/scripts/precheck-bot.sh ]]; then
               SERVICE_NAME='rob-bot.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/precheck-bot.sh
             else
@@ -130,12 +136,9 @@ jobs:
               test -f .env
               test -x .venv/bin/python
               systemctl list-unit-files 'rob-bot.service' >/dev/null 2>&1
-              set -a
-              source .env
-              set +a
-              test -n "${DATABASE_URL:-}"
-              test -n "${DISCORD_TOKEN:-}"
-              test -n "${BOT_NAME:-}"
+              grep -Eq '^[[:space:]]*DATABASE_URL=' .env
+              grep -Eq '^[[:space:]]*DISCORD_TOKEN=' .env
+              grep -Eq '^[[:space:]]*BOT_NAME=' .env
               echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-bot.sh."
               systemctl is-active 'rob-bot.service' || true
             fi
@@ -151,6 +154,12 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-bot/app
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            git fetch origin --prune main >/dev/null 2>&1 || true
+            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+              chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            fi
             if [[ -x ./deploy/scripts/precheck-bot.sh ]]; then
               SERVICE_NAME='rob-bot-dev.service' APP_DIR=/opt/rob-bot/app ./deploy/scripts/precheck-bot.sh
             else
@@ -159,12 +168,9 @@ jobs:
               test -f .env
               test -x .venv/bin/python
               systemctl list-unit-files 'rob-bot-dev.service' >/dev/null 2>&1
-              set -a
-              source .env
-              set +a
-              test -n "${DATABASE_URL:-}"
-              test -n "${DISCORD_TOKEN:-}"
-              test -n "${BOT_NAME:-}"
+              grep -Eq '^[[:space:]]*DATABASE_URL=' .env
+              grep -Eq '^[[:space:]]*DISCORD_TOKEN=' .env
+              grep -Eq '^[[:space:]]*BOT_NAME=' .env
               echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-bot.sh."
               systemctl is-active 'rob-bot-dev.service' || true
             fi
@@ -186,6 +192,12 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            git fetch origin --prune main >/dev/null 2>&1 || true
+            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+              chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            fi
             if [[ -x ./deploy/scripts/precheck-webhook.sh ]]; then
               SERVICE_NAME='rob-webhook.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/precheck-webhook.sh
             else
@@ -194,12 +206,9 @@ jobs:
               test -f .env
               test -x .venv/bin/python
               systemctl list-unit-files 'rob-webhook.service' >/dev/null 2>&1
-              set -a
-              source .env
-              set +a
-              test -n "${DATABASE_URL:-}"
-              test -n "${THRONE_WEBHOOK_HOST:-}"
-              test -n "${THRONE_WEBHOOK_PORT:-}"
+              grep -Eq '^[[:space:]]*DATABASE_URL=' .env
+              grep -Eq '^[[:space:]]*THRONE_WEBHOOK_HOST=' .env
+              grep -Eq '^[[:space:]]*THRONE_WEBHOOK_PORT=' .env
               echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-webhook.sh."
               state="$(systemctl is-active 'rob-webhook.service' || true)"
               echo "$state"
@@ -219,6 +228,12 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd /opt/rob-webhook/app
+            deploy_ref='${{ needs.resolve_deploy_context.outputs.deploy_ref }}'
+            git fetch origin --prune main >/dev/null 2>&1 || true
+            if git fetch origin "${deploy_ref}" >/dev/null 2>&1; then
+              git checkout FETCH_HEAD -- deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+              chmod +x deploy/scripts/precheck-bot.sh deploy/scripts/precheck-webhook.sh >/dev/null 2>&1 || true
+            fi
             if [[ -x ./deploy/scripts/precheck-webhook.sh ]]; then
               SERVICE_NAME='rob-webhook-dev.service' APP_DIR=/opt/rob-webhook/app HEALTH_URL=http://127.0.0.1:8080/health ./deploy/scripts/precheck-webhook.sh
             else
@@ -227,12 +242,9 @@ jobs:
               test -f .env
               test -x .venv/bin/python
               systemctl list-unit-files 'rob-webhook-dev.service' >/dev/null 2>&1
-              set -a
-              source .env
-              set +a
-              test -n "${DATABASE_URL:-}"
-              test -n "${THRONE_WEBHOOK_HOST:-}"
-              test -n "${THRONE_WEBHOOK_PORT:-}"
+              grep -Eq '^[[:space:]]*DATABASE_URL=' .env
+              grep -Eq '^[[:space:]]*THRONE_WEBHOOK_HOST=' .env
+              grep -Eq '^[[:space:]]*THRONE_WEBHOOK_PORT=' .env
               echo "Skipping DB schema check in bootstrap fallback. Full DB check runs in deploy-webhook.sh."
               state="$(systemctl is-active 'rob-webhook-dev.service' || true)"
               echo "$state"
