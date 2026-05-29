@@ -139,16 +139,14 @@ warn_if_stale_env_values() {
   local env_file="${APP_DIR}/.env"
   [[ -f "${env_file}" ]] || return
 
-  local stale=()
-  for token in "dev_rob_bot" "dev_rob_webhook" "rob-dev.barecoding.com"; do
-    if grep -Fq "${token}" "${env_file}"; then
-      stale+=("${token}")
-    fi
-  done
-
-  if [[ "${#stale[@]}" -gt 0 ]]; then
-    log "WARNING: ${env_file} still contains stale values (${stale[*]})."
-    log "WARNING: Update DATABASE_URL and THRONE_WEBHOOK_BASE_URL for prod-role rehearsal on rob_dev_v2."
+  if grep -Eq 'dev_rob_bot|rob-dev\.barecoding\.com' "${env_file}"; then
+    warn "Existing .env appears to contain old dev webhook values."
+    warn "This installer will not overwrite it."
+    warn "Please update DATABASE_URL to prod_rob_webhook against rob_dev_v2 and THRONE_WEBHOOK_BASE_URL to https://throne.robthebot.com."
+  elif grep -Fq "dev_rob_webhook" "${env_file}"; then
+    warn "Existing .env still references dev_rob_webhook."
+    warn "This installer will not overwrite it."
+    warn "Please update DATABASE_URL to prod_rob_webhook against rob_dev_v2."
   fi
 }
 

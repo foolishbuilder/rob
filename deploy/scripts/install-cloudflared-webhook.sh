@@ -5,6 +5,7 @@ WEBHOOK_ENV_FILE="${WEBHOOK_ENV_FILE:-/opt/rob-webhook/app/.env}"
 PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-throne.robthebot.com}"
 ORIGIN_URL="${ORIGIN_URL:-http://127.0.0.1:8080}"
 CONFIG_FILE="${CONFIG_FILE:-/etc/cloudflared/config.yml}"
+CLOUDFLARED_CONFIG="${CONFIG_FILE}"
 CREDENTIALS_FILE="${CREDENTIALS_FILE:-/etc/cloudflared/rob-webhook.json}"
 
 log() {
@@ -14,6 +15,15 @@ log() {
 die() {
   printf '[install-cloudflared-webhook] error: %s\n' "$*" >&2
   exit 1
+}
+
+backup_existing_config() {
+  if [[ -f "${CLOUDFLARED_CONFIG}" ]]; then
+    local backup_path
+    backup_path="${CLOUDFLARED_CONFIG}.bak-$(date +%Y%m%d-%H%M%S)"
+    log "Backing up existing ${CLOUDFLARED_CONFIG} to ${backup_path}"
+    cp -a "${CLOUDFLARED_CONFIG}" "${backup_path}"
+  fi
 }
 
 ensure_root() {
@@ -83,8 +93,9 @@ install_token_managed_tunnel() {
 write_named_tunnel_config() {
   local tunnel_id="$1"
   install -d -m 0750 /etc/cloudflared
+  backup_existing_config
 
-  cat > "${CONFIG_FILE}" <<EOF
+  cat > "${CLOUDFLARED_CONFIG}" <<EOF
 tunnel: ${tunnel_id}
 credentials-file: ${CREDENTIALS_FILE}
 ingress:
@@ -92,13 +103,21 @@ ingress:
     service: ${ORIGIN_URL}
   - service: http_status:404
 EOF
-  chmod 0640 "${CONFIG_FILE}"
-  log "Wrote ${CONFIG_FILE} for named tunnel ingress."
+  chmod 0640 "${CLOUDFLARED_CONFIG}"
+  log "Wrote ${CLOUDFLARED_CONFIG} for named tunnel ingress."
 }
 
 install_named_tunnel() {
-  [[ -f "${CREDENTIALS_FILE}" ]] || die "Expected named tunnel credentials at ${CREDENTIALS_FILE}."
+  local tunnel_name="${TUNNEL_NAME:-rob-webhook}"
+  local credentials_file="${CREDENTIALS_FILE}"
+  if [[ ! -f "${credentials_file}" ]]; then
+    die "Named tunnel ${tunnel_name} exists, but ${credentials_file} was not found.
 
+Please copy the correct credentials JSON for this exact tunnel to:
+${credentials_file}
+
+Then rerun this script."
+  fi
   local tunnel_id=""
   read -r -p "Enter tunnel UUID for named tunnel mode: " tunnel_id
   [[ -n "${tunnel_id}" ]] || die "Tunnel UUID cannot be empty."
