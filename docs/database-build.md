@@ -20,7 +20,7 @@ Execute as `doadmin` in pgAdmin4 or `psql`:
 
 Then apply runtime grants:
 
-- Dev rehearsal: `scripts/db/grants/dev_rob_bot.sql`
+- Dev rehearsal using production-shaped roles: `scripts/db/grants/dev_rehearsal_prod_roles.sql`
 - Prod bot: `scripts/db/grants/prod_rob_bot.sql`
 - Prod webhook: `scripts/db/grants/prod_rob_webhook.sql`
 
@@ -31,6 +31,15 @@ Required `db_build_version` rows are:
 - `003_achievements`
 
 Runtime grants are environment-specific and are validated by `scripts/check_db.py` from runtime credentials.
+
+## Canonical rehearsal order (`rob_dev_v2`)
+
+1. Ensure `prod_rob_bot` and `prod_rob_webhook` roles exist.
+2. Run `scripts/db/build/001_core_schema.sql`.
+3. Run `scripts/db/build/002_indexes.sql`.
+4. Run `scripts/db/build/003_achievements.sql`.
+5. Run `scripts/db/grants/dev_rehearsal_prod_roles.sql`.
+6. Run `PYTHONPATH=. python3 -m scripts.check_db` from both bot and webhook runtime environments.
 
 ## Target tables
 
@@ -49,7 +58,7 @@ Runtime grants are environment-specific and are validated by `scripts/check_db.p
 
 ## Runtime safety
 
-Runtime users (`dev_rob_bot`, `prod_rob_bot`, `prod_rob_webhook`) must not receive:
+Runtime users (`prod_rob_bot`, `prod_rob_webhook`) must not receive:
 
 - `CREATE`
 - `ALTER`

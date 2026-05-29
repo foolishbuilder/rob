@@ -2,7 +2,8 @@
 
 These SQL files are environment-specific runtime grants.
 
-- `dev_rob_bot.sql`
+- `dev_rob_bot.sql` (legacy rehearsal role file, retained for compatibility)
+- `dev_rehearsal_prod_roles.sql`
 - `prod_rob_bot.sql`
 - `prod_rob_webhook.sql`
 

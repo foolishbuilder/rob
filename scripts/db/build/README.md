@@ -10,7 +10,7 @@ Run in order:
 1. `001_core_schema.sql`
 2. `002_indexes.sql`
 3. `003_achievements.sql`
-4. `../grants/dev_rob_bot.sql`
+4. `../grants/dev_rehearsal_prod_roles.sql`
 
 Important:
 

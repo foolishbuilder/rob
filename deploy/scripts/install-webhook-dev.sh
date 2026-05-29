@@ -114,14 +114,14 @@ write_env_template_if_missing() {
 
   log "Writing webhook .env template to ${env_file}"
   cat > "${env_file}" <<'EOF'
-APP_ENV=dev
+APP_ENV=prod
 LOG_LEVEL=INFO
-DATABASE_URL=postgresql://dev_rob_bot:replace@127.0.0.1:5432/rob_dev_v2
+DATABASE_URL=postgresql://prod_rob_webhook:replace@replace:25060/rob_dev_v2?sslmode=require
 
 # Webhook server only. Do not add DISCORD_TOKEN on this host.
 THRONE_WEBHOOK_HOST=127.0.0.1
 THRONE_WEBHOOK_PORT=8080
-THRONE_WEBHOOK_BASE_URL=https://rob-dev.barecoding.com
+THRONE_WEBHOOK_BASE_URL=https://throne.robthebot.com
 THRONE_WEBHOOK_REQUIRE_SIGNATURE=false
 THRONE_PUBLIC_KEY_PEM=
 THRONE_WEBHOOK_DEBUG_LOG_PAYLOAD=false
@@ -129,9 +129,27 @@ THRONE_WEBHOOK_TIMESTAMP_HEADER=X-Signature-Timestamp
 THRONE_WEBHOOK_SIGNATURE_HEADER=X-Signature-Ed25519
 THRONE_WEBHOOK_SIGNED_MESSAGE_FORMAT=timestamp_dot_body
 THRONE_WEBHOOK_MAX_TIMESTAMP_SKEW_SECONDS=300
+THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS=false
 EOF
   chown "${DEPLOY_USER}:${RUNTIME_GROUP}" "${env_file}"
   chmod 0640 "${env_file}"
+}
+
+warn_if_stale_env_values() {
+  local env_file="${APP_DIR}/.env"
+  [[ -f "${env_file}" ]] || return
+
+  local stale=()
+  for token in "dev_rob_bot" "dev_rob_webhook" "rob-dev.barecoding.com"; do
+    if grep -Fq "${token}" "${env_file}"; then
+      stale+=("${token}")
+    fi
+  done
+
+  if [[ "${#stale[@]}" -gt 0 ]]; then
+    log "WARNING: ${env_file} still contains stale values (${stale[*]})."
+    log "WARNING: Update DATABASE_URL and THRONE_WEBHOOK_BASE_URL for prod-role rehearsal on rob_dev_v2."
+  fi
 }
 
 install_service_files() {
@@ -199,7 +217,7 @@ maybe_enable_and_start() {
 print_summary() {
   cat <<EOF
 
-Webhook dev bootstrap complete.
+Webhook prod-role rehearsal bootstrap complete.
 
 App root:       ${APP_ROOT}
 App dir:        ${APP_DIR}
@@ -210,8 +228,9 @@ Deploy script:  ${DEPLOY_SCRIPT_LINK}
 
 Next steps:
   1. Edit ${APP_DIR}/.env with the real PostgreSQL and webhook values.
-  2. If you want signed requests in dev, set THRONE_WEBHOOK_REQUIRE_SIGNATURE=true and add THRONE_PUBLIC_KEY_PEM.
-  3. Run ${DEPLOY_SCRIPT_LINK} after pushing updates, or restart the service manually once the .env file is ready.
+  2. Keep THRONE_WEBHOOK_BASE_URL set to https://throne.robthebot.com.
+  3. If you want signed requests, set THRONE_WEBHOOK_REQUIRE_SIGNATURE=true and add THRONE_PUBLIC_KEY_PEM.
+  4. Run ${DEPLOY_SCRIPT_LINK} after pushing updates, or restart the service manually once the .env file is ready.
 EOF
 }
 
@@ -223,6 +242,7 @@ main() {
   clone_or_update_repo
   install_python_environment
   write_env_template_if_missing
+  warn_if_stale_env_values
   install_service_files
   install_sudoers
   maybe_enable_and_start

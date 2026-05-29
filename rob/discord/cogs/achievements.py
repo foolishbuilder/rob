@@ -50,20 +50,23 @@ class AchievementsCog(commands.Cog):
 
         target = user or viewer
 
-        await self.bot.achievements_service.unlock_achievement(
+        newly_unlocked = 0
+        if await self.bot.achievements_service.unlock_achievement(
             guild_id=interaction.guild.id,
             discord_user_id=viewer.id,
             achievement_key="first_achievement_view",
             source="slash:/achievements",
-        )
+        ):
+            newly_unlocked += 1
         if target.id != viewer.id:
-            await self.bot.achievements_service.unlock_achievement(
+            if await self.bot.achievements_service.unlock_achievement(
                 guild_id=interaction.guild.id,
                 discord_user_id=viewer.id,
                 achievement_key="viewed_other_achievements",
                 source="slash:/achievements",
                 metadata={"target_user_id": target.id},
-            )
+            ):
+                newly_unlocked += 1
 
         unlocked_keys = await self.bot.achievements_service.get_user_achievement_keys(
             guild_id=interaction.guild.id,
@@ -73,6 +76,7 @@ class AchievementsCog(commands.Cog):
             display_name=target.display_name,
             unlocked_keys=unlocked_keys,
             for_self=target.id == viewer.id,
+            newly_unlocked_count=newly_unlocked,
         )
         first, *rest = cards
         await interaction.response.send_message(**first.send_kwargs(), ephemeral=False)
@@ -117,7 +121,13 @@ class AchievementsCog(commands.Cog):
         achievements = self.bot.achievements_service.all_definitions()
         for achievement in achievements:
             try:
-                await channel.send(**achievement_unlocked_card(achievement, include_meta_line=True).send_kwargs())
+                await channel.send(
+                    **achievement_unlocked_card(
+                        achievement,
+                        unlocked_by_display_name="Preview Mode",
+                        include_meta_line=True,
+                    ).send_kwargs()
+                )
             except discord.HTTPException:
                 log.exception("Failed to send achievement preview key=%s", achievement.key)
                 continue
@@ -139,4 +149,3 @@ class AchievementsCog(commands.Cog):
             achievement_key="dm_rob",
             source="dm",
         )
-

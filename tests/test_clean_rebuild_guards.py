@@ -170,6 +170,7 @@ def test_db_build_scripts_exist_under_scripts_db_build():
     assert (build_dir / "README.md").exists()
     grants_dir = REPO_ROOT / "scripts" / "db" / "grants"
     assert (grants_dir / "dev_rob_bot.sql").exists()
+    assert (grants_dir / "dev_rehearsal_prod_roles.sql").exists()
     assert (grants_dir / "prod_rob_bot.sql").exists()
     assert (grants_dir / "prod_rob_webhook.sql").exists()
     assert not (REPO_ROOT / "rob" / "database" / "migrations").exists()
@@ -225,7 +226,6 @@ def test_runtime_grants_template_does_not_grant_schema_create_to_runtime_users()
     grants = (
         REPO_ROOT / "scripts" / "db" / "build" / "003_runtime_grants_template.sql"
     ).read_text(encoding="utf-8")
-    assert "GRANT CREATE ON SCHEMA public TO dev_rob_bot" not in grants
     assert "GRANT CREATE ON SCHEMA public TO prod_rob_bot" not in grants
     assert "GRANT CREATE ON SCHEMA public TO prod_rob_webhook" not in grants
 

@@ -38,6 +38,10 @@ Webhook:
 
 No admin DB credential is required in runtime `.env`.
 
+Rehearsal note:
+
+- Use the same role names (`prod_rob_bot`, `prod_rob_webhook`) against `rob_dev_v2` before cutover.
+
 ## 5) Validate DB with runtime credentials
 
 Run:

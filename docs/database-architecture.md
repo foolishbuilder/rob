@@ -9,9 +9,10 @@ Rob runtime services should not use `defaultdb` or `_dodb` for app data.
 
 ## Runtime users
 
-- Dev bot runtime: `dev_rob_bot`
-- Prod bot runtime: `prod_rob_bot`
-- Prod webhook runtime: `prod_rob_webhook`
+- Rehearsal bot runtime: `prod_rob_bot` (against `rob_dev_v2`)
+- Rehearsal webhook runtime: `prod_rob_webhook` (against `rob_dev_v2`)
+- Production bot runtime: `prod_rob_bot` (against `rob_prod`)
+- Production webhook runtime: `prod_rob_webhook` (against `rob_prod`)
 
 Schema creation/alteration is handled manually by `doadmin` (or provider-equivalent admin).
 

@@ -28,7 +28,7 @@ python3 -m scripts.data_migration.inspect_sqlite \
 ```bash
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
-  --database-url 'postgresql://dev_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
+  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
   --default-guild-id 1506597978251591813 \
   --dry-run \
   --report-json /tmp/rob-import-dry-run.json
@@ -39,7 +39,7 @@ python3 -m scripts.data_migration.import_sqlite_to_postgres \
 ```bash
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
-  --database-url 'postgresql://dev_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
+  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
   --default-guild-id 1506597978251591813 \
   --no-dry-run \
   --report-json /tmp/rob-import-apply.json
@@ -50,7 +50,7 @@ Optional target reset (dangerous):
 ```bash
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
-  --database-url 'postgresql://dev_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
+  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
   --default-guild-id 1506597978251591813 \
   --no-dry-run \
   --truncate-target \

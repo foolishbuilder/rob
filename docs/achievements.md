@@ -30,7 +30,7 @@ Run manually as `doadmin`:
 
 1. `scripts/db/build/003_achievements.sql`
 2. Re-run the relevant grants file:
-   - dev: `scripts/db/grants/dev_rob_bot.sql`
+   - dev rehearsal: `scripts/db/grants/dev_rehearsal_prod_roles.sql`
    - prod bot: `scripts/db/grants/prod_rob_bot.sql`
    - prod webhook: `scripts/db/grants/prod_rob_webhook.sql`
 3. Validate with runtime credentials:

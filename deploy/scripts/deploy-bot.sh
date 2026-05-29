@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/opt/rob-bot/app}"
-SERVICE_NAME="${SERVICE_NAME:-rob-bot.service}"
+SERVICE_NAME="${SERVICE_NAME:-rob-bot-dev.service}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_REF="${DEPLOY_REF:-${DEPLOY_BRANCH}}"
 GIT_CLEAN="${GIT_CLEAN:-true}"
@@ -88,4 +88,4 @@ sudo systemctl is-active "$SERVICE_NAME"
 echo "[12/12] Show final service status"
 sudo systemctl --no-pager --full status "$SERVICE_NAME" | sed -n '1,14p'
 
-echo "Bot deployment completed successfully."
+echo "Bot prod-role rehearsal deploy complete."
