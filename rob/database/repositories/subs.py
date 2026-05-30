@@ -258,6 +258,28 @@ class SubsRepository:
             )
         return [_build_sub(row) for row in rows]
 
+    async def remove_by_user_id(self, guild_id: int, discord_user_id: int) -> Sub | None:
+        async with self.database.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                DELETE FROM subs
+                WHERE guild_id = $1
+                  AND discord_user_id = $2
+                RETURNING *
+                """,
+                guild_id,
+                discord_user_id,
+            )
+        if row is None:
+            return None
+        return _build_sub(row)
+
+    async def remove_by_send_name(self, guild_id: int, send_name: str) -> Sub | None:
+        sub = await self.get_by_send_name(guild_id, send_name)
+        if sub is None:
+            return None
+        return await self.remove_by_user_id(guild_id, sub.discord_user_id)
+
     async def count(self, guild_id: int) -> int:
         async with self.database.acquire() as connection:
             value = await connection.fetchval(

@@ -18,7 +18,8 @@ Execute as `doadmin` in pgAdmin4 or `psql`:
 3. `scripts/db/build/003_achievements.sql`
 4. `scripts/db/build/004_sub_send_names.sql`
 5. `scripts/db/build/005_count_recovery.sql`
-6. `scripts/db/build/003_runtime_grants_template.sql` (optional reference template)
+6. `scripts/db/build/006_send_change_requests.sql`
+7. `scripts/db/build/003_runtime_grants_template.sql` (optional reference template)
 
 Then apply runtime grants:
 
@@ -33,6 +34,7 @@ Required `db_build_version` rows are:
 - `003_achievements`
 - `004_sub_send_names`
 - `005_count_recovery`
+- `006_send_change_requests`
 
 Runtime grants are environment-specific and are validated by `scripts/check_db.py` from runtime credentials.
 
@@ -44,8 +46,9 @@ Runtime grants are environment-specific and are validated by `scripts/check_db.p
 4. Run `scripts/db/build/003_achievements.sql`.
 5. Run `scripts/db/build/004_sub_send_names.sql`.
 6. Run `scripts/db/build/005_count_recovery.sql`.
-7. Run `scripts/db/grants/dev_rehearsal_prod_roles.sql`.
-8. Run `PYTHONPATH=. python3 -m scripts.check_db` from both bot and webhook runtime environments.
+7. Run `scripts/db/build/006_send_change_requests.sql`.
+8. Run `scripts/db/grants/dev_rehearsal_prod_roles.sql`.
+9. Run `PYTHONPATH=. python3 -m scripts.check_db` from both bot and webhook runtime environments.
 
 ## Target tables
 
@@ -62,6 +65,7 @@ Runtime grants are environment-specific and are validated by `scripts/check_db.p
 - `inactive_users`
 - `count_recovery_windows`
 - `count_blocks`
+- `send_change_requests`
 - `user_achievements`
 - `achievement_events`
 

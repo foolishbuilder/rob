@@ -12,7 +12,8 @@ Run in order:
 3. `003_achievements.sql`
 4. `004_sub_send_names.sql`
 5. `005_count_recovery.sql`
-6. `../grants/dev_rehearsal_prod_roles.sql`
+6. `006_send_change_requests.sql`
+7. `../grants/dev_rehearsal_prod_roles.sql`
 
 Important:
 

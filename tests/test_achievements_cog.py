@@ -118,6 +118,15 @@ class _FakeBot:
 
 
 def _message_text(payload: dict) -> str:
+    embeds = payload.get("embeds") or []
+    if embeds:
+        embed = embeds[0]
+        parts = [embed.title or "", embed.description or ""]
+        parts.extend(field.name for field in embed.fields)
+        parts.extend(field.value for field in embed.fields)
+        parts.append(embed.footer.text if embed.footer else "")
+        return "\n".join(part for part in parts if part)
+
     view = payload["view"]
     return "\n".join(
         str(getattr(item, "content", ""))
@@ -126,7 +135,7 @@ def _message_text(payload: dict) -> str:
     )
 
 
-def test_achievements_command_shows_only_unlocked_achievements():
+def test_achievements_command_shows_catalogue_with_locked_entries():
     bot = _FakeBot(unlocked_keys={"count_10"})
     cog = AchievementsCog(bot)  # type: ignore[arg-type]
     member = _FakeMember(user_id=10, display_name="Pat", role_ids=[42], manage_guild=True)
@@ -135,16 +144,27 @@ def test_achievements_command_shows_only_unlocked_achievements():
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
 
     payload = interaction.response.messages[0]
-    assert payload["ephemeral"] is False
+    assert payload["ephemeral"] is True
     text = _message_text(payload)
-    text += "\n".join(_message_text(message) for message in interaction.followup.messages)
     assert "Rob Achievements" in text
     assert "Double Digits" in text
-    assert "Secret Achievement" not in text
-    assert "???" not in text
+    assert "Achievements unlocked (total): 1/" in text
+    assert "The 67 Incident" in text
+    assert "You said 67." in text
 
 
-def test_achievements_command_shows_empty_state_when_none_unlocked():
+def test_achievements_command_does_not_send_unlock_followups_for_meta_achievements():
+    bot = _FakeBot(unlocked_keys={"count_10"}, unlock_returns=True)
+    cog = AchievementsCog(bot)  # type: ignore[arg-type]
+    member = _FakeMember(user_id=10, display_name="Pat", role_ids=[42], manage_guild=True)
+    interaction = _FakeInteraction(user=member, guild=_FakeGuild(1), channel=_FakeChannel())
+
+    asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
+
+    assert interaction.followup.messages == []
+
+
+def test_achievements_command_shows_zero_progress_when_none_unlocked():
     bot = _FakeBot(unlocked_keys=set())
     cog = AchievementsCog(bot)  # type: ignore[arg-type]
     member = _FakeMember(user_id=10, display_name="Pat", role_ids=[42], manage_guild=True)
@@ -153,7 +173,8 @@ def test_achievements_command_shows_empty_state_when_none_unlocked():
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
 
     text = _message_text(interaction.response.messages[0])
-    assert "You have not unlocked any achievements yet." in text
+    assert "Achievements unlocked (total): 0/" in text
+    assert "Double Digits" in text
 
 
 def test_achievements_viewing_other_user_unlocks_nosy_achievement():
@@ -212,8 +233,7 @@ def test_achievements_command_adds_pagination_buttons_after_ten_entries():
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
 
     view = interaction.response.messages[0]["view"]
-    assert type(view.children[1]).__name__ == "ActionRow"
-    buttons = view.children[1].children
+    buttons = view.children
     assert [button.label for button in buttons] == ["Previous", "Next"]
     assert buttons[0].disabled is True
     assert buttons[1].disabled is False
@@ -228,7 +248,7 @@ def test_achievements_pagination_rejects_other_users():
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
 
     view = interaction.response.messages[0]["view"]
-    next_button = view.children[1].children[1]
+    next_button = view.children[1]
 
     intruder = _FakeMember(user_id=99, display_name="Intruder", role_ids=[], manage_guild=False)
     intruder_interaction = _FakeInteraction(user=intruder, guild=_FakeGuild(1), channel=_FakeChannel())

@@ -14,6 +14,7 @@ REQUIRED_DB_BUILD_VERSIONS = (
     "003_achievements",
     "004_sub_send_names",
     "005_count_recovery",
+    "006_send_change_requests",
 )
 
 REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
@@ -182,6 +183,28 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "blocked_until",
         "created_at",
     },
+    "send_change_requests": {
+        "id",
+        "guild_id",
+        "domme_user_id",
+        "action",
+        "status",
+        "requested_by",
+        "requested_sub_name",
+        "amount_cents",
+        "currency",
+        "method",
+        "note",
+        "target_send_id",
+        "decision_reason",
+        "request_channel_id",
+        "request_message_id",
+        "approved_by_user_id",
+        "approved_send_id",
+        "created_at",
+        "updated_at",
+        "decided_at",
+    },
     "user_achievements": {
         "id",
         "guild_id",
@@ -233,6 +256,7 @@ BOT_TABLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "inactive_users": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "count_recovery_windows": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "count_blocks": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "send_change_requests": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "user_achievements": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "achievement_events": ("SELECT", "INSERT", "UPDATE", "DELETE"),
 }
@@ -261,6 +285,7 @@ BOT_RUNTIME_SEQUENCES = (
     "public.inactive_users_id_seq",
     "public.count_recovery_windows_id_seq",
     "public.count_blocks_id_seq",
+    "public.send_change_requests_id_seq",
     "public.user_achievements_id_seq",
     "public.achievement_events_id_seq",
 )

@@ -268,6 +268,25 @@ class SendsRepository:
                 error,
             )
 
+    async def mark_ignored(self, send_id: int, *, reason: str | None = None) -> int:
+        async with self.database.acquire() as connection:
+            result = await connection.execute(
+                """
+                UPDATE sends
+                SET
+                    discord_post_status = 'ignored',
+                    discord_post_error = CASE
+                        WHEN $2::text IS NULL OR $2::text = '' THEN discord_post_error
+                        ELSE left($2, 500)
+                    END
+                WHERE id = $1
+                  AND discord_post_status <> 'ignored'
+                """,
+                send_id,
+                reason,
+            )
+        return int(result.rsplit(" ", 1)[-1])
+
     async def count_statuses(self) -> QueueStatus:
         async with self.database.acquire() as connection:
             rows = await connection.fetch(

@@ -38,6 +38,7 @@ If schema build/grants are required, run manually (admin action):
 - `scripts/db/build/003_achievements.sql`
 - `scripts/db/build/004_sub_send_names.sql`
 - `scripts/db/build/005_count_recovery.sql`
+- `scripts/db/build/006_send_change_requests.sql`
 - `scripts/db/grants/*.sql`
 
 SQLite data migration remains separate and is not part of deployment.

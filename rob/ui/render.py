@@ -43,15 +43,27 @@ class RobCard:
 @dataclass(frozen=True)
 class RenderedMessage:
     content: str | None = None
-    view: discord.ui.LayoutView | None = None
-    mode: Literal["components_v2"] = "components_v2"
+    view: discord.ui.View | discord.ui.LayoutView | None = None
+    embeds: list[discord.Embed] = field(default_factory=list)
+    mode: Literal["components_v2", "embed"] = "components_v2"
 
     def send_kwargs(self) -> dict[str, Any]:
-        return {"content": self.content, "view": self.view}
+        payload: dict[str, Any] = {}
+        if self.content is not None:
+            payload["content"] = self.content
+        if self.embeds:
+            payload["embeds"] = list(self.embeds)
+        if self.view is not None:
+            payload["view"] = self.view
+        return payload
 
     def edit_kwargs(self) -> dict[str, Any]:
-        # Explicitly avoid mixing embed/embeds to prevent discord.py edit errors.
-        return {"content": None, "embeds": [], "attachments": [], "view": self.view}
+        return {
+            "content": self.content,
+            "embeds": list(self.embeds),
+            "attachments": [],
+            "view": self.view,
+        }
 
 
 def supports_components_v2() -> bool:

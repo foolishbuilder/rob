@@ -8,6 +8,7 @@ from rob.database.repositories.dommes import DommesRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.inactive_users import InactiveUsersRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
+from rob.database.repositories.send_change_requests import SendChangeRequestsRepository
 from rob.database.repositories.sends import SendsRepository
 from rob.database.repositories.subs import SubsRepository
 from rob.database.repositories.the_count import TheCountRepository
@@ -25,6 +26,7 @@ __all__ = [
     "GuildSettingsRepository",
     "InactiveUsersRepository",
     "LeaderboardsRepository",
+    "SendChangeRequestsRepository",
     "SendsRepository",
     "SubsRepository",
     "TheCountRepository",

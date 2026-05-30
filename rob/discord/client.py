@@ -15,10 +15,11 @@ from rob.database.repositories import (
     BotSettingsRepository,
     CountingRepository,
     DommesRepository,
-    VibSettingsRepository,
     LeaderboardsRepository,
+    SendChangeRequestsRepository,
     SendsRepository,
     SubsRepository,
+    VibSettingsRepository,
 )
 from rob.discord.cogs.admin_tools import AdminToolsCog
 from rob.discord.cogs.achievements import AchievementsCog
@@ -35,6 +36,7 @@ from rob.services.inactivity_service import InactivityService
 from rob.services.leaderboard_service import LeaderboardService
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.registration_service import RegistrationService
+from rob.services.send_change_request_service import SendChangeRequestService
 from rob.services.send_queue_service import SendQueueService
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
@@ -76,6 +78,7 @@ class RobBot(commands.Bot):
         self.sends_repo = SendsRepository(self.database)
         self.leaderboards_repo = LeaderboardsRepository(self.database)
         self.counting_repo = CountingRepository(self.database)
+        self.send_change_requests_repo = SendChangeRequestsRepository(self.database)
 
         self.throne_service = ThroneService()
         self.maintenance_service = MaintenanceService(self.bot_settings_repo)
@@ -145,6 +148,15 @@ class RobBot(commands.Bot):
             test_gifter_usernames=self.settings.throne_test_gifter_usernames,
             poll_interval_seconds=self.settings.send_queue_loop_seconds,
         )
+        self.send_change_request_service = SendChangeRequestService(
+            bot=self,
+            requests=self.send_change_requests_repo,
+            dommes=self.dommes_repo,
+            sends=self.sends_repo,
+            send_service=self.send_service,
+            send_queue_service=self.send_queue_service,
+            leaderboard_service=self.leaderboard_service,
+        )
         self.bot_ops_server = BotOpsServer(
             bot=self,
             host=self.settings.rob_ops_host,
@@ -163,6 +175,7 @@ class RobBot(commands.Bot):
         await self.add_cog(AdminToolsCog(self))
 
         self.tree.interaction_check = self._global_blacklist_interaction_check
+        await self.send_change_request_service.rebind_pending_views()
 
         guild_ids = await self.vib_settings_repo.list_guild_ids()
         if len(guild_ids) == 1:

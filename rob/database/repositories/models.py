@@ -162,6 +162,30 @@ class NewSend:
 
 
 @dataclass(frozen=True)
+class SendChangeRequest:
+    id: int
+    guild_id: int
+    domme_user_id: int
+    action: str
+    status: str
+    requested_by: str
+    requested_sub_name: str | None
+    amount_cents: int | None
+    currency: str | None
+    method: str | None
+    note: str | None
+    target_send_id: int | None
+    decision_reason: str | None
+    request_channel_id: int | None
+    request_message_id: int | None
+    approved_by_user_id: int | None
+    approved_send_id: int | None
+    created_at: datetime
+    updated_at: datetime
+    decided_at: datetime | None
+
+
+@dataclass(frozen=True)
 class LeaderboardMessageRef:
     id: int
     guild_id: int

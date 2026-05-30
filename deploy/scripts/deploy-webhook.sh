@@ -130,8 +130,9 @@ if ! PYTHON_DOTENV_DISABLED=1 ROB_CHECK_DB_PROFILE=webhook PYTHONPATH=. "$PYTHON
   echo "5. Run scripts/db/build/003_achievements.sql."
   echo "6. Run scripts/db/build/004_sub_send_names.sql."
   echo "7. Run scripts/db/build/005_count_recovery.sql."
-  echo "8. Run the correct grants file from scripts/db/grants/."
-  echo "9. Rerun deploy."
+  echo "8. Run scripts/db/build/006_send_change_requests.sql."
+  echo "9. Run the correct grants file from scripts/db/grants/."
+  echo "10. Rerun deploy."
   exit 1
 fi
 

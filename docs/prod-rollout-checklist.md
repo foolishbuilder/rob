@@ -9,9 +9,10 @@ Run in order, against `rob_prod`:
 3. `scripts/db/build/003_achievements.sql`
 4. `scripts/db/build/004_sub_send_names.sql`
 5. `scripts/db/build/005_count_recovery.sql`
-6. `scripts/db/build/003_runtime_grants_template.sql` (optional reference template)
-7. `scripts/db/grants/prod_rob_bot.sql`
-8. `scripts/db/grants/prod_rob_webhook.sql`
+6. `scripts/db/build/006_send_change_requests.sql`
+7. `scripts/db/build/003_runtime_grants_template.sql` (optional reference template)
+8. `scripts/db/grants/prod_rob_bot.sql`
+9. `scripts/db/grants/prod_rob_webhook.sql`
 
 These are DB build scripts, not app migrations.
 
@@ -84,3 +85,4 @@ Deploy scripts do **not** create/alter schema.
   - `003_achievements`
   - `004_sub_send_names`
   - `005_count_recovery`
+  - `006_send_change_requests`

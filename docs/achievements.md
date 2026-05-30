@@ -35,6 +35,7 @@ Run manually as `doadmin`:
    - `scripts/db/build/003_achievements.sql`
    - `scripts/db/build/004_sub_send_names.sql`
    - `scripts/db/build/005_count_recovery.sql`
+   - `scripts/db/build/006_send_change_requests.sql`
 3. Re-run the relevant grants file:
    - dev rehearsal: `scripts/db/grants/dev_rehearsal_prod_roles.sql`
    - prod bot: `scripts/db/grants/prod_rob_bot.sql`

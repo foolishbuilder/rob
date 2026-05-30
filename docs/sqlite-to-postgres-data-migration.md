@@ -14,6 +14,7 @@ Before importing data, manually apply DB build SQL (as `doadmin`) in this order:
 3. `scripts/db/build/003_achievements.sql`
 4. `scripts/db/build/004_sub_send_names.sql`
 5. `scripts/db/build/005_count_recovery.sql`
+6. `scripts/db/build/006_send_change_requests.sql`
 
 ## Safety rules
 
