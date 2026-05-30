@@ -67,6 +67,17 @@ This will:
 3. run the PostgreSQL importer in `--dry-run` mode;
 4. write timestamped report artifacts under `/tmp`.
 
+If you need to deliberately skip known duplicate or unwanted legacy Dom/me handles during rehearsal shaping, repeat `--exclude-domme-handle`:
+
+```bash
+scripts/data_migration/legacy_server/legacy_to_pg_dry_run.sh \
+  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
+  --default-guild-id 1506597978251591813 \
+  --exclude-domme-handle missbuttercup \
+  --exclude-domme-handle gothpuppy22 \
+  --exclude-domme-handle sirenofspoils
+```
+
 ### Real rehearsal import from the legacy host
 
 ```bash

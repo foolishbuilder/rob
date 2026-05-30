@@ -8,11 +8,12 @@ SQLITE_PATH="${SQLITE_PATH:-}"
 DATABASE_URL="${DATABASE_URL:-}"
 DEFAULT_GUILD_ID="${DEFAULT_GUILD_ID:-}"
 SCAN_ROOTS="${SCAN_ROOTS:-}"
+EXCLUDE_DOMME_HANDLES=()
 
 usage() {
   cat <<'EOF'
 Usage:
-  legacy_to_pg_dry_run.sh --database-url <url> --default-guild-id <guild_id> [--sqlite <path>] [--report-dir <dir>] [--roots "/opt /srv"]
+  legacy_to_pg_dry_run.sh --database-url <url> --default-guild-id <guild_id> [--sqlite <path>] [--report-dir <dir>] [--roots "/opt /srv"] [--exclude-domme-handle <handle>]
 
 Notes:
   - This script never writes to PostgreSQL.
@@ -42,6 +43,10 @@ while (($#)); do
     --roots)
       shift
       SCAN_ROOTS="${1:-}"
+      ;;
+    --exclude-domme-handle)
+      shift
+      EXCLUDE_DOMME_HANDLES+=("${1:-}")
       ;;
     -h|--help)
       usage
@@ -84,6 +89,11 @@ if [[ -n "${SCAN_ROOTS}" ]]; then
   ROOT_ARGS=(--roots "${ROOT_PARTS[@]}")
 fi
 
+EXCLUDE_ARGS=()
+for handle in "${EXCLUDE_DOMME_HANDLES[@]}"; do
+  EXCLUDE_ARGS+=(--exclude-domme-handle "${handle}")
+done
+
 if [[ -z "${SQLITE_PATH}" ]]; then
   SQLITE_PATH="$(
     PYTHONPATH=. python3 -m scripts.data_migration.legacy_server.legacy_sqlite_report \
@@ -107,6 +117,7 @@ PYTHONPATH=. python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite "${SQLITE_PATH}" \
   --database-url "${DATABASE_URL}" \
   --default-guild-id "${DEFAULT_GUILD_ID}" \
+  "${EXCLUDE_ARGS[@]}" \
   --dry-run \
   --report-json "${DRY_RUN_JSON}"
 

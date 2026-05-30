@@ -340,6 +340,49 @@ def test_importer_reports_creator_merge_conflicts_and_missing_users(tmp_path: Pa
     assert payload["warnings"]
 
 
+def test_importer_matches_throne_creators_by_handle_before_creating_duplicate_domme(
+    tmp_path: Path,
+):
+    sqlite_path = tmp_path / "legacy.sqlite3"
+    _create_sample_sqlite(sqlite_path)
+    with sqlite3.connect(sqlite_path) as sqlite:
+        sqlite.execute("DELETE FROM throne_creators")
+        sqlite.execute(
+            "INSERT INTO throne_creators (id, guild_id, discord_user_id, throne_handle, throne_creator_id) VALUES (1, 10, 9999, 'dom', 'creator_1')"
+        )
+        sqlite.commit()
+
+    payload = import_sqlite_to_postgres._build_payload(
+        sqlite_path=sqlite_path,
+        default_guild_id=10,
+        include_wishlist_cache=False,
+    )
+
+    assert len(payload["dommes"]) == 1
+    assert payload["report_counts"]["throne_creators_matched_by_handle"] == 1
+
+
+def test_importer_can_exclude_legacy_dommes_by_handle(tmp_path: Path):
+    sqlite_path = tmp_path / "legacy.sqlite3"
+    _create_sample_sqlite(sqlite_path)
+    with sqlite3.connect(sqlite_path) as sqlite:
+        sqlite.execute(
+            "INSERT INTO throne_creators (id, guild_id, discord_user_id, throne_handle, throne_creator_id) VALUES (2, 10, 2002, 'remove-me', 'creator_remove')"
+        )
+        sqlite.commit()
+
+    payload = import_sqlite_to_postgres._build_payload(
+        sqlite_path=sqlite_path,
+        default_guild_id=10,
+        include_wishlist_cache=False,
+        exclude_domme_handles={"remove-me"},
+    )
+
+    handles = {row.get("throne_handle") for row in payload["dommes"]}
+    assert "remove-me" not in handles
+    assert payload["report_counts"]["excluded_throne_creators_by_handle"] == 1
+
+
 def test_importer_dry_run_does_not_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     sqlite_path = tmp_path / "legacy.sqlite3"
     _create_sample_sqlite(sqlite_path)
@@ -366,6 +409,7 @@ def test_importer_dry_run_does_not_write(tmp_path: Path, monkeypatch: pytest.Mon
         allow_prod_truncate=False,
         include_wishlist_cache=False,
         report_json=str(tmp_path / "dry-run-report.json"),
+        exclude_domme_handle=[],
     )
     rc = asyncio.run(import_sqlite_to_postgres.main_async(args))
 
@@ -388,6 +432,7 @@ def test_importer_refuses_unsafe_prod_truncate(tmp_path: Path):
         allow_prod_truncate=False,
         include_wishlist_cache=False,
         report_json="",
+        exclude_domme_handle=[],
     )
     with pytest.raises(RuntimeError, match="Refusing to truncate a prod-like database"):
         asyncio.run(import_sqlite_to_postgres.main_async(args))

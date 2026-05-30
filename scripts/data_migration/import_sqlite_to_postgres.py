@@ -123,6 +123,21 @@ def _as_text(value: Any) -> str | None:
     return text or None
 
 
+def _normalize_throne_handle(value: Any) -> str | None:
+    text = _as_text(value)
+    if text is None:
+        return None
+    text = text.strip()
+    if "://" in text:
+        parsed = urlsplit(text)
+        path = parsed.path.strip("/")
+        if not path:
+            return None
+        text = path.split("/", 1)[0]
+    text = text.lstrip("@").strip().lower()
+    return text or None
+
+
 def _as_datetime(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -212,11 +227,14 @@ def _build_payload(
     sqlite_path: Path,
     default_guild_id: int,
     include_wishlist_cache: bool,
+    exclude_domme_handles: set[str] | None = None,
 ) -> dict[str, Any]:
     with sqlite3.connect(sqlite_path) as sqlite:
         sqlite.row_factory = sqlite3.Row
 
         source_rows = {table: _public_source_rows(sqlite, table) for table in TABLES_OF_INTEREST}
+
+    excluded_handles = {handle.lower() for handle in (exclude_domme_handles or set())}
 
     bot_users: dict[tuple[int, int], dict[str, Any]] = {}
     dommes: dict[tuple[int, int], dict[str, Any]] = {}
@@ -236,6 +254,9 @@ def _build_payload(
         "send_requests_inserted": 0,
         "send_requests_skipped_duplicate": 0,
         "send_requests_skipped_missing_domme": 0,
+        "throne_creators_matched_by_handle": 0,
+        "excluded_event_dommes_by_handle": 0,
+        "excluded_throne_creators_by_handle": 0,
         "wishlist_rows_ignored": (
             0 if include_wishlist_cache else len(source_rows["throne_wishlist_items"])
         ),
@@ -245,6 +266,7 @@ def _build_payload(
     domme_id_lookup: dict[tuple[int, int], int] = {}
     sub_id_lookup: dict[tuple[int, int], int] = {}
     creator_id_to_user: dict[str, int] = {}
+    domme_handle_to_user: dict[tuple[int, str], int] = {}
 
     def ensure_user(guild_id: int, user_id: int, *, blocked: bool = False) -> None:
         key = (guild_id, user_id)
@@ -263,6 +285,12 @@ def _build_payload(
 
     for row in source_rows["event_dommes"]:
         guild_id = _resolve_guild_id(row, default_guild_id=default_guild_id)
+        normalized_handle = _normalize_throne_handle(
+            _row_value(row, "throne_handle", "handle", "throne_url", "profile_url")
+        )
+        if normalized_handle is not None and normalized_handle in excluded_handles:
+            report_counts["excluded_event_dommes_by_handle"] += 1
+            continue
         discord_user_id = _as_int(
             _row_value(row, "discord_user_id", "user_id", "domme_user_id")
         )
@@ -301,9 +329,16 @@ def _build_payload(
         creator_id = dommes[domme_key]["throne_creator_id"]
         if creator_id:
             creator_id_to_user[creator_id] = discord_user_id
+        if normalized_handle:
+            domme_handle_to_user[(guild_id, normalized_handle)] = discord_user_id
 
     for row in _sorted_rows_by_id(source_rows["throne_creators"]):
         guild_id = _resolve_guild_id(row, default_guild_id=default_guild_id)
+        incoming_handle = _as_text(_row_value(row, "throne_handle", "handle"))
+        normalized_handle = _normalize_throne_handle(incoming_handle)
+        if normalized_handle is not None and normalized_handle in excluded_handles:
+            report_counts["excluded_throne_creators_by_handle"] += 1
+            continue
         discord_user_id = _as_int(
             _row_value(row, "discord_user_id", "user_id", "domme_user_id")
         )
@@ -314,6 +349,16 @@ def _build_payload(
         if discord_user_id is None:
             report_counts["throne_creators_missing_discord_user_id"] += 1
             continue
+        matched_by_handle_user_id: int | None = None
+        if (guild_id, discord_user_id) not in dommes and normalized_handle is not None:
+            matched_by_handle_user_id = domme_handle_to_user.get((guild_id, normalized_handle))
+            if matched_by_handle_user_id is not None:
+                report_counts["throne_creators_matched_by_handle"] += 1
+                warnings.append(
+                    f"Matched throne_creators handle {normalized_handle} in guild {guild_id} "
+                    f"to existing Dom/me user {matched_by_handle_user_id} instead of creator row user {discord_user_id}."
+                )
+                discord_user_id = matched_by_handle_user_id
         if (guild_id, discord_user_id) not in dommes:
             report_counts["throne_creators_without_event_domme"] += 1
         ensure_user(guild_id, discord_user_id)
@@ -383,6 +428,11 @@ def _build_payload(
             }
         )
         dommes[domme_key] = base
+        resolved_handle = _normalize_throne_handle(
+            base.get("throne_handle") or base.get("throne_url")
+        )
+        if resolved_handle:
+            domme_handle_to_user[(guild_id, resolved_handle)] = discord_user_id
 
     for row in source_rows["event_subs"]:
         guild_id = _resolve_guild_id(row, default_guild_id=default_guild_id)
@@ -688,6 +738,17 @@ def _print_report(report: dict[str, Any]) -> None:
         f"missing_discord_user_id={import_counts['throne_creators_missing_discord_user_id']}, "
         f"conflicts={import_counts['throne_creator_conflicts']}"
     )
+    if (
+        import_counts.get("throne_creators_matched_by_handle")
+        or import_counts.get("excluded_event_dommes_by_handle")
+        or import_counts.get("excluded_throne_creators_by_handle")
+    ):
+        print(
+            "- domme_merge_adjustments: "
+            f"matched_by_handle={import_counts.get('throne_creators_matched_by_handle', 0)}, "
+            f"excluded_event_dommes={import_counts.get('excluded_event_dommes_by_handle', 0)}, "
+            f"excluded_throne_creators={import_counts.get('excluded_throne_creators_by_handle', 0)}"
+        )
     print(
         "- event_sends_skipped_missing_domme: "
         f"{import_counts['event_sends_skipped_missing_domme']}"
@@ -1117,6 +1178,12 @@ def parse_args() -> argparse.Namespace:
         help="Read throne_wishlist_items into report context (not imported by default).",
     )
     parser.add_argument("--report-json", default="", help="Optional JSON report output path.")
+    parser.add_argument(
+        "--exclude-domme-handle",
+        action="append",
+        default=[],
+        help="Repeat to skip legacy Dom/me rows by Throne handle during import shaping.",
+    )
     return parser.parse_args()
 
 
@@ -1144,6 +1211,7 @@ async def main_async(args: argparse.Namespace) -> int:
         sqlite_path=sqlite_path,
         default_guild_id=int(args.default_guild_id),
         include_wishlist_cache=bool(args.include_wishlist_cache),
+        exclude_domme_handles={str(handle).strip().lower() for handle in args.exclude_domme_handle},
     )
 
     sends_total_usd = round(
