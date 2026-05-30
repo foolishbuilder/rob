@@ -180,6 +180,7 @@ def test_refresh_uses_new_message_keys_for_upsert(monkeypatch: pytest.MonkeyPatc
 
     keys = [u["message_key"] for u in repo.upserts]
     assert keys == ["leaderboard", "leaderboard_stats"]
+    assert [u["leaderboard_type"] for u in repo.upserts] == ["discord", "discord"]
 
 
 def test_refresh_edits_existing_messages_when_refs_exist(monkeypatch: pytest.MonkeyPatch):

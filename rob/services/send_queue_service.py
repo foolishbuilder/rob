@@ -51,6 +51,12 @@ class SendQueueService:
         self._task: asyncio.Task[None] | None = None
         self._stopping = False
         self._startup_leaderboard_refresh_done = False
+        self._send_notifications: asyncio.Queue[int] | None = None
+
+    def _notification_queue(self) -> asyncio.Queue[int]:
+        if self._send_notifications is None:
+            self._send_notifications = asyncio.Queue()
+        return self._send_notifications
 
     async def start(self) -> None:
         if self._task is not None:
@@ -73,12 +79,19 @@ class SendQueueService:
         await self._refresh_leaderboards_on_startup()
         while not self._stopping:
             try:
-                await self.process_cycle()
+                try:
+                    send_id = await asyncio.wait_for(
+                        self._notification_queue().get(),
+                        timeout=self.poll_interval_seconds,
+                    )
+                except TimeoutError:
+                    await self.process_idle_tasks()
+                else:
+                    await self.process_send_by_id(send_id)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("Send queue cycle failed.")
-            await asyncio.sleep(self.poll_interval_seconds)
 
     async def _refresh_leaderboards_on_startup(self) -> None:
         if self._startup_leaderboard_refresh_done:
@@ -128,6 +141,76 @@ class SendQueueService:
 
         if await self.maintenance.consume_leaderboard_refresh_request():
             await self.leaderboard_service.refresh_all_guilds()
+
+    async def process_idle_tasks(self) -> None:
+        """Run slow maintenance work without sweeping pending sends every tick."""
+        if not await self.maintenance.is_enabled():
+            released = await self.sends.release_queued_maintenance()
+            if released:
+                log.info("Released %s queued maintenance send(s).", released)
+                await self.process_cycle()
+
+        if await self.maintenance.consume_leaderboard_refresh_request():
+            await self.leaderboard_service.refresh_all_guilds()
+
+    async def notify_send(self, send_id: int) -> None:
+        self._notification_queue().put_nowait(int(send_id))
+
+    async def process_send_by_id(self, send_id: int) -> bool:
+        send = await self.sends.get(int(send_id))
+        if send is None:
+            log.warning("Send notification ignored because send_id=%s was not found.", send_id)
+            return False
+        return await self._process_send_record(send)
+
+    async def _process_send_record(self, send) -> bool:
+        if self.counting_service is not None:
+            try:
+                await self.counting_service.process_send_for_count_rescue(send)
+            except Exception:
+                log.exception(
+                    "Count rescue evaluation failed for send_id=%s guild_id=%s.",
+                    send.id,
+                    send.guild_id,
+                )
+
+        if send.discord_post_status == "queued_maintenance":
+            if await self.maintenance.is_enabled():
+                log.info(
+                    "Send id=%s guild_id=%s is queued until maintenance ends.",
+                    send.id,
+                    send.guild_id,
+                )
+                return False
+            released = await self.sends.release_queued_maintenance()
+            if released:
+                log.info("Released %s queued maintenance send(s).", released)
+            send = await self.sends.get(send.id)
+            if send is None:
+                return False
+
+        if send.discord_post_status != "pending":
+            log.info(
+                "Send notification ignored for send_id=%s guild_id=%s status=%s.",
+                send.id,
+                send.guild_id,
+                send.discord_post_status,
+            )
+            return False
+
+        ok = await self._post_send(send)
+        if ok:
+            log.info("Posted send id=%s guild_id=%s", send.id, send.guild_id)
+            try:
+                log.info("Refreshing leaderboard for guild_id=%s", send.guild_id)
+                await self.leaderboard_service.refresh_guild(send.guild_id)
+            except Exception:
+                log.exception(
+                    "Leaderboard refresh failed after posted send_id=%s guild_id=%s.",
+                    send.id,
+                    send.guild_id,
+                )
+        return ok
 
     async def _post_send(self, send) -> bool:
         settings = await self.guild_settings.get(send.guild_id)

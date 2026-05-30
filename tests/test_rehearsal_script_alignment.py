@@ -10,6 +10,8 @@ def test_webhook_installer_uses_prod_role_rehearsal_template():
     assert "https://throne.robthebot.com" in text
     assert "THRONE_WEBHOOK_HOST=127.0.0.1" in text
     assert "THRONE_WEBHOOK_PORT=8080" in text
+    assert "ROB_BOT_NOTIFY_URL=https://bot-01.robthebot.com/ops/sends/process" in text
+    assert "ROB_OPS_SECRET=replace" in text
     assert "DISCORD_TOKEN=replace" not in text
     assert "Do not add DISCORD_TOKEN on this host" in text
 
@@ -19,6 +21,8 @@ def test_bot_installer_uses_prod_role_rehearsal_template():
     assert "prod_rob_bot" in text
     assert "rob_dev_v2" in text
     assert "DISCORD_TOKEN=replace" in text
+    assert "ROB_OPS_HOST=127.0.0.1" in text
+    assert "ROB_OPS_PORT=8811" in text
     assert "dev_rob_bot:replace@127.0.0.1" not in text
 
 

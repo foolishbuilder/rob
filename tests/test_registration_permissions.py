@@ -33,6 +33,27 @@ class _FakeFollowup:
         self.messages.append(kwargs)
 
 
+class _FakePartialMessage:
+    def __init__(self, message_id: int):
+        self.id = message_id
+        self.edits: list[dict] = []
+
+    async def edit(self, **kwargs):
+        self.edits.append(kwargs)
+
+
+class _FakeChannel:
+    def __init__(self):
+        self.partial_messages: dict[int, _FakePartialMessage] = {}
+
+    def get_partial_message(self, message_id: int):
+        message = self.partial_messages.get(message_id)
+        if message is None:
+            message = _FakePartialMessage(message_id)
+            self.partial_messages[message_id] = message
+        return message
+
+
 class _FakeUser:
     def __init__(self, user_id: int = 123, *, dm_forbidden: bool = False):
         self.id = user_id
@@ -48,9 +69,11 @@ class _FakeUser:
 
 
 class _FakeInteraction:
-    def __init__(self, *, user: _FakeUser | None = None):
+    def __init__(self, *, user: _FakeUser | None = None, channel: _FakeChannel | None = None, message_id: int | None = None):
         self.guild = SimpleNamespace(id=1)
         self.user = user or _FakeUser()
+        self.channel = channel or _FakeChannel()
+        self.message = SimpleNamespace(id=message_id) if message_id is not None else None
         self.response = _FakeResponse()
         self.followup = _FakeFollowup()
 
@@ -159,18 +182,21 @@ def test_domme_setup_button_opens_modal_and_submit_registers_once(monkeypatch):
     dm_payload = user.sent_messages[0]
     start_button = dm_payload["view"].children[1].children[0]
 
-    dm_click_interaction = _FakeInteraction(user=user)
+    channel = _FakeChannel()
+    dm_click_interaction = _FakeInteraction(user=user, channel=channel, message_id=555)
     asyncio.run(start_button.callback(dm_click_interaction))
     modal = dm_click_interaction.response.modal
     assert modal is not None
     modal.throne._value = "missadore"  # noqa: SLF001
 
-    submit_interaction = _FakeInteraction(user=user)
+    submit_interaction = _FakeInteraction(user=user, channel=channel)
     asyncio.run(modal.on_submit(submit_interaction))
 
     assert len(bot.registration_service.domme_calls) == 1
-    setup_cards = [message for message in submit_interaction.followup.messages if "Throne Tracking Setup!" in _view_text(message)]
-    assert len(setup_cards) == 1
+    setup_message = channel.partial_messages[555]
+    assert len(setup_message.edits) == 1
+    assert "Throne Tracking Setup!" in _view_text(setup_message.edits[0])
+    assert submit_interaction.followup.messages == []
 
 
 def test_domme_modal_double_submit_is_guarded(monkeypatch):
@@ -183,14 +209,15 @@ def test_domme_modal_double_submit_is_guarded(monkeypatch):
 
     asyncio.run(RegistrationCog.register_domme.callback(cog, interaction))
     start_button = user.sent_messages[0]["view"].children[1].children[0]
-    dm_click_interaction = _FakeInteraction(user=user)
+    channel = _FakeChannel()
+    dm_click_interaction = _FakeInteraction(user=user, channel=channel, message_id=555)
     asyncio.run(start_button.callback(dm_click_interaction))
     modal = dm_click_interaction.response.modal
     assert modal is not None
     modal.throne._value = "missadore"  # noqa: SLF001
 
-    first_submit = _FakeInteraction(user=user)
-    second_submit = _FakeInteraction(user=user)
+    first_submit = _FakeInteraction(user=user, channel=channel)
+    second_submit = _FakeInteraction(user=user, channel=channel)
 
     async def _submit_twice():
         first_task = asyncio.create_task(modal.on_submit(first_submit))

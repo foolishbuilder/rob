@@ -27,11 +27,7 @@ DOMME_REGISTERED_BODY = (
 )
 
 THRONE_SETUP_TITLE = "Throne Tracking Setup!"
-THRONE_SETUP_INTRO = (
-    "Howdy Partner!\n\n"
-    "You've received this DM because you've enabled Throne tracking for yourself. "
-    "Before we can continue, we'll need you to do some extra steps inside Throne first."
-)
+
 
 def throne_setup_steps(webhook_url: str) -> str:
     return (

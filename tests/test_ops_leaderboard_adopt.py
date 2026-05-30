@@ -56,14 +56,14 @@ def test_leaderboard_adopt_writes_message_refs(capsys):
         {
             "guild_id": 1,
             "message_key": "leaderboard",
-            "leaderboard_type": "leaderboard",
+            "leaderboard_type": "discord",
             "channel_id": 222,
             "message_id": 333,
         },
         {
             "guild_id": 1,
             "message_key": "leaderboard_stats",
-            "leaderboard_type": "leaderboard_stats",
+            "leaderboard_type": "discord",
             "channel_id": 222,
             "message_id": 444,
         },

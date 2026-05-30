@@ -143,6 +143,7 @@ class RobBot(commands.Bot):
             include_test_sends=self.settings.throne_parse_test_sends_as_real_sends,
             owner_test_user_id=self.settings.throne_test_send_leaderboard_owner_user_id,
             test_gifter_usernames=self.settings.throne_test_gifter_usernames,
+            poll_interval_seconds=self.settings.send_queue_loop_seconds,
         )
         self.bot_ops_server = BotOpsServer(
             bot=self,

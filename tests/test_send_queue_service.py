@@ -65,6 +65,12 @@ class _FakeSends:
         self.pending = [_send()]
         self.queued_maintenance: list[SendRecord] = []
 
+    async def get(self, send_id: int):
+        for send in [*self.pending, *self.queued_maintenance]:
+            if send.id == send_id:
+                return send
+        return None
+
     async def release_queued_maintenance(self):
         return self.released
 
@@ -298,3 +304,25 @@ def test_send_queue_count_recovery_does_not_depend_on_send_post_success():
     assert counting.send_ids == [1]
     assert sends.mark_failed_calls == [1]
     assert sends.mark_posted_calls == []
+
+
+def test_send_queue_processes_notified_send_by_id(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.send_queue_service.discord.TextChannel", _FakeChannel)
+    sends = _FakeSends()
+    leaderboard = _FakeLeaderboard()
+    counting = _FakeCounting()
+    service = SendQueueService(
+        bot=_FakeBot(),
+        sends=sends,
+        guild_settings=_FakeSettingsRepo(),
+        maintenance=_FakeMaintenance(),
+        leaderboard_service=leaderboard,
+        counting_service=counting,
+    )
+
+    ok = asyncio.run(service.process_send_by_id(1))
+
+    assert ok is True
+    assert sends.mark_posted_calls == [1]
+    assert leaderboard.refresh_calls == [1]
+    assert counting.send_ids == [1]

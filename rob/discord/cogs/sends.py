@@ -74,6 +74,10 @@ class SendsCog(commands.Cog):
             )
             return
 
+        send_queue = getattr(self.bot, "send_queue_service", None)
+        if send_queue is not None:
+            await send_queue.notify_send(send.id)
+
         queue_label = (
             "queued for after maintenance"
             if send.discord_post_status == "queued_maintenance"
@@ -90,4 +94,3 @@ class SendsCog(commands.Cog):
             ).send_kwargs(),
             ephemeral=True,
         )
-

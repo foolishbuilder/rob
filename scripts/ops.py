@@ -714,14 +714,14 @@ async def handle_leaderboard(ctx: OperationsContext, args: argparse.Namespace) -
         await ctx.leaderboards.upsert_message(
             guild_id=args.guild_id,
             message_key="leaderboard",
-            leaderboard_type="leaderboard",
+            leaderboard_type="discord",
             channel_id=args.leaderboard_channel_id,
             message_id=args.leaderboard_message_id,
         )
         await ctx.leaderboards.upsert_message(
             guild_id=args.guild_id,
             message_key="leaderboard_stats",
-            leaderboard_type="leaderboard_stats",
+            leaderboard_type="discord",
             channel_id=args.leaderboard_channel_id,
             message_id=args.stats_message_id,
         )

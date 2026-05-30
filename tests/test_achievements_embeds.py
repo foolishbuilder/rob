@@ -23,9 +23,9 @@ def _catalogue_entry_count(card) -> int:
         content = str(getattr(item, "content", "")).strip()
         if not content:
             continue
-        if content.startswith("## Rob Achievements"):
+        if content.startswith("### Rob Achievements"):
             continue
-        if content.startswith("Achievements unlocked:"):
+        if content.startswith("Unlocked:"):
             continue
         if content.startswith("-# Your unlocked achievements"):
             continue
@@ -44,9 +44,10 @@ def test_achievements_catalogue_uses_compact_entry_layout():
         for_self=True,
     )
     text = _card_text(cards[0])
-    assert "## Rob Achievements" in text
-    assert "Achievements unlocked: **1/" in text
-    assert "🏆 **First Send Tracked**" in text
+    assert "### Rob Achievements" in text
+    assert "Unlocked: **1/" in text
+    assert "**First Send Tracked**" in text
+    assert "🏆" not in text
     assert "Ooo, you got your first tracked send." in text
 
 
@@ -57,7 +58,7 @@ def test_locked_hidden_achievements_do_not_render_in_user_catalogue():
         for_self=True,
     )
     text = "\n".join(_card_text(card) for card in cards)
-    assert "⚪ **Secret Achievement**" not in text
+    assert "Secret Achievement" not in text
     assert "???" not in text
     assert "You have not unlocked any achievements yet." in text
 
@@ -82,9 +83,10 @@ def test_unlock_card_header_and_unlocked_by_line():
     )
     text = _card_text(card)
     assert "Achievement Unlocked" not in text
-    assert f"## 🥇 {achievement.title}" in text
+    assert f"### {achievement.title}" in text
     assert achievement.title in text
     assert achievement.description in text
+    assert "🥇" not in text
     assert "Unlocked by Adore's Pickle Pat" in text
 
 

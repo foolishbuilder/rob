@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 
-from rob.achievements.definitions import ACHIEVEMENTS, ACHIEVEMENTS_BY_KEY, AchievementDefinition
+from rob.achievements.definitions import ACHIEVEMENTS, ACHIEVEMENTS_BY_KEY, ENABLED_ACHIEVEMENTS, AchievementDefinition
 from rob.database.repositories.achievements import AchievementsRepository
 from rob.database.repositories.models import AchievementSummary
 
@@ -132,7 +132,7 @@ class AchievementsService:
             guild_id=guild_id,
             discord_user_id=discord_user_id,
         )
-        return [achievement for achievement in ACHIEVEMENTS if achievement.key in unlocked_keys]
+        return [achievement for achievement in ENABLED_ACHIEVEMENTS if achievement.key in unlocked_keys]
 
     async def get_achievement_summary(
         self,
@@ -140,13 +140,15 @@ class AchievementsService:
         guild_id: int,
         discord_user_id: int,
     ) -> AchievementSummary:
-        unlocked_count = await self.repository.count_for_user(
-            guild_id=guild_id,
-            discord_user_id=discord_user_id,
+        unlocked_count = len(
+            await self.get_user_achievements(
+                guild_id=guild_id,
+                discord_user_id=discord_user_id,
+            )
         )
         return AchievementSummary(
             guild_id=guild_id,
             discord_user_id=discord_user_id,
             unlocked_count=unlocked_count,
-            total_count=len(ACHIEVEMENTS),
+            total_count=len(ENABLED_ACHIEVEMENTS),
         )

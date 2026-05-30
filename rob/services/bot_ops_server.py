@@ -39,6 +39,8 @@ class BotOpsServer:
             "/guilds/{guild_id}/leaderboard/refresh",
             self._handle_refresh_leaderboard,
         )
+        app.router.add_post("/ops/sends/process", self._handle_process_send)
+        app.router.add_post("/sends/process", self._handle_process_send)
         app.router.add_post("/maintenance", self._handle_set_maintenance)
 
         self._runner = web.AppRunner(app, access_log=None)
@@ -174,6 +176,44 @@ class BotOpsServer:
 
         refreshed = await self.bot.leaderboard_service.refresh_guild(guild_id)
         return web.json_response({"ok": bool(refreshed), "guild_id": guild_id, "refreshed": bool(refreshed)})
+
+    async def _handle_process_send(self, request: web.Request) -> web.Response:
+        if not self._is_authorized(request):
+            return web.json_response({"error": "forbidden"}, status=403)
+
+        if not hasattr(self.bot, "send_queue_service"):
+            return web.json_response({"error": "send_queue_service_unavailable"}, status=500)
+
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+
+        try:
+            send_id = int(payload.get("send_id"))
+        except (TypeError, ValueError):
+            return web.json_response({"error": "invalid_send_id"}, status=400)
+
+        guild_id = payload.get("guild_id")
+        try:
+            guild_id = int(guild_id) if guild_id is not None else None
+        except (TypeError, ValueError):
+            return web.json_response({"error": "invalid_guild_id"}, status=400)
+
+        await self.bot.send_queue_service.notify_send(send_id)
+        log.info(
+            "Accepted send processing notification send_id=%s guild_id=%s.",
+            send_id,
+            guild_id,
+        )
+        return web.json_response(
+            {
+                "ok": True,
+                "queued": True,
+                "send_id": send_id,
+                "guild_id": guild_id,
+            }
+        )
 
     async def _handle_set_maintenance(self, request: web.Request) -> web.Response:
         if not self._is_authorized(request):

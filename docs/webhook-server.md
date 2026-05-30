@@ -9,6 +9,7 @@ The webhook server is the HTTP-only side of Rob.
 - Optionally validates Throne Ed25519 signatures and timestamps.
 - Normalises accepted Throne purchase payloads.
 - Writes sends into PostgreSQL.
+- Notifies the bot ops bridge after a send is recorded so Discord posting can happen immediately.
 - Respects maintenance mode by inserting `queued_maintenance` instead of `pending`.
 - Never connects to Discord.
 
@@ -35,6 +36,8 @@ The webhook server is the HTTP-only side of Rob.
 - `THRONE_WEBHOOK_SIGNATURE_HEADER`
 - `THRONE_WEBHOOK_SIGNED_MESSAGE_FORMAT`
 - `THRONE_WEBHOOK_MAX_TIMESTAMP_SKEW_SECONDS`
+- `ROB_BOT_NOTIFY_URL` (recommended, for example `https://bot-01.robthebot.com/ops/sends/process`)
+- `ROB_OPS_SECRET` (must match the bot server when `ROB_BOT_NOTIFY_URL` is set)
 
 `DISCORD_TOKEN` is not required here.
 

@@ -20,6 +20,10 @@ log() {
   printf '[install-webhook-dev] %s\n' "$*"
 }
 
+warn() {
+  printf '[install-webhook-dev] WARNING: %s\n' "$*" >&2
+}
+
 die() {
   printf '[install-webhook-dev] error: %s\n' "$*" >&2
   exit 1
@@ -130,6 +134,8 @@ THRONE_WEBHOOK_SIGNATURE_HEADER=X-Signature-Ed25519
 THRONE_WEBHOOK_SIGNED_MESSAGE_FORMAT=timestamp_dot_body
 THRONE_WEBHOOK_MAX_TIMESTAMP_SKEW_SECONDS=300
 THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS=false
+ROB_BOT_NOTIFY_URL=https://bot-01.robthebot.com/ops/sends/process
+ROB_OPS_SECRET=replace
 EOF
   chown "${DEPLOY_USER}:${RUNTIME_GROUP}" "${env_file}"
   chmod 0640 "${env_file}"

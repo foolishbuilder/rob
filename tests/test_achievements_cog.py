@@ -140,7 +140,8 @@ def test_achievements_command_shows_only_unlocked_achievements():
     text += "\n".join(_message_text(message) for message in interaction.followup.messages)
     assert "Rob Achievements" in text
     assert "Double Digits" in text
-    assert "⚪ **Secret Achievement**" not in text
+    assert "Secret Achievement" not in text
+    assert "🏆" not in text
     assert "???" not in text
 
 

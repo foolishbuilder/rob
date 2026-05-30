@@ -16,6 +16,7 @@ class BaseSettings:
     rob_ops_host: str
     rob_ops_port: int
     rob_ops_secret: str | None
+    rob_bot_notify_url: str | None
     throne_parse_test_sends_as_real_sends: bool
     throne_test_gifter_usernames: tuple[str, ...]
     throne_test_send_leaderboard_owner_user_id: int | None
@@ -126,6 +127,7 @@ def load_base_settings(env_file: str | Path | None = None) -> BaseSettings:
         rob_ops_host=_env_str("ROB_OPS_HOST", "127.0.0.1"),
         rob_ops_port=_env_int("ROB_OPS_PORT", 8811, minimum=1),
         rob_ops_secret=_env_str("ROB_OPS_SECRET") or None,
+        rob_bot_notify_url=_env_str("ROB_BOT_NOTIFY_URL") or None,
         throne_parse_test_sends_as_real_sends=_env_bool(
             "THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS",
             False,
@@ -161,6 +163,7 @@ def load_webhook_settings(env_file: str | Path | None = None) -> WebhookSettings
         rob_ops_host=base.rob_ops_host,
         rob_ops_port=base.rob_ops_port,
         rob_ops_secret=base.rob_ops_secret,
+        rob_bot_notify_url=base.rob_bot_notify_url,
         throne_parse_test_sends_as_real_sends=base.throne_parse_test_sends_as_real_sends,
         throne_test_gifter_usernames=base.throne_test_gifter_usernames,
         throne_test_send_leaderboard_owner_user_id=base.throne_test_send_leaderboard_owner_user_id,
@@ -220,6 +223,7 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         rob_ops_host=base.rob_ops_host,
         rob_ops_port=base.rob_ops_port,
         rob_ops_secret=base.rob_ops_secret,
+        rob_bot_notify_url=base.rob_bot_notify_url,
         throne_parse_test_sends_as_real_sends=base.throne_parse_test_sends_as_real_sends,
         throne_test_gifter_usernames=base.throne_test_gifter_usernames,
         throne_test_send_leaderboard_owner_user_id=base.throne_test_send_leaderboard_owner_user_id,

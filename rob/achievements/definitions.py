@@ -40,6 +40,7 @@ def _a(
     category: AchievementCategory,
     rarity: AchievementRarity,
     hidden: bool = False,
+    enabled: bool = True,
     trigger_type: str | None = None,
     trigger_value: str | int | None = None,
 ) -> AchievementDefinition:
@@ -50,6 +51,7 @@ def _a(
         category=category,
         rarity=rarity,
         hidden=hidden,
+        enabled=enabled,
         trigger_type=trigger_type,
         trigger_value=trigger_value,
     )
@@ -194,7 +196,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "count_domme_saved_by_sub",
         "What Mistake? I Don’t See One",
-        "A sub recovered your happy little accident. Achievement unlocked.",
+        "A sub recovered your happy little accident..",
         category="count",
         rarity="uncommon",
         trigger_type="count_recovery",
@@ -203,7 +205,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "count_sub_blocked",
         "BOOOOOOOO!",
-        "You got blocked from counting. Achievement unlocked, unfortunately.",
+        "You got blocked from counting..",
         category="count",
         rarity="uncommon",
         trigger_type="count_blocked",
@@ -211,7 +213,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "count_domme_failed_recovery",
         "Happy Little Accident",
-        "Oh well. Mistakes happen. Achievement unlocked.",
+        "Oh well. Mistakes happen..",
         category="count",
         rarity="uncommon",
         trigger_type="count_recovery_expired",
@@ -237,7 +239,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_first_tracked_send",
         "First Send Tracked",
-        "Ooo, you got your first tracked send. Achievement unlocked.",
+        "Ooo, you got your first tracked send..",
         category="sends_domme",
         rarity="common",
         trigger_type="domme_total_cents",
@@ -246,7 +248,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_first_test_send",
         "marie_123 Sent You AirPods",
-        "Nice AirPods. Shame they’re not real. Achievement unlocked.",
+        "Nice AirPods. Shame they’re not real..",
         category="sends_domme",
         rarity="common",
         trigger_type="test_send",
@@ -254,7 +256,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_100_tracked",
         "Triple Digits",
-        "You’ve had $100 in sends tracked by Rob. Achievement unlocked.",
+        "You’ve had $100 in sends tracked by Rob..",
         category="sends_domme",
         rarity="common",
         trigger_type="domme_total_cents",
@@ -263,7 +265,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_1000_tracked",
         "Rob Counts $1k Sends",
-        "You’ve had $1k in sends tracked by Rob. Achievement unlocked.",
+        "You’ve had $1k in sends tracked by Rob..",
         category="sends_domme",
         rarity="uncommon",
         trigger_type="domme_total_cents",
@@ -281,7 +283,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_top_10",
         "Top 10",
-        "You entered the leaderboard top 10. Achievement unlocked.",
+        "You entered the leaderboard top 10..",
         category="leaderboard",
         rarity="uncommon",
         trigger_type="domme_rank",
@@ -289,8 +291,8 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     ),
     _a(
         "domme_first_place",
-        "This Is Yours… 👑",
-        "You reached first place on the leaderboard. Achievement unlocked.",
+        "This Is Yours",
+        "You reached first place on the leaderboard..",
         category="leaderboard",
         rarity="rare",
         trigger_type="domme_rank",
@@ -307,7 +309,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_manual_send",
         "Cash App?? Never Heard of It",
-        "You tracked a send manually. Achievement unlocked.",
+        "You tracked a send manually..",
         category="sends_domme",
         rarity="common",
         trigger_type="manual_send",
@@ -315,7 +317,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_10_sends_received",
         "Ten Little Notifications",
-        "Rob has tracked 10 sends for you. Achievement unlocked.",
+        "Rob has tracked 10 sends for you..",
         category="sends_domme",
         rarity="common",
         trigger_type="domme_send_count",
@@ -333,7 +335,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "domme_100_sends_received",
         "Send Magnet",
-        "Rob has tracked 100 sends for you. Achievement unlocked.",
+        "Rob has tracked 100 sends for you..",
         category="sends_domme",
         rarity="epic",
         trigger_type="domme_send_count",
@@ -342,7 +344,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "sub_first_send",
         "You Sent Some Money",
-        "You sent your first tracked send. Achievement unlocked.",
+        "You sent your first tracked send..",
         category="sends_sub",
         rarity="common",
         trigger_type="sub_total_cents",
@@ -351,7 +353,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "sub_100_sent",
         "Triple Digit Tribute",
-        "You’ve sent $100 tracked by Rob. Achievement unlocked.",
+        "You’ve sent $100 tracked by Rob..",
         category="sends_sub",
         rarity="common",
         trigger_type="sub_total_cents",
@@ -360,7 +362,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "sub_1000_sent",
         "Welcome to the Thousand Club",
-        "You’ve sent $1k to dommes in this server. Achievement unlocked.",
+        "You’ve sent $1k to dommes in this server..",
         category="sends_sub",
         rarity="uncommon",
         trigger_type="sub_total_cents",
@@ -394,7 +396,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "sub_10_sends",
         "Frequent Flyer",
-        "Rob has tracked 10 sends from you. Achievement unlocked.",
+        "Rob has tracked 10 sends from you..",
         category="sends_sub",
         rarity="common",
         trigger_type="sub_send_count",
@@ -403,7 +405,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     _a(
         "sub_50_sends",
         "Repeat Customer",
-        "Rob has tracked 50 sends from you. Achievement unlocked.",
+        "Rob has tracked 50 sends from you..",
         category="sends_sub",
         rarity="rare",
         trigger_type="sub_send_count",
@@ -448,6 +450,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You changed your tracking settings. Rob will try not to be dramatic about it.",
         category="throne_tracking",
         rarity="common",
+        enabled=False,
         trigger_type="throne_optout",
     ),
     _a(
@@ -456,6 +459,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You returned after being marked as inactive. The void has been defeated.",
         category="inactivity",
         rarity="common",
+        enabled=False,
         trigger_type="inactivity_returned",
     ),
     _a(
@@ -464,6 +468,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You came back just before Rob had to remove you. Dramatic timing.",
         category="inactivity",
         rarity="uncommon",
+        enabled=False,
         trigger_type="inactivity_final_return",
     ),
     _a(
@@ -472,6 +477,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You came back to VIB. Rob is happy now!",
         category="inactivity",
         rarity="rare",
+        enabled=False,
         trigger_type="rejoined_vib",
     ),
     _a(
@@ -480,6 +486,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You used Rob during one of his “briefly held together with duct tape” eras.",
         category="maintenance",
         rarity="uncommon",
+        enabled=False,
         trigger_type="maintenance_interaction",
     ),
     _a(
@@ -488,6 +495,7 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
         "You checked the leaderboard while Rob was under maintenance. Optimistic.",
         category="maintenance",
         rarity="common",
+        enabled=False,
         trigger_type="maintenance_leaderboard_view",
     ),
     _a(
@@ -516,15 +524,17 @@ ACHIEVEMENTS: tuple[AchievementDefinition, ...] = (
     ),
     _a(
         "secret_command",
-        "Shhhh…. 🤫",
+        "Shhhh...",
         "I’ll give you an achievement as long as we never speak of this again. Got it?",
         category="secret",
         rarity="secret",
         hidden=True,
+        enabled=False,
         trigger_type="secret_command",
     ),
 )
 
 
 ACHIEVEMENTS_BY_KEY = {achievement.key: achievement for achievement in ACHIEVEMENTS}
-TOTAL_ACHIEVEMENT_COUNT = len(ACHIEVEMENTS)
+ENABLED_ACHIEVEMENTS = tuple(achievement for achievement in ACHIEVEMENTS if achievement.enabled)
+TOTAL_ACHIEVEMENT_COUNT = len(ENABLED_ACHIEVEMENTS)

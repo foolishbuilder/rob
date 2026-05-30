@@ -10,11 +10,10 @@ from discord.ext import commands
 from rob.discord.permissions import member_has_role
 from rob.achievements.embeds import achievement_unlocked_card
 from rob.ui.cards.errors import error_card, error_permission
-from rob.ui.cards.registration import domme_registered_card, registration_card, throne_setup_card
+from rob.ui.cards.registration import registration_card, throne_setup_card
 from rob.ui.copy import (
     PERMISSION_ROLE_MISSING,
     PERMISSION_ROLE_NOT_CONFIGURED,
-    THRONE_SETUP_INTRO,
     throne_setup_steps,
 )
 from rob.ui.render import add_card_actions
@@ -39,31 +38,6 @@ def _dm_blocked_error_card():
         "- Your Discord privacy settings allow bot/member DMs\n\n"
         "Once fixed, run /register domme again.",
     )
-
-
-def add_setup_buttons(view: discord.ui.LayoutView, *, domme_id: int, webhook_url: str, send_track_channel_id: int | None) -> None:
-
-    class ContinueSetupButton(discord.ui.Button):
-        def __init__(self) -> None:
-            super().__init__(label="Continue Setup", style=discord.ButtonStyle.primary)
-
-        async def callback(self, interaction: discord.Interaction) -> None:
-            msg = throne_setup_card(throne_setup_steps(webhook_url))
-            add_card_actions(msg.view, YesButton(domme_id, send_track_channel_id), NotYetButton())
-            await interaction.response.edit_message(**msg.edit_kwargs())
-
-    class NotNowButton(discord.ui.Button):
-        def __init__(self) -> None:
-            super().__init__(label="Not Now", style=discord.ButtonStyle.secondary)
-
-        async def callback(self, interaction: discord.Interaction) -> None:
-            msg = throne_setup_card(
-                "No worries — your Throne profile is linked, but tracking won't start until the webhook URL is added to Throne.\n\n"
-                "You can run /register domme again when you're ready."
-            )
-            await interaction.response.edit_message(**msg.edit_kwargs())
-
-    add_card_actions(view, ContinueSetupButton(), NotNowButton())
 
 
 class YesButton(discord.ui.Button):
@@ -212,6 +186,7 @@ class RegistrationCog(commands.Cog):
         discord_user_id: int,
         send_track_channel_id: int | None,
         throne_input: str,
+        setup_message_id: int | None = None,
     ) -> None:
         try:
             result = await self.bot.registration_service.register_domme(
@@ -249,16 +224,15 @@ class RegistrationCog(commands.Cog):
             )
             return
 
-        dm_msg = throne_setup_card(THRONE_SETUP_INTRO)
-        add_setup_buttons(
-            dm_msg.view,
-            domme_id=int(domme_result.id),
-            webhook_url=result.webhook_url,
-            send_track_channel_id=send_track_channel_id,
-        )
-        await interaction.followup.send(**dm_msg.send_kwargs())
+        dm_msg = throne_setup_card(throne_setup_steps(result.webhook_url))
+        add_card_actions(dm_msg.view, YesButton(int(domme_result.id), send_track_channel_id), NotYetButton())
+        if setup_message_id is not None and interaction.channel is not None:
+            setup_message = interaction.channel.get_partial_message(setup_message_id)
+            await setup_message.edit(**dm_msg.edit_kwargs())
+        else:
+            await interaction.followup.send(**dm_msg.send_kwargs())
         log.info(
-            "Dom/me webhook setup card sent guild_id=%s discord_user_id=%s domme_id=%s",
+            "Dom/me webhook setup card edited guild_id=%s discord_user_id=%s domme_id=%s",
             guild_id,
             discord_user_id,
             int(domme_result.id),
@@ -288,8 +262,6 @@ class RegistrationCog(commands.Cog):
                     else getattr(interaction.user, "name", str(discord_user_id))
                 ),
             )
-
-        await interaction.followup.send(**domme_registered_card().send_kwargs())
 
     @register_group.command(name="sub", description="Register a sending name to claim sends.")
     async def register_sub(self, interaction: discord.Interaction) -> None:
@@ -340,12 +312,14 @@ class _DommeSetupStartButton(discord.ui.Button):
             self.guild_id,
             self.discord_user_id,
         )
+        setup_message_id = interaction.message.id if interaction.message is not None else None
         await interaction.response.send_modal(
             _DommeRegistrationModal(
                 cog=self.cog,
                 guild_id=self.guild_id,
                 discord_user_id=self.discord_user_id,
                 send_track_channel_id=self.send_track_channel_id,
+                setup_message_id=setup_message_id,
             )
         )
 
@@ -365,12 +339,14 @@ class _DommeRegistrationModal(discord.ui.Modal, title="Rob | Dom/me Setup"):
         guild_id: int,
         discord_user_id: int,
         send_track_channel_id: int | None,
+        setup_message_id: int | None,
     ) -> None:
         super().__init__(timeout=600)
         self.cog = cog
         self.guild_id = guild_id
         self.discord_user_id = discord_user_id
         self.send_track_channel_id = send_track_channel_id
+        self.setup_message_id = setup_message_id
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if interaction.user is None or interaction.user.id != self.discord_user_id:
@@ -405,6 +381,7 @@ class _DommeRegistrationModal(discord.ui.Modal, title="Rob | Dom/me Setup"):
                 discord_user_id=self.discord_user_id,
                 send_track_channel_id=self.send_track_channel_id,
                 throne_input=str(self.throne.value),
+                setup_message_id=self.setup_message_id,
             )
         finally:
             self.cog._active_domme_submission_keys.discard(flow_key)

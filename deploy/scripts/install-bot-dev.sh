@@ -119,6 +119,9 @@ DATABASE_URL=postgresql://prod_rob_bot:replace@replace:25060/rob_dev_v2?sslmode=
 DISCORD_TOKEN=replace
 DISCORD_GUILD_ID=replace
 BOT_NAME=Rob
+ROB_OPS_HOST=127.0.0.1
+ROB_OPS_PORT=8811
+ROB_OPS_SECRET=replace
 # Optional: useful when the bot needs to generate webhook URLs.
 THRONE_WEBHOOK_BASE_URL=https://throne.robthebot.com
 EOF

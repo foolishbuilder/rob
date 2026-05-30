@@ -14,6 +14,7 @@ from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.dommes import DommesRepository
 from rob.database.repositories.sends import SendsRepository
 from rob.services.maintenance_service import MaintenanceService
+from rob.services.bot_notify_client import notify_bot_send
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import is_explicit_test_webhook_payload, is_known_test_sender, is_supported_event_type, parse_throne_send_payload
@@ -132,7 +133,19 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
     if send is None:
         return web.json_response({"ok": True, "duplicate": True})
 
-    response: dict[str, Any] = {"ok": True, "inserted": True, "send_id": send.id}
+    bot_notified = await notify_bot_send(
+        notify_url=settings.rob_bot_notify_url,
+        secret=settings.rob_ops_secret,
+        send_id=send.id,
+        guild_id=send.guild_id,
+    )
+
+    response: dict[str, Any] = {
+        "ok": True,
+        "inserted": True,
+        "send_id": send.id,
+        "bot_notified": bot_notified,
+    }
     if known_test_sender and not settings.throne_parse_test_sends_as_real_sends:
         response["setup_verified"] = True
     return web.json_response(response)
