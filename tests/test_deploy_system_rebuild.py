@@ -48,6 +48,10 @@ def test_deploy_scripts_and_docs():
     docs = Path('docs/deployment.md').read_text()
     cloudflared_script = Path('deploy/scripts/install-cloudflared-webhook.sh')
     cloudflared_doc = Path('docs/cloudflared-webhook.md')
+    prod_install_bot = Path('deploy/scripts/install-bot.sh')
+    prod_install_webhook = Path('deploy/scripts/install-webhook.sh')
+    prod_bot_service = Path('deploy/systemd/rob-bot.service')
+    prod_webhook_service = Path('deploy/systemd/rob-webhook.service')
 
     assert 'scripts/check_db.py' in pre_bot and 'scripts/check_db.py' in pre_webhook
     assert 'systemctl restart' not in pre_bot and 'systemctl restart' not in pre_webhook
@@ -63,6 +67,10 @@ def test_deploy_scripts_and_docs():
     assert 'Do not expose PostgreSQL publicly' in docs
     assert cloudflared_script.exists()
     assert cloudflared_doc.exists()
+    assert prod_install_bot.exists()
+    assert prod_install_webhook.exists()
+    assert prod_bot_service.exists()
+    assert prod_webhook_service.exists()
 
     assert deploy_bot
     assert deploy_webhook
@@ -80,11 +88,12 @@ def test_cloudflared_webhook_installer_guards():
     assert 'ufw allow 8080' not in script
     assert 'firewall-cmd' not in script
     assert 'iptables' not in script
-    assert 'head -n 1' not in script
-    assert 'source_file=' not in script
     assert '.bak-$(date +%Y%m%d-%H%M%S)' in script
     assert 'cp -a "${CLOUDFLARED_CONFIG}" "${backup_path}"' in script
-    assert 'Named tunnel ${tunnel_name} exists, but ${credentials_file} was not found.' in script
+    assert 'cloudflared_run tunnel login' in script
+    assert 'cloudflared_run tunnel create "${TUNNEL_NAME}"' in script
+    assert 'cloudflared_run tunnel route dns "${TUNNEL_NAME}" "${PUBLIC_HOSTNAME}"' in script
+    assert 'token-managed' not in script
 
 
 def test_webhook_dev_installer_uses_prod_role_rehearsal_env_template():
@@ -96,6 +105,25 @@ def test_webhook_dev_installer_uses_prod_role_rehearsal_env_template():
     assert 'prod_rob_webhook' in env_template
     assert 'rob_dev_v2' in env_template
     assert 'https://throne.robthebot.com' in env_template
+
+
+def test_prod_installers_and_manual_setup_target_real_prod():
+    bot_script = Path('deploy/scripts/install-bot.sh').read_text()
+    webhook_script = Path('deploy/scripts/install-webhook.sh').read_text()
+    setup_sql = Path('scripts/db/manual/setup_rob_prod.sql').read_text()
+
+    assert 'rob-bot.service' in bot_script
+    assert 'rob-webhook.service' in webhook_script
+    assert 'rob_prod' in bot_script
+    assert 'rob_prod' in webhook_script
+    assert 'PlainStack2/rob.git' in bot_script
+    assert 'PlainStack2/rob.git' in webhook_script
+    assert 'CREATE ROLE prod_rob_bot LOGIN' in setup_sql
+    assert 'CREATE ROLE prod_rob_webhook LOGIN' in setup_sql
+    assert 'CREATE DATABASE rob_prod OWNER doadmin' in setup_sql
+    assert '\\ir ../build/001_core_schema.sql' in setup_sql
+    assert '\\ir ../grants/prod_rob_bot.sql' in setup_sql
+    assert '\\ir ../grants/prod_rob_webhook.sql' in setup_sql
 
 
 def test_webhook_dev_installer_warns_about_existing_stale_env():

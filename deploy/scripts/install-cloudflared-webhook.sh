@@ -6,10 +6,16 @@ PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-throne.robthebot.com}"
 ORIGIN_URL="${ORIGIN_URL:-http://127.0.0.1:8080}"
 CONFIG_FILE="${CONFIG_FILE:-/etc/cloudflared/config.yml}"
 CLOUDFLARED_CONFIG="${CONFIG_FILE}"
+TUNNEL_NAME="${TUNNEL_NAME:-rob-webhook}"
 CREDENTIALS_FILE="${CREDENTIALS_FILE:-/etc/cloudflared/rob-webhook.json}"
+LOGIN_USER="${LOGIN_USER:-${SUDO_USER:-root}}"
 
 log() {
   printf '[install-cloudflared-webhook] %s\n' "$*"
+}
+
+warn() {
+  printf '[install-cloudflared-webhook] WARNING: %s\n' "$*" >&2
 }
 
 die() {
@@ -61,7 +67,7 @@ EOF
 
 warn_webhook_env_values() {
   if [[ ! -f "${WEBHOOK_ENV_FILE}" ]]; then
-    log "WARNING: ${WEBHOOK_ENV_FILE} not found; skipping webhook env checks."
+    warn "${WEBHOOK_ENV_FILE} not found; skipping webhook env checks."
     return
   fi
 
@@ -71,30 +77,103 @@ warn_webhook_env_values() {
   base_url="${base_url%\"}"
 
   if [[ -n "${base_url}" && "${base_url}" != "https://throne.robthebot.com" ]]; then
-    log "WARNING: THRONE_WEBHOOK_BASE_URL is '${base_url}' but should be https://throne.robthebot.com."
+    warn "THRONE_WEBHOOK_BASE_URL is '${base_url}' but should be https://throne.robthebot.com."
   fi
 
   if grep -E '^DISCORD_TOKEN=' "${WEBHOOK_ENV_FILE}" >/dev/null 2>&1; then
-    log "WARNING: DISCORD_TOKEN is present in webhook .env; this host should stay webhook-only."
+    warn "DISCORD_TOKEN is present in webhook .env; this host should stay webhook-only."
   fi
 }
 
-install_token_managed_tunnel() {
-  local tunnel_token=""
-  read -r -s -p "Paste Cloudflare tunnel token for ${PUBLIC_HOSTNAME}: " tunnel_token
-  echo
-  [[ -n "${tunnel_token}" ]] || die "Tunnel token cannot be empty."
-
-  log "Installing cloudflared service using token-managed tunnel."
-  cloudflared service install "${tunnel_token}"
-  unset tunnel_token
+login_home() {
+  getent passwd "${LOGIN_USER}" | cut -d: -f6
 }
 
-write_named_tunnel_config() {
-  local tunnel_id="$1"
-  install -d -m 0750 /etc/cloudflared
-  backup_existing_config
+cloudflared_run() {
+  local user_home
+  user_home="$(login_home)"
+  HOME="${user_home}" cloudflared "$@"
+}
 
+ensure_login_certificate() {
+  local user_home cert_file
+  user_home="$(login_home)"
+  cert_file="${user_home}/.cloudflared/cert.pem"
+
+  if [[ -f "${cert_file}" ]]; then
+    log "Found existing Cloudflare login certificate for ${LOGIN_USER}."
+    return
+  fi
+
+  log "Starting Cloudflare named-tunnel login for ${LOGIN_USER}."
+  log "Complete the browser-based login when cloudflared prints the authorization URL."
+  cloudflared_run tunnel login
+
+  if [[ ! -f "${cert_file}" ]]; then
+    die "cloudflared tunnel login did not create ${cert_file}."
+  fi
+}
+
+discover_existing_tunnel_id() {
+  local json_output
+  json_output="$(cloudflared_run tunnel list --output json 2>/dev/null || true)"
+  if [[ -z "${json_output}" ]]; then
+    return 0
+  fi
+  python3 - <<'PY' "${TUNNEL_NAME}" "${json_output}"
+import json
+import sys
+
+name = sys.argv[1]
+payload = sys.argv[2]
+try:
+    tunnels = json.loads(payload)
+except json.JSONDecodeError:
+    print("")
+    raise SystemExit(0)
+
+for tunnel in tunnels:
+    if str(tunnel.get("name", "")).strip() == name:
+        print(str(tunnel.get("id", "")).strip())
+        break
+else:
+    print("")
+PY
+}
+
+ensure_named_tunnel() {
+  local tunnel_id source_credentials
+  install -d -m 0750 /etc/cloudflared
+
+  tunnel_id="$(discover_existing_tunnel_id)"
+  if [[ -z "${tunnel_id}" ]]; then
+    log "Creating named tunnel ${TUNNEL_NAME}."
+    local create_output
+    create_output="$(cloudflared_run tunnel create "${TUNNEL_NAME}" 2>&1)"
+    printf '%s\n' "${create_output}"
+    tunnel_id="$(printf '%s\n' "${create_output}" | grep -Eo '[0-9a-fA-F-]{36}' | head -n 1 || true)"
+    [[ -n "${tunnel_id}" ]] || die "Could not determine tunnel UUID after creation."
+  else
+    log "Using existing named tunnel ${TUNNEL_NAME} (${tunnel_id})."
+  fi
+
+  source_credentials="$(login_home)/.cloudflared/${tunnel_id}.json"
+  if [[ ! -f "${source_credentials}" ]]; then
+    die "Expected named tunnel credentials were not found at:
+${source_credentials}
+
+Run cloudflared tunnel login and cloudflared tunnel create ${TUNNEL_NAME} as ${LOGIN_USER}, then rerun this script."
+  fi
+
+  install -m 0640 "${source_credentials}" "${CREDENTIALS_FILE}"
+  log "Installed tunnel credentials to ${CREDENTIALS_FILE}."
+
+  if ! cloudflared_run tunnel route dns "${TUNNEL_NAME}" "${PUBLIC_HOSTNAME}"; then
+    warn "DNS routing command did not succeed. Confirm ${PUBLIC_HOSTNAME} already points at tunnel ${TUNNEL_NAME}, or rerun:"
+    warn "cloudflared tunnel route dns ${TUNNEL_NAME} ${PUBLIC_HOSTNAME}"
+  fi
+
+  backup_existing_config
   cat > "${CLOUDFLARED_CONFIG}" <<EOF
 tunnel: ${tunnel_id}
 credentials-file: ${CREDENTIALS_FILE}
@@ -107,40 +186,13 @@ EOF
   log "Wrote ${CLOUDFLARED_CONFIG} for named tunnel ingress."
 }
 
-install_named_tunnel() {
-  local tunnel_name="${TUNNEL_NAME:-rob-webhook}"
-  local credentials_file="${CREDENTIALS_FILE}"
-  if [[ ! -f "${credentials_file}" ]]; then
-    die "Named tunnel ${tunnel_name} exists, but ${credentials_file} was not found.
-
-Please copy the correct credentials JSON for this exact tunnel to:
-${credentials_file}
-
-Then rerun this script."
-  fi
-  local tunnel_id=""
-  read -r -p "Enter tunnel UUID for named tunnel mode: " tunnel_id
-  [[ -n "${tunnel_id}" ]] || die "Tunnel UUID cannot be empty."
-
-  write_named_tunnel_config "${tunnel_id}"
-
+install_or_refresh_service() {
   if ! systemctl list-unit-files cloudflared.service >/dev/null 2>&1; then
     log "Installing cloudflared service unit."
     cloudflared service install
+    return
   fi
-}
-
-choose_mode() {
-  local choice=""
-  echo "Choose Cloudflared mode:"
-  echo "  1) Token-managed tunnel (Cloudflare Zero Trust managed)"
-  echo "  2) Named tunnel with local ingress config (${CONFIG_FILE})"
-  read -r -p "Selection [1/2]: " choice
-  case "${choice}" in
-    1) install_token_managed_tunnel ;;
-    2) install_named_tunnel ;;
-    *) die "Invalid selection." ;;
-  esac
+  log "cloudflared service unit already exists."
 }
 
 restart_and_verify() {
@@ -166,9 +218,10 @@ Validation commands:
   sudo journalctl -u cloudflared -n 100 --no-pager
 
 Notes:
+  - This installer uses cloudflared named-tunnel login flow, not token mode.
   - Do not expose port 8080 publicly.
-  - Do not commit tunnel tokens or credentials into the repository.
-  - Named tunnel mode requires ${CREDENTIALS_FILE}; this script will not guess credential files.
+  - Do not commit tunnel credentials into the repository.
+  - The installed credentials file is ${CREDENTIALS_FILE}.
   - Host-level routing keeps /health reachable for validation checks.
 EOF
 }
@@ -177,7 +230,9 @@ main() {
   ensure_root
   install_cloudflared
   warn_webhook_env_values
-  choose_mode
+  ensure_login_certificate
+  ensure_named_tunnel
+  install_or_refresh_service
   restart_and_verify
   print_summary
 }

@@ -55,15 +55,47 @@ When promoting `rob-dev` into `rob`:
 4. Rehearse services and imported data against `rob_dev_v2`.
 5. Only then update `PlainStack2/rob:main`.
 
-## Prod-role rehearsal target
+## Production install path
 
-For current rehearsals, both services run against `rob_dev_v2` with production-shaped runtime users:
+For production, use:
 
-- Bot server (`/opt/rob-bot/app/.env`): `DATABASE_URL=postgresql://prod_rob_bot:.../rob_dev_v2?...`
-- Webhook server (`/opt/rob-webhook/app/.env`): `DATABASE_URL=postgresql://prod_rob_webhook:.../rob_dev_v2?...`
-- Webhook base URL: `THRONE_WEBHOOK_BASE_URL=https://throne.robthebot.com`
+- Bot installer: `deploy/scripts/install-bot.sh`
+- Webhook installer: `deploy/scripts/install-webhook.sh`
+- Bot service: `rob-bot.service`
+- Webhook service: `rob-webhook.service`
+- Production database: `rob_prod`
+- Runtime users: `prod_rob_bot` and `prod_rob_webhook`
 
-If either service still points at an older database, `scripts/check_db.py` will fail because Rob v2 expects `db_build_version` and the new v2 schema tables.
+Current production examples live in:
+
+- `deploy/examples/bot.prod.env.example`
+- `deploy/examples/webhook.prod.env.example`
+
+The webhook host should stay on `127.0.0.1:8080` behind Cloudflared, and it should notify the bot over the private ops bridge (`ROB_BOT_NOTIFY_URL`) instead of polling the database for send cards.
+
+If either service points at an older database, `scripts/check_db.py` will fail because Rob v2 expects `db_build_version` and the new v2 schema tables.
+
+## Manual DB bootstrap
+
+Production DB setup remains manual. Use:
+
+- `scripts/db/manual/setup_rob_prod.sql`
+
+That script:
+
+- creates `prod_rob_bot` and `prod_rob_webhook` if they do not already exist;
+- creates `rob_prod` if it does not already exist;
+- runs the full manual DB build order;
+- applies the production grants files.
+
+Run it manually as `doadmin`, for example:
+
+```bash
+psql postgresql://doadmin@<host>:25060/defaultdb \
+  -v prod_rob_bot_password='replace-me' \
+  -v prod_rob_webhook_password='replace-me-too' \
+  -f scripts/db/manual/setup_rob_prod.sql
+```
 
 ## Infrastructure hostnames
 

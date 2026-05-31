@@ -33,10 +33,32 @@ def test_cloudflared_webhook_remains_local_only():
     assert "pkg.cloudflare.com/cloudflared" in text
     assert "cloudflare-main.gpg" in text
     assert "lsb_release -cs" in text
+    assert "tunnel login" in text
+    assert "tunnel create" in text
+    assert "tunnel route dns" in text
+    assert "token-managed" not in text
     assert "ufw allow 8080" not in text
     assert "firewall-cmd" not in text
     assert "iptables" not in text
     assert "path: /webhook/*" not in text
+
+
+def test_prod_installers_use_prod_database_and_service_names():
+    bot_text = Path("deploy/scripts/install-bot.sh").read_text(encoding="utf-8")
+    webhook_text = Path("deploy/scripts/install-webhook.sh").read_text(encoding="utf-8")
+    bot_template = bot_text.split("cat > \"${env_file}\" <<'EOF'", 1)[1].split('EOF', 1)[0]
+    webhook_template = webhook_text.split("cat > \"${env_file}\" <<'EOF'", 1)[1].split('EOF', 1)[0]
+
+    assert "https://github.com/PlainStack2/rob.git" in bot_text
+    assert "https://github.com/PlainStack2/rob.git" in webhook_text
+    assert "rob-bot.service" in bot_text
+    assert "rob-webhook.service" in webhook_text
+    assert "rob_prod" in bot_template
+    assert "rob_prod" in webhook_template
+    assert "rob_dev_v2" not in bot_template
+    assert "rob_dev_v2" not in webhook_template
+    assert "ACHIEVEMENTS_ENABLED=false" in bot_template
+    assert "ACHIEVEMENTS_ENABLED=false" in webhook_template
 
 
 def test_docs_do_not_reference_old_webhook_domain_or_dev_webhook_user():

@@ -23,3 +23,9 @@ Current manual DB build order before applying grants:
 4. `scripts/db/build/004_sub_send_names.sql`
 5. `scripts/db/build/005_count_recovery.sql`
 6. `scripts/db/build/006_send_change_requests.sql`
+
+For one-shot production bootstrap, you can instead run:
+
+- `scripts/db/manual/setup_rob_prod.sql`
+
+That file creates `rob_prod`, creates the production runtime users, runs the build order above, and then applies `prod_rob_bot.sql` and `prod_rob_webhook.sql`.

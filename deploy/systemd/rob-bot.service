@@ -1,0 +1,17 @@
+[Unit]
+Description=Rob Discord Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=rob
+Group=rob
+WorkingDirectory=/opt/rob-bot/app
+EnvironmentFile=/opt/rob-bot/app/.env
+Environment=PYTHONPATH=/opt/rob-bot/app
+ExecStart=/opt/rob-bot/app/.venv/bin/python -m apps.bot.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -3,7 +3,8 @@
 These are **manual DB build scripts** for Rob v2.
 
 - Run them manually in pgAdmin4 or `psql` as `doadmin`.
-- Start with `rob_dev_v2` first.
+- For production bootstrap, use `../manual/setup_rob_prod.sql`.
+- For rehearsals, start with `rob_dev_v2` first.
 
 Run in order:
 

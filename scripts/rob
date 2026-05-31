@@ -16,8 +16,8 @@ SCRIPT_PATH="$(resolve_script_path)"
 SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" && pwd)"
 APP_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-ROB_BOT_SERVICE="${ROB_BOT_SERVICE:-rob-bot-dev.service}"
-ROB_WEBHOOK_SERVICE="${ROB_WEBHOOK_SERVICE:-rob-webhook-dev.service}"
+ROB_BOT_SERVICE="${ROB_BOT_SERVICE:-rob-bot.service}"
+ROB_WEBHOOK_SERVICE="${ROB_WEBHOOK_SERVICE:-rob-webhook.service}"
 ROB_LOG_LINES="${ROB_LOG_LINES:-100}"
 GUILD_ID=""
 declare -a REMAINING_ARGS=()

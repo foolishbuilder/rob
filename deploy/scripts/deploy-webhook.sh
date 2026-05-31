@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/opt/rob-webhook/app}"
-SERVICE_NAME="${SERVICE_NAME:-rob-webhook-dev.service}"
+SERVICE_NAME="${SERVICE_NAME:-rob-webhook.service}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_REF="${DEPLOY_REF:-${DEPLOY_BRANCH}}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
@@ -157,4 +157,4 @@ done
 echo "[13/13] Show final service status"
 sudo systemctl --no-pager --full status "$SERVICE_NAME" | sed -n '1,14p'
 
-echo "Webhook prod-role rehearsal deploy complete."
+echo "Webhook deploy complete."
