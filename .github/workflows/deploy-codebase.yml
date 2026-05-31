@@ -10,12 +10,6 @@ on:
         description: "Branch, tag, or commit SHA to deploy"
         required: false
         default: "main"
-      environment:
-        description: "Deployment environment"
-        required: true
-        default: "dev"
-        type: choice
-        options: [dev, prod]
       deploy_bot:
         description: "Deploy bot service"
         required: true
@@ -28,7 +22,6 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-rob-codebase-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -62,12 +55,12 @@ jobs:
           }
 
           if [[ "$EVENT_NAME" == "push" ]]; then
-            deploy_env="dev"
+            deploy_env="prod"
             deploy_ref="$PUSH_SHA"
             deploy_bot="true"
             deploy_webhook="true"
           else
-            deploy_env="${INPUT_ENVIRONMENT:-dev}"
+            deploy_env="prod"
             deploy_ref="${INPUT_DEPLOY_REF:-main}"
             if [[ -z "$deploy_ref" ]]; then
               deploy_ref="main"
@@ -93,15 +86,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pip install -r requirements.txt
       - run: PYTHONPATH=. python -m compileall apps rob scripts
       - run: ruff check .
       - run: PYTHONPATH=. python -m pytest -q
       - run: |
           test -f deploy/scripts/deploy-bot.sh
           test -f deploy/scripts/deploy-webhook.sh
-          test -f deploy/scripts/deploy-bot-dev.sh
-          test -f deploy/scripts/deploy-webhook-dev.sh
           test -f deploy/scripts/precheck-bot.sh
           test -f deploy/scripts/precheck-webhook.sh
           test -f scripts/check_db.py
