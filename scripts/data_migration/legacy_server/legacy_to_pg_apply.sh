@@ -14,11 +14,12 @@ EXCLUDE_DOMME_HANDLES=()
 usage() {
   cat <<'EOF'
 Usage:
-  legacy_to_pg_apply.sh --database-url <url> --default-guild-id <guild_id> --confirm-apply yes [--sqlite <path>] [--report-dir <dir>] [--roots "/opt /srv"] [--exclude-domme-handle <handle>]
+  legacy_to_pg_apply.sh --database-url <url> [--default-guild-id <guild_id>] --confirm-apply yes [--sqlite <path>] [--report-dir <dir>] [--roots "/opt /srv"] [--exclude-domme-handle <handle>]
 
 Notes:
   - This script writes imported data into the target PostgreSQL database.
   - Schema/build SQL and runtime grants must already be applied manually.
+  - If --default-guild-id is omitted, the importer will try to infer a single guild id.
   - It does not create schema or database roles.
 EOF
 }
@@ -79,11 +80,6 @@ command -v python3 >/dev/null 2>&1 || {
   echo "--database-url is required." >&2
   exit 1
 }
-[[ -n "${DEFAULT_GUILD_ID}" ]] || {
-  echo "--default-guild-id is required." >&2
-  exit 1
-}
-
 mkdir -p "${REPORT_DIR}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 INSPECT_JSON="${REPORT_DIR}/sqlite-report-${STAMP}.json"
@@ -102,6 +98,11 @@ EXCLUDE_ARGS=()
 for handle in "${EXCLUDE_DOMME_HANDLES[@]}"; do
   EXCLUDE_ARGS+=(--exclude-domme-handle "${handle}")
 done
+
+DEFAULT_GUILD_ARGS=()
+if [[ -n "${DEFAULT_GUILD_ID}" ]]; then
+  DEFAULT_GUILD_ARGS=(--default-guild-id "${DEFAULT_GUILD_ID}")
+fi
 
 if [[ -z "${SQLITE_PATH}" ]]; then
   SQLITE_PATH="$(
@@ -125,7 +126,7 @@ fi
 PYTHONPATH=. python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite "${SQLITE_PATH}" \
   --database-url "${DATABASE_URL}" \
-  --default-guild-id "${DEFAULT_GUILD_ID}" \
+  "${DEFAULT_GUILD_ARGS[@]}" \
   "${EXCLUDE_ARGS[@]}" \
   --no-dry-run \
   --report-json "${APPLY_JSON}"

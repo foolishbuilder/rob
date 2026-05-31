@@ -56,8 +56,7 @@ python3 -m scripts.data_migration.legacy_server.legacy_sqlite_report \
 
 ```bash
 scripts/data_migration/legacy_server/legacy_to_pg_dry_run.sh \
-  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813
+  --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require'
 ```
 
 This will:
@@ -72,9 +71,7 @@ If you need to deliberately skip known duplicate or unwanted legacy Dom/me handl
 ```bash
 scripts/data_migration/legacy_server/legacy_to_pg_dry_run.sh \
   --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813 \
   --exclude-domme-handle missbuttercup \
-  --exclude-domme-handle gothpuppy22 \
   --exclude-domme-handle sirenofspoils
 ```
 
@@ -83,7 +80,6 @@ scripts/data_migration/legacy_server/legacy_to_pg_dry_run.sh \
 ```bash
 scripts/data_migration/legacy_server/legacy_to_pg_apply.sh \
   --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813 \
   --confirm-apply yes
 ```
 
@@ -103,7 +99,6 @@ python3 -m scripts.data_migration.inspect_sqlite \
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
   --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813 \
   --dry-run \
   --report-json /tmp/rob-import-dry-run.json
 ```
@@ -114,7 +109,6 @@ python3 -m scripts.data_migration.import_sqlite_to_postgres \
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
   --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813 \
   --no-dry-run \
   --report-json /tmp/rob-import-apply.json
 ```
@@ -125,7 +119,6 @@ Optional target reset (dangerous):
 python3 -m scripts.data_migration.import_sqlite_to_postgres \
   --sqlite /opt/rob-the-bot/data/rob_the_bot.sqlite3 \
   --database-url 'postgresql://prod_rob_bot:***@host:25060/rob_dev_v2?sslmode=require' \
-  --default-guild-id 1506597978251591813 \
   --no-dry-run \
   --truncate-target \
   --confirm-truncate
@@ -160,8 +153,10 @@ This avoids silent data-shape handling during rehearsal imports.
 2. Run `legacy_sqlite_report.py` or `find_sqlite_candidates.py` on the legacy host.
 3. Run `legacy_to_pg_dry_run.sh` against `rob_dev_v2`.
 4. Review Dom/me counts, Sub counts, send totals, and count-state parity.
-5. Run `legacy_to_pg_apply.sh` only after the dry-run looks correct.
+   5. Run `legacy_to_pg_apply.sh` only after the dry-run looks correct.
 6. Validate the imported result with:
    - `rob migration audit --guild <guild_id>`
    - `PYTHONPATH=. python3 -m scripts.check_db`
    - live bot/webhook rehearsal against `rob_dev_v2`
+
+If the legacy data clearly belongs to a single guild, the importer now infers that guild id automatically. Keep `--default-guild-id` as an override for multi-guild SQLite datasets or unusual legacy snapshots.

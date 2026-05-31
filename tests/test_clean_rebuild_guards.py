@@ -418,6 +418,46 @@ def test_importer_dry_run_does_not_write(tmp_path: Path, monkeypatch: pytest.Mon
     assert called["write"] == 0
 
 
+def test_importer_can_infer_default_guild_id_from_source_sqlite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sqlite_path = tmp_path / "legacy.sqlite3"
+    _create_sample_sqlite(sqlite_path)
+    called = {"write": 0}
+
+    async def _fake_write_payload_to_postgres(**_kwargs):
+        called["write"] += 1
+        return {}
+
+    monkeypatch.setattr(
+        import_sqlite_to_postgres,
+        "_write_payload_to_postgres",
+        _fake_write_payload_to_postgres,
+    )
+
+    args = SimpleNamespace(
+        sqlite=str(sqlite_path),
+        database_url="postgresql://prod_rob_bot:pass@localhost:5432/rob_prod",
+        default_guild_id=None,
+        dry_run=True,
+        inspect_only=False,
+        truncate_target=False,
+        confirm_truncate=False,
+        allow_prod_truncate=False,
+        include_wishlist_cache=False,
+        report_json=str(tmp_path / "dry-run-report.json"),
+        exclude_domme_handle=[],
+    )
+
+    rc = asyncio.run(import_sqlite_to_postgres.main_async(args))
+
+    assert rc == 0
+    assert called["write"] == 0
+    report = (tmp_path / "dry-run-report.json").read_text(encoding="utf-8")
+    assert '"resolved_default_guild_id": 10' in report
+
+
 def test_importer_refuses_unsafe_prod_truncate(tmp_path: Path):
     sqlite_path = tmp_path / "legacy.sqlite3"
     _create_sample_sqlite(sqlite_path)

@@ -179,6 +179,100 @@ def _resolve_guild_id(row: dict[str, Any], *, default_guild_id: int) -> int:
     return value if value is not None else default_guild_id
 
 
+def _guild_ids_from_bot_setting_key(key: str | None) -> set[int]:
+    if not key:
+        return set()
+    guild_ids: set[int] = set()
+    count_match = _COUNT_KEY_RE.match(key)
+    if count_match:
+        guild_ids.add(int(count_match.group("guild")))
+    inactivity_match = _INACTIVITY_KEY_RE.match(key)
+    if inactivity_match:
+        guild_ids.add(int(inactivity_match.group("guild")))
+    return guild_ids
+
+
+def _discover_source_guild_ids(sqlite_path: Path) -> set[int]:
+    guild_ids: set[int] = set()
+    with sqlite3.connect(sqlite_path) as sqlite:
+        sqlite.row_factory = sqlite3.Row
+        for table in TABLES_OF_INTEREST:
+            for row in _public_source_rows(sqlite, table):
+                explicit_guild_id = _as_int(_row_value(row, "guild_id", "server_id"))
+                if explicit_guild_id is not None:
+                    guild_ids.add(explicit_guild_id)
+                key = _as_text(_row_value(row, "key", "config_key", "name"))
+                guild_ids.update(_guild_ids_from_bot_setting_key(key))
+    return guild_ids
+
+
+async def _discover_target_guild_ids(database_url: str) -> set[int]:
+    connection = await asyncpg.connect(database_url)
+    try:
+        rows = await connection.fetch(
+            """
+            SELECT DISTINCT guild_id
+            FROM (
+                SELECT guild_id FROM vib_settings
+                UNION ALL
+                SELECT guild_id FROM bot_users
+                UNION ALL
+                SELECT guild_id FROM dommes
+                UNION ALL
+                SELECT guild_id FROM subs
+                UNION ALL
+                SELECT guild_id FROM sends
+                UNION ALL
+                SELECT guild_id FROM vib_leaderboard
+                UNION ALL
+                SELECT guild_id FROM the_count
+                UNION ALL
+                SELECT guild_id FROM inactive_users
+            ) guilds
+            WHERE guild_id IS NOT NULL
+            ORDER BY guild_id ASC
+            """
+        )
+        return {int(row["guild_id"]) for row in rows}
+    finally:
+        await connection.close()
+
+
+async def _resolve_default_guild_id(
+    *,
+    sqlite_path: Path,
+    database_url: str,
+    explicit_default_guild_id: int | None,
+) -> int:
+    if explicit_default_guild_id is not None:
+        return explicit_default_guild_id
+
+    source_guild_ids = _discover_source_guild_ids(sqlite_path)
+    if len(source_guild_ids) == 1:
+        return next(iter(source_guild_ids))
+    if len(source_guild_ids) > 1:
+        discovered = ", ".join(str(guild_id) for guild_id in sorted(source_guild_ids))
+        raise RuntimeError(
+            "Could not infer a single guild id from the legacy SQLite database. "
+            f"Found multiple candidates: {discovered}. Pass --default-guild-id explicitly."
+        )
+
+    target_guild_ids = await _discover_target_guild_ids(database_url)
+    if len(target_guild_ids) == 1:
+        return next(iter(target_guild_ids))
+    if len(target_guild_ids) > 1:
+        discovered = ", ".join(str(guild_id) for guild_id in sorted(target_guild_ids))
+        raise RuntimeError(
+            "Could not infer a single guild id from the target PostgreSQL database. "
+            f"Found multiple candidates: {discovered}. Pass --default-guild-id explicitly."
+        )
+
+    raise RuntimeError(
+        "Could not infer a guild id from the legacy SQLite database or the target PostgreSQL "
+        "database. Pass --default-guild-id explicitly."
+    )
+
+
 def _parse_bot_setting_value(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -706,6 +800,7 @@ def _print_report(report: dict[str, Any]) -> None:
     print("SQLite -> PostgreSQL migration report")
     print(f"- source_sqlite: {report['source_sqlite']}")
     print(f"- target_database: {report['target_database']}")
+    print(f"- resolved_default_guild_id: {report['resolved_default_guild_id']}")
     print(f"- dry_run: {report['dry_run']}")
     print(f"- inspect_only: {report['inspect_only']}")
     for table_name, count in report["source_counts"].items():
@@ -1147,7 +1242,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--sqlite", required=True, help="Path to legacy SQLite database file.")
     parser.add_argument("--database-url", required=True, help="Target PostgreSQL database URL.")
-    parser.add_argument("--default-guild-id", required=True, type=int, help="Fallback guild id.")
+    parser.add_argument(
+        "--default-guild-id",
+        type=int,
+        default=None,
+        help=(
+            "Fallback guild id. Optional when the importer can infer a single guild from the "
+            "legacy SQLite data or the target PostgreSQL database."
+        ),
+    )
     parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
@@ -1194,6 +1297,14 @@ async def main_async(args: argparse.Namespace) -> int:
     if not sqlite_path.exists():
         raise RuntimeError(f"SQLite database not found: {sqlite_path}")
 
+    default_guild_id = await _resolve_default_guild_id(
+        sqlite_path=sqlite_path,
+        database_url=args.database_url,
+        explicit_default_guild_id=(
+            int(args.default_guild_id) if args.default_guild_id is not None else None
+        ),
+    )
+
     if args.truncate_target and not args.confirm_truncate:
         raise RuntimeError(
             "--truncate-target requires --confirm-truncate."
@@ -1211,7 +1322,7 @@ async def main_async(args: argparse.Namespace) -> int:
     inspection = inspect_sqlite(sqlite_path)
     payload = _build_payload(
         sqlite_path=sqlite_path,
-        default_guild_id=int(args.default_guild_id),
+        default_guild_id=default_guild_id,
         include_wishlist_cache=bool(args.include_wishlist_cache),
         exclude_domme_handles={str(handle).strip().lower() for handle in args.exclude_domme_handle},
     )
@@ -1223,6 +1334,7 @@ async def main_async(args: argparse.Namespace) -> int:
     report: dict[str, Any] = {
         "source_sqlite": str(sqlite_path),
         "target_database": _safe_db_label(args.database_url),
+        "resolved_default_guild_id": default_guild_id,
         "dry_run": bool(args.dry_run),
         "inspect_only": bool(args.inspect_only),
         "source_counts": payload["source_counts"],

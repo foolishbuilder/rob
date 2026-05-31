@@ -73,6 +73,8 @@ def test_legacy_shell_wrappers_reference_v2_importer():
     assert "--dry-run" in dry_run
     assert "import_sqlite_to_postgres" in dry_run
     assert "--exclude-domme-handle" in dry_run
+    assert "--default-guild-id is omitted" in dry_run
     assert "--no-dry-run" in apply
     assert "--confirm-apply yes" in apply
     assert "--exclude-domme-handle" in apply
+    assert "--default-guild-id is omitted" in apply
