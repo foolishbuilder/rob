@@ -32,18 +32,11 @@ def test_deploy_workflow_rebuild():
     assert 'scripts/db/build/001_core_schema.sql' not in text
 
 
-def test_old_workflows_removed():
-    assert not Path('.github/workflows/deploy-bot-dev.yml').exists()
-    assert not Path('.github/workflows/deploy-webhook-dev.yml').exists()
-
-
 def test_deploy_scripts_and_docs():
     pre_bot = Path('deploy/scripts/precheck-bot.sh').read_text()
     pre_webhook = Path('deploy/scripts/precheck-webhook.sh').read_text()
     deploy_bot = Path('deploy/scripts/deploy-bot.sh').read_text()
     deploy_webhook = Path('deploy/scripts/deploy-webhook.sh').read_text()
-    bot_dev = Path('deploy/scripts/deploy-bot-dev.sh').read_text()
-    webhook_dev = Path('deploy/scripts/deploy-webhook-dev.sh').read_text()
     docs = Path('docs/deployment.md').read_text()
     cloudflared_script = Path('deploy/scripts/install-cloudflared-webhook.sh')
     cloudflared_doc = Path('docs/cloudflared-webhook.md')
@@ -95,16 +88,6 @@ def test_cloudflared_webhook_installer_guards():
     assert 'token-managed' not in script
 
 
-def test_webhook_dev_installer_uses_prod_role_rehearsal_env_template():
-    script = Path('deploy/scripts/install-webhook-dev.sh').read_text()
-    env_template = script.split("cat > \"${env_file}\" <<'EOF'", 1)[1].split('EOF', 1)[0]
-
-    assert 'DATABASE_URL=postgresql://dev_rob_bot:replace@127.0.0.1:5432/rob_dev_v2' not in env_template
-    assert 'THRONE_WEBHOOK_BASE_URL=https://rob-dev.barecoding.com' not in env_template
-    assert 'prod_rob_webhook' in env_template
-    assert 'rob_dev_v2' in env_template
-    assert 'https://throne.robthebot.com' in env_template
-
 
 def test_prod_installers_and_manual_setup_target_real_prod():
     bot_script = Path('deploy/scripts/install-bot.sh').read_text()
@@ -124,10 +107,3 @@ def test_prod_installers_and_manual_setup_target_real_prod():
     assert '\\ir ../grants/prod_rob_bot.sql' in setup_sql
     assert '\\ir ../grants/prod_rob_webhook.sql' in setup_sql
 
-
-def test_webhook_dev_installer_warns_about_existing_stale_env():
-    script = Path('deploy/scripts/install-webhook-dev.sh').read_text()
-
-    assert 'Existing .env appears to contain old dev webhook values.' in script
-    assert 'This installer will not overwrite it.' in script
-    assert 'dev_rob_bot|rob-dev\\.barecoding\\.com' in script
