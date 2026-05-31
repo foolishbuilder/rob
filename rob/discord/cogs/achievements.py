@@ -92,6 +92,30 @@ class AchievementsCog(commands.Cog):
     def __init__(self, bot: RobBot) -> None:
         self.bot = bot
 
+    def _make_interaction_achievement_announcer(
+        self,
+        *,
+        interaction: discord.Interaction,
+        discord_user_id: int,
+        display_name: str,
+    ):
+        async def _callback(achievement) -> None:
+            maintenance = getattr(self.bot, "maintenance_service", None)
+            if maintenance is not None and await maintenance.notifications_suppressed():
+                return
+            channel = interaction.channel
+            if channel is None:
+                return
+            await channel.send(
+                **achievement_unlocked_card(
+                    achievement,
+                    unlocked_by_display_name=display_name,
+                    unlocked_by_user_id=discord_user_id,
+                ).send_kwargs()
+            )
+
+        return _callback
+
     @app_commands.command(name="achievements", description="View your achievements or another member's achievements.")
     @app_commands.describe(user="Optional member to view instead of yourself.")
     async def achievements(
@@ -124,6 +148,7 @@ class AchievementsCog(commands.Cog):
                 return
 
         target = user or viewer
+        viewer_display_name = viewer.display_name
 
         newly_unlocked = 0
         if await self.bot.achievements_service.unlock_achievement(
@@ -131,6 +156,11 @@ class AchievementsCog(commands.Cog):
             discord_user_id=viewer.id,
             achievement_key="first_achievement_view",
             source="slash:/achievements",
+            on_unlocked=self._make_interaction_achievement_announcer(
+                interaction=interaction,
+                discord_user_id=viewer.id,
+                display_name=viewer_display_name,
+            ),
         ):
             newly_unlocked += 1
         if target.id != viewer.id:
@@ -140,6 +170,11 @@ class AchievementsCog(commands.Cog):
                 achievement_key="viewed_other_achievements",
                 source="slash:/achievements",
                 metadata={"target_user_id": target.id},
+                on_unlocked=self._make_interaction_achievement_announcer(
+                    interaction=interaction,
+                    discord_user_id=viewer.id,
+                    display_name=viewer_display_name,
+                ),
             ):
                 newly_unlocked += 1
 

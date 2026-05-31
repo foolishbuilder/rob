@@ -61,6 +61,7 @@ def achievements_overview_cards(
     summary_line = f"Achievements unlocked: {unlocked_total}/{len(ENABLED_ACHIEVEMENTS)}"
     if newly_unlocked_count and newly_unlocked_count > 0:
         summary_line = f"{summary_line} +{newly_unlocked_count}"
+    subtitle = "Your unlocked achievements" if for_self else f"{display_name}'s unlocked achievements"
 
     cards: list[RenderedMessage] = []
     for index in range(page_count):
@@ -69,10 +70,9 @@ def achievements_overview_cards(
 
         embed = discord.Embed(
             title="Rob Achievements",
-            description=summary_line,
+            description=f"{summary_line}\n{subtitle}",
             colour=COLOR_ROB_PURPLE,
         )
-        embed.set_author(name=f"{display_name}'s achievements" if not for_self else f"{display_name}'s achievements")
         embed.set_footer(text=f"Page {index + 1}/{page_count}")
 
         if not page_achievements:

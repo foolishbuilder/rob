@@ -466,6 +466,37 @@ def test_bot_ops_webhook_preview_endpoint_marks_already_reissued_users():
     assert skipped["will_send"] is False
 
 
+def test_bot_ops_webhook_preview_uses_fallback_label_when_handle_missing():
+    dommes = [
+        SimpleNamespace(
+            guild_id=99,
+            discord_user_id=555,
+            throne_handle=None,
+            throne_url="https://throne.com/missadore",
+            public_display_name=None,
+            throne_creator_id="creator_1",
+            tracking_status="active",
+            profile_status="active",
+            webhook_connected_at=None,
+            last_successful_event_at=None,
+        )
+    ]
+    bot = SimpleNamespace(
+        get_guild=lambda guild_id: _make_fake_guild() if guild_id == 99 else None,
+        dommes_repo=_FakeDommesRepo(dommes),
+        bot_settings_repo=_FakeBotSettingsRepo(),
+        user=SimpleNamespace(id=123),
+    )
+    server = BotOpsServer(bot=bot, host="127.0.0.1", port=8811, secret="shared")
+    request = _FakeRequest(headers={"X-Rob-Ops-Secret": "shared"}, query={"format": "text"})
+    request.match_info["guild_id"] = "99"
+
+    response = asyncio.run(server._handle_webhook_reissue_preview(request))
+
+    assert response.status == 200
+    assert "handle=missadore" in response.text
+
+
 def test_bot_ops_webhook_send_rotates_and_marks_reissue_sent():
     dm_user = _FakeDmUser()
     dommes = [

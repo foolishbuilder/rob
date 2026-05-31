@@ -285,6 +285,7 @@ def _build_payload(
 
     for row in source_rows["event_dommes"]:
         guild_id = _resolve_guild_id(row, default_guild_id=default_guild_id)
+        throne_url = _as_text(_row_value(row, "throne_url", "profile_url"))
         normalized_handle = _normalize_throne_handle(
             _row_value(row, "throne_handle", "handle", "throne_url", "profile_url")
         )
@@ -301,8 +302,9 @@ def _build_payload(
         dommes[domme_key] = {
             "guild_id": guild_id,
             "discord_user_id": discord_user_id,
-            "throne_url": _as_text(_row_value(row, "throne_url", "profile_url")),
-            "throne_handle": _as_text(_row_value(row, "throne_handle", "handle")),
+            "throne_url": throne_url,
+            "throne_handle": _as_text(_row_value(row, "throne_handle", "handle"))
+            or normalized_handle,
             "throne_creator_id": _as_text(_row_value(row, "throne_creator_id", "creator_id")),
             "tracking_status": "active",
             "profile_status": "active",

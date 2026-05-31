@@ -307,6 +307,7 @@ def test_importer_maps_dommes_subs_sends_count_and_inactivity(tmp_path: Path):
     )
 
     assert len(payload["dommes"]) == 1
+    assert payload["dommes"][0]["throne_handle"] == "dom"
     assert len(payload["subs"]) == 1
     assert len(payload["sends"]) >= 1
     assert payload["sends"][0].amount_cents == 1234

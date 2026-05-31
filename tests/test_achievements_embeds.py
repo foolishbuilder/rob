@@ -32,6 +32,7 @@ def test_achievements_catalogue_uses_compact_embed_field_layout():
     text = _card_text(cards[0])
     assert embed.title == "Rob Achievements"
     assert "Achievements unlocked: 1/" in (embed.description or "")
+    assert "Your unlocked achievements" in (embed.description or "")
     assert any(field.name == "Double Digits" for field in embed.fields)
     assert "You counted to 10. Humanity may yet survive." in text
 

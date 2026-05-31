@@ -190,15 +190,21 @@ def test_achievements_command_shows_only_unlocked_entries_publicly():
     assert "You said 67." not in text
 
 
-def test_achievements_command_does_not_send_unlock_followups_for_meta_achievements():
+def test_achievements_command_announces_new_meta_achievement_in_channel(monkeypatch):
+    monkeypatch.setattr("rob.discord.cogs.achievements.discord.Member", _FakeMember)
     bot = _FakeBot(unlocked_keys={"count_10"}, unlock_returns=True)
     cog = AchievementsCog(bot)  # type: ignore[arg-type]
     member = _FakeMember(user_id=10, display_name="Pat", role_ids=[42], manage_guild=True)
-    interaction = _FakeInteraction(user=member, guild=_FakeGuild(1), channel=_FakeChannel())
+    channel = _FakeChannel()
+    interaction = _FakeInteraction(user=member, guild=_FakeGuild(1), channel=channel)
 
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=None))
 
     assert interaction.followup.messages == []
+    assert len(channel.messages) == 1
+    rendered = _message_text(channel.messages[0])
+    assert "Trophy Cabinet" in rendered
+    assert "Achievements Unlock by Pat" in rendered
 
 
 def test_achievements_command_shows_empty_state_when_none_unlocked():
@@ -211,6 +217,7 @@ def test_achievements_command_shows_empty_state_when_none_unlocked():
 
     text = _message_text(interaction.response.messages[0])
     assert "Achievements unlocked: 0/" in text
+    assert "Your unlocked achievements" in text
     assert "Nothing here yet" in text
     assert "Double Digits" not in text
 
@@ -225,6 +232,23 @@ def test_achievements_viewing_other_user_unlocks_nosy_achievement():
     asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=target))
 
     assert ("viewed_other_achievements", 10) in bot.achievements_service.unlock_calls
+
+
+def test_achievements_viewing_other_user_announces_nosy_achievement(monkeypatch):
+    monkeypatch.setattr("rob.discord.cogs.achievements.discord.Member", _FakeMember)
+    bot = _FakeBot(unlocked_keys={"count_10"}, unlock_returns=True)
+    cog = AchievementsCog(bot)  # type: ignore[arg-type]
+    viewer = _FakeMember(user_id=10, display_name="Pat", role_ids=[42], manage_guild=True)
+    target = _FakeMember(user_id=20, display_name="Alex", role_ids=[], manage_guild=False)
+    channel = _FakeChannel()
+    interaction = _FakeInteraction(user=viewer, guild=_FakeGuild(1), channel=channel)
+
+    asyncio.run(AchievementsCog.achievements.callback(cog, interaction, user=target))
+
+    assert len(channel.messages) == 2
+    rendered = "\n".join(_message_text(message) for message in channel.messages)
+    assert "Trophy Cabinet" in rendered
+    assert "Nosy Little Thing" in rendered
 
 
 def test_test_achievements_renders_all_configured_cards_for_admin(monkeypatch):

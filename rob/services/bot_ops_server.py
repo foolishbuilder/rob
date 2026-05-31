@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
 from typing import Any
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from aiohttp import web
 import discord
@@ -78,6 +79,17 @@ def _score_named_match(name: str, tokens: tuple[str, ...]) -> int:
         elif normalized_token in normalized:
             score = max(score, 50)
     return score
+
+
+def _preview_handle_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    path = parsed.path.strip("/")
+    if not path:
+        return None
+    handle = path.split("/", 1)[0].strip().lstrip("@")
+    return handle or None
 
 
 def _find_best_channel_match(channels: list[dict[str, Any]], field_name: str) -> dict[str, Any] | None:
@@ -1060,6 +1072,16 @@ class BotOpsServer:
             or str(domme.tracking_status).strip().lower() != "active"
         )
 
+    @staticmethod
+    def _domme_preview_label(domme: Any) -> str:
+        return (
+            getattr(domme, "throne_handle", None)
+            or _preview_handle_from_url(getattr(domme, "throne_url", None))
+            or getattr(domme, "public_display_name", None)
+            or getattr(domme, "throne_creator_id", None)
+            or "(missing)"
+        )
+
     async def _build_webhook_reissue_preview_payload(self, guild_id: int) -> tuple[dict[str, Any], int]:
         if not hasattr(self.bot, "dommes_repo") or not hasattr(self.bot, "bot_settings_repo"):
             return (
@@ -1091,6 +1113,7 @@ class BotOpsServer:
                 {
                     "discord_user_id": domme.discord_user_id,
                     "throne_handle": domme.throne_handle,
+                    "preview_label": self._domme_preview_label(domme),
                     "tracking_status": domme.tracking_status,
                     "profile_status": domme.profile_status,
                     "webhook_connected": domme.webhook_connected_at is not None,
@@ -1456,7 +1479,7 @@ class BotOpsServer:
             lines.append(
                 "- "
                 f"user={row['discord_user_id']} "
-                f"handle={row.get('throne_handle') or '(missing)'} "
+                f"handle={row.get('preview_label') or row.get('throne_handle') or '(missing)'} "
                 f"tracking={row['tracking_status']} "
                 f"connected={'yes' if row['webhook_connected'] else 'no'} "
                 f"reconnect_needed={'yes' if row['needs_reconnect'] else 'no'} "
@@ -1479,21 +1502,21 @@ class BotOpsServer:
             lines.extend(["", "Delivered"])
             for row in delivered:
                 lines.append(
-                    f"- user={row['discord_user_id']} handle={row.get('throne_handle') or '(missing)'}"
+                    f"- user={row['discord_user_id']} handle={row.get('preview_label') or row.get('throne_handle') or '(missing)'}"
                 )
         skipped = payload.get("skipped") or []
         if skipped:
             lines.extend(["", "Skipped"])
             for row in skipped:
                 lines.append(
-                    f"- user={row['discord_user_id']} handle={row.get('throne_handle') or '(missing)'} reason={row['reason']}"
+                    f"- user={row['discord_user_id']} handle={row.get('preview_label') or row.get('throne_handle') or '(missing)'} reason={row['reason']}"
                 )
         failed = payload.get("failed") or []
         if failed:
             lines.extend(["", "Failed"])
             for row in failed:
                 lines.append(
-                    f"- user={row['discord_user_id']} handle={row.get('throne_handle') or '(missing)'} error={row['error']}"
+                    f"- user={row['discord_user_id']} handle={row.get('preview_label') or row.get('throne_handle') or '(missing)'} error={row['error']}"
                 )
         return "\n".join(lines)
 
