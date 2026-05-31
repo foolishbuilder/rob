@@ -22,6 +22,7 @@ on:
         type: boolean
 
 concurrency:
+  group: deploy-rob-codebase-prod
   cancel-in-progress: false
 
 jobs:
