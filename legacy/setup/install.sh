@@ -3,7 +3,7 @@
 # Usage: sudo bash install.sh
 set -euo pipefail
 
-REPO_URL="https://github.com/PlainStack2/rob-dev.git"
+REPO_URL="https://github.com/notpatdev/rob.git"
 APP_ROOT="/opt/rob"
 APP_DIR="${APP_ROOT}/app"
 DATA_DIR="${APP_ROOT}/data"

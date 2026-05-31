@@ -2,7 +2,7 @@
 
 The old split deploy workflows have been replaced by a single workflow: **Deploy Rob Codebase** in `.github/workflows/deploy-codebase.yml`.
 
-The current promotion path is `PlainStack2/rob-dev` -> `PlainStack2/rob`. Treat that as a controlled repo bootstrap and cutover rehearsal, not as a code-history merge from the legacy `notpatdev/robthebot` repository.
+The canonical Rob repo is now `notpatdev/rob`. Any earlier rehearsal/bootstrap repo references should be treated as legacy history, not as the live source of truth, and not as a code-history merge from the legacy `notpatdev/robthebot` repository.
 
 ## Deployment flow
 
@@ -47,13 +47,13 @@ SQLite data migration remains separate and is not part of deployment.
 
 ## Repo bootstrap guidance
 
-When promoting `rob-dev` into `rob`:
+When bootstrapping a fresh host or validating a fresh checkout:
 
-1. Push to a non-`main` bootstrap branch in `PlainStack2/rob`.
-2. Copy Actions secrets, environments, and protection rules.
-3. Verify workflow wiring in the new repo.
-4. Rehearse services and imported data against `rob_dev_v2`.
-5. Only then update `PlainStack2/rob:main`.
+1. Clone from `https://github.com/notpatdev/rob.git`.
+2. Copy Actions secrets, environments, and protection rules into the active repo if GitHub is being rebuilt.
+3. Verify workflow wiring in the active repo before deploy.
+4. Rehearse services and imported data against `rob_dev_v2` if you are doing a migration dry run.
+5. Only then proceed with `main`-based deployment to production.
 
 ## Production install path
 

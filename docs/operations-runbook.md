@@ -2,18 +2,17 @@
 
 This page is a practical checklist for day-to-day Rob operations in production/dev.
 
-## Repo promotion: `rob-dev` -> `rob`
+## Canonical Repo
 
-Treat the promotion as code promotion plus data rehearsal, not as a merge from the old `notpatdev/robthebot` repo.
+The canonical Rob repo is now `notpatdev/rob`. Treat older rehearsal/bootstrap repo references as legacy history, not the active source of truth, and not as a merge from the old `notpatdev/robthebot` repo.
 
-Recommended order:
+Recommended baseline:
 
-1. Push the current `rob-dev` codebase to a non-`main` bootstrap branch in `PlainStack2/rob`.
-2. Copy GitHub Actions secrets, environments, and protection rules into `PlainStack2/rob`.
-3. Verify the workflow wiring in the new repo before touching `main`.
-4. Keep `PlainStack2/rob-dev` intact as rollback/reference during rehearsal.
-5. Rehearse data import and webhook reissue on `rob_dev_v2`.
-6. Only then move `PlainStack2/rob:main` to the promoted codebase.
+1. Clone from `https://github.com/notpatdev/rob.git`.
+2. Copy GitHub Actions secrets, environments, and protection rules into the active repo if GitHub has been rebuilt.
+3. Verify the workflow wiring in the active repo before touching production.
+4. Rehearse data import and webhook reissue on `rob_dev_v2` when doing migration work.
+5. Keep any older PlainStack2 repo around only as optional historical rollback/reference.
 
 ## Install Global `rob`
 

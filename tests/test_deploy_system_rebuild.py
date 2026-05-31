@@ -116,8 +116,8 @@ def test_prod_installers_and_manual_setup_target_real_prod():
     assert 'rob-webhook.service' in webhook_script
     assert 'rob_prod' in bot_script
     assert 'rob_prod' in webhook_script
-    assert 'PlainStack2/rob.git' in bot_script
-    assert 'PlainStack2/rob.git' in webhook_script
+    assert 'notpatdev/rob.git' in bot_script
+    assert 'notpatdev/rob.git' in webhook_script
     assert 'CREATE ROLE prod_rob_bot LOGIN' in setup_sql
     assert 'CREATE ROLE prod_rob_webhook LOGIN' in setup_sql
     assert 'CREATE DATABASE rob_prod OWNER doadmin' in setup_sql
