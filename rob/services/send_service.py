@@ -8,6 +8,7 @@ from rob.database.repositories.subs import SubsRepository
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import ThroneSendPayload, is_known_test_sender
+from rob.utils.fx import convert_cents_to_usd
 from rob.utils.time import utc_now
 
 _UNMATCHABLE_SUB_NAMES = {"anonymous", "anon", "private", "hidden"}
@@ -53,8 +54,12 @@ class SendService:
         creator: Domme,
         payload: ThroneSendPayload,
     ) -> SendRecord | None:
-        amount_cents = payload.amount_cents
-        currency = payload.currency or "USD"
+        source_amount_cents = payload.amount_cents
+        source_currency = (payload.currency or "USD").upper()
+        amount_cents = convert_cents_to_usd(source_amount_cents, source_currency)
+        currency = "USD"
+        original_amount_cents = source_amount_cents if source_currency != "USD" else None
+        original_currency = source_currency if source_currency != "USD" else None
         is_private = payload.is_private
         is_test_send = is_known_test_sender(
             payload.gifter_username,
@@ -97,6 +102,8 @@ class SendService:
                 sub_name=payload.gifter_username,
                 amount_cents=amount_cents,
                 currency=currency,
+                original_amount_cents=original_amount_cents,
+                original_currency=original_currency,
                 method="throne",
                 source="throne_webhook",
                 item_name=payload.item_name,

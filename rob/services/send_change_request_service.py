@@ -18,7 +18,7 @@ from rob.ui.cards.send_change_requests import (
     send_change_result_card,
 )
 from rob.ui.render import add_card_actions
-from rob.utils.money import format_money_from_cents
+from rob.utils.money import format_money_from_cents, format_money_with_currency_name
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +28,18 @@ def _normalize_lookup(value: str) -> str:
     if cleaned.startswith("@"):
         cleaned = cleaned[1:]
     return cleaned
+
+
+def _send_amount_text(send: SendRecord) -> str:
+    currency = (send.currency or "USD").upper()
+    amount = format_money_from_cents(send.amount_cents, currency)
+    original_currency = (send.original_currency or "").upper()
+    if currency == "USD" and send.original_amount_cents is not None and original_currency and original_currency != "USD":
+        original = format_money_with_currency_name(send.original_amount_cents, original_currency)
+        return f"{amount} (converted from {original})"
+    if currency != "USD":
+        return format_money_with_currency_name(send.amount_cents, currency)
+    return amount
 
 
 class _SendChangeDecisionButton(discord.ui.Button):
@@ -290,7 +302,7 @@ class SendChangeRequestService:
             raise ValueError("The target send was no longer available.")
 
         if request.action == "send_update":
-            old_amount = format_money_from_cents(target_send.amount_cents, target_send.currency or "USD")
+            old_amount = _send_amount_text(target_send)
             updated_send = await self.sends.update_amount(
                 target_send.id,
                 amount_cents=request.amount_cents or 0,

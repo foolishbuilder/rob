@@ -261,3 +261,125 @@ def test_create_send_update_request_validates_message_id_and_stores_reason():
     assert captured["target_send_id"] == 321
     assert captured["amount_cents"] == 1875
     assert captured["note"] == "Price correction"
+
+
+def test_approve_send_update_refreshes_message_for_converted_send_and_keeps_usd_update_flow():
+    now = _now()
+    request = SendChangeRequest(
+        id=55,
+        guild_id=99,
+        domme_user_id=555,
+        action="send_update",
+        status="pending",
+        requested_by="Pat",
+        requested_sub_name=None,
+        amount_cents=1875,
+        currency="USD",
+        method=None,
+        note="Price correction",
+        target_send_id=321,
+        decision_reason=None,
+        request_channel_id=None,
+        request_message_id=None,
+        approved_by_user_id=None,
+        approved_send_id=None,
+        created_at=now,
+        updated_at=now,
+        decided_at=None,
+    )
+    target_send = SendRecord(
+        id=321,
+        guild_id=99,
+        domme_id=1,
+        domme_user_id=555,
+        sub_id=None,
+        sub_user_id=None,
+        sub_name="pat",
+        amount_cents=1198,
+        currency="USD",
+        method="throne",
+        source="throne_webhook",
+        item_name="Gift",
+        item_image_url=None,
+        external_id=None,
+        event_id=None,
+        fallback_event_hash=None,
+        is_private=False,
+        seeded=False,
+        sent_at=now,
+        received_at=now,
+        discord_post_status="posted",
+        discord_posted_at=now,
+        discord_message_id=654321,
+        discord_post_error=None,
+        created_at=now,
+        is_test_send=False,
+        _public_send_id=None,
+        original_amount_cents=1099,
+        original_currency="EUR",
+    )
+    updated_send = SendRecord(
+        **{
+            **target_send.__dict__,
+            "amount_cents": 1875,
+            "original_amount_cents": 1099,
+            "original_currency": "EUR",
+        }
+    )
+    captured: dict[str, object] = {}
+
+    class _Requests:
+        async def get(self, request_id: int):
+            return request if request_id == 55 else None
+
+        async def mark_failed(self, **kwargs):
+            captured["failed"] = kwargs
+
+        async def mark_approved(self, **kwargs):
+            captured["approved"] = kwargs
+            return request
+
+    class _Sends:
+        async def get(self, send_id: int):
+            return target_send if send_id == 321 else None
+
+        async def update_amount(self, send_id: int, *, amount_cents: int, currency: str):
+            captured["update_amount"] = {
+                "send_id": send_id,
+                "amount_cents": amount_cents,
+                "currency": currency,
+            }
+            return updated_send
+
+    class _Queue:
+        async def refresh_send_message(self, **kwargs):
+            captured["refresh_send_message"] = kwargs
+            return True
+
+    class _Leaderboard:
+        async def refresh_guild(self, guild_id: int):
+            captured["refresh_guild"] = guild_id
+
+    service = SendChangeRequestService(
+        bot=SimpleNamespace(),
+        requests=_Requests(),  # type: ignore[arg-type]
+        dommes=SimpleNamespace(),
+        sends=_Sends(),  # type: ignore[arg-type]
+        send_service=SimpleNamespace(),
+        send_queue_service=_Queue(),  # type: ignore[arg-type]
+        leaderboard_service=_Leaderboard(),  # type: ignore[arg-type]
+    )
+
+    rendered = asyncio.run(service.approve_request(request_id=55, approved_by_user_id=555))
+
+    assert rendered is not None
+    assert captured["update_amount"] == {
+        "send_id": 321,
+        "amount_cents": 1875,
+        "currency": "USD",
+    }
+    refresh_call = captured["refresh_send_message"]
+    assert refresh_call["send_id"] == 321
+    assert refresh_call["message_id"] == 654321
+    assert "adjusted by Pat" in refresh_call["adjustment_note"]
+    assert captured["refresh_guild"] == 99

@@ -1082,6 +1082,7 @@ class BotOpsServer:
                 message_id=message_id,
                 reason=reason,
                 requested_by=requested_by,
+                # rob send update amount input is an operator-provided USD override.
                 currency="USD",
             )
         except ValueError as exc:

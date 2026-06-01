@@ -125,6 +125,8 @@ class SendRecord:
     created_at: datetime
     is_test_send: bool = False
     _public_send_id: str | None = None
+    original_amount_cents: int | None = None
+    original_currency: str | None = None
 
     @property
     def public_send_id(self) -> str:
@@ -159,6 +161,8 @@ class NewSend:
     sent_at: datetime
     discord_post_status: str
     is_test_send: bool = False
+    original_amount_cents: int | None = None
+    original_currency: str | None = None
 
 
 @dataclass(frozen=True)

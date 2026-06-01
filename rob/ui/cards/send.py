@@ -11,7 +11,12 @@ from rob.utils.money import format_money_from_cents, format_money_with_currency_
 def _amount_text(send: SendRecord) -> str:
     currency = (send.currency or "USD").upper()
     if currency == "USD":
-        return format_money_from_cents(send.amount_cents, "USD")
+        usd = format_money_from_cents(send.amount_cents, "USD")
+        original_currency = (send.original_currency or "").upper()
+        if send.original_amount_cents is not None and original_currency and original_currency != "USD":
+            original = format_money_with_currency_name(send.original_amount_cents, original_currency)
+            return f"{usd} (converted from {original})"
+        return usd
     return format_money_with_currency_name(send.amount_cents, send.currency)
 
 

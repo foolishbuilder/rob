@@ -182,6 +182,8 @@ def test_public_send_id_db_build_scripts_define_column_and_unique_index():
     indexes = Path("scripts/db/build/002_indexes.sql").read_text(encoding="utf-8")
 
     assert "public_send_id TEXT" in core_schema
+    assert "original_amount_cents INTEGER" in core_schema
+    assert "original_currency TEXT" in core_schema
     assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_sends_public_send_id_unique\nON sends (public_send_id);" in indexes
     assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_sends_event_id_unique\nON sends (event_id);" in indexes
     assert "WHERE public_send_id IS NOT NULL" not in indexes

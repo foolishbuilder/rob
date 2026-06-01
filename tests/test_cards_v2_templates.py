@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary, SendRecord
+from rob.database.repositories.models import (
+    LeaderboardEntry,
+    LeaderboardSummary,
+    SendChangeRequest,
+    SendRecord,
+)
 from rob.services.leaderboard_status import LeaderboardStatus
 from rob.services.send_display import build_sub_display
 from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
+from rob.ui.cards.send_change_requests import send_change_request_card
 from rob.ui.cards.send import send_card
 from rob.ui.copy import throne_setup_steps
 from rob.ui.theme import COLOR_LEADER_ALERT, COLOR_SEND
@@ -151,6 +157,48 @@ def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
     assert "normalized from" not in body_content
 
 
+def test_send_card_shows_real_usd_conversion_with_original_currency_metadata():
+    now = datetime.now(timezone.utc)
+    send = SendRecord(
+        3,
+        1,
+        None,
+        10,
+        None,
+        None,
+        "gifter_name",
+        1198,
+        "USD",
+        None,
+        "throne_webhook",
+        "Flowers",
+        None,
+        None,
+        None,
+        None,
+        False,
+        False,
+        now,
+        now,
+        "posted",
+        None,
+        None,
+        None,
+        now,
+        False,
+        None,
+        1099,
+        "EUR",
+    )
+    msg = send_card(
+        send=send,
+        domme_label="@Domme",
+        sub_display="gifter_name with no nickname claimed",
+    )
+    contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
+    assert "$11.98 (converted from EUR 10.99 (Euro))" in contents
+
+
 def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():
     now = datetime.now(timezone.utc)
     send = SendRecord(
@@ -189,6 +237,70 @@ def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():
     assert "**Sub:** <@42>" in contents
     assert "**Service:** paypal" in contents
     assert "Rob Send ID" not in contents
+
+
+def test_send_update_approval_card_shows_converted_existing_amount_when_metadata_exists():
+    now = datetime.now(timezone.utc)
+    request = SendChangeRequest(
+        id=7,
+        guild_id=1,
+        domme_user_id=10,
+        action="send_update",
+        status="pending",
+        requested_by="Pat",
+        requested_sub_name=None,
+        amount_cents=1875,
+        currency="USD",
+        method=None,
+        note="Price correction",
+        target_send_id=99,
+        decision_reason=None,
+        request_channel_id=None,
+        request_message_id=None,
+        approved_by_user_id=None,
+        approved_send_id=None,
+        created_at=now,
+        updated_at=now,
+        decided_at=None,
+    )
+    target_send = SendRecord(
+        99,
+        1,
+        None,
+        10,
+        None,
+        None,
+        "gifter_name",
+        1198,
+        "USD",
+        None,
+        "throne_webhook",
+        "Flowers",
+        None,
+        None,
+        None,
+        None,
+        False,
+        False,
+        now,
+        now,
+        "posted",
+        None,
+        None,
+        None,
+        now,
+        False,
+        None,
+        1099,
+        "EUR",
+    )
+    msg = send_change_request_card(
+        request,
+        domme_label="@Domme",
+        target_send=target_send,
+    )
+    payload = str(msg.view.to_components())
+    assert "$11.98 (converted from EUR 10.99 (Euro))" in payload
 
 
 def test_leaderboard_main_and_stats_titles_and_separators():
