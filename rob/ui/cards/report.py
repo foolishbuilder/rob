@@ -11,10 +11,10 @@ def report_submitted_card() -> RenderedMessage:
     view = discord.ui.LayoutView(timeout=600)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Report Sent"),
+            discord.ui.TextDisplay("## ✅ Report Sent"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
-                "Thanks - I've sent that through.\n"
+                "Thanks — I've sent that through.\n"
                 "If this is urgent, please also let a moderator know."
             ),
             accent_color=COLOR_SUCCESS,
@@ -44,7 +44,7 @@ def report_staff_card(
     )
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Rob Issue Report"),
+            discord.ui.TextDisplay("## 📋 Rob Issue Report"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(body),
             accent_color=COLOR_PRIMARY,

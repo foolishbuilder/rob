@@ -62,5 +62,7 @@ def send_card(
         )
     else:
         children.append(discord.ui.TextDisplay(body))
+    children.append(discord.ui.Separator())
+    children.append(discord.ui.TextDisplay("-# Rob kept the paperwork tidy."))
     view.add_item(discord.ui.Container(*children, accent_color=COLOR_SEND))
     return RenderedMessage(view=view)

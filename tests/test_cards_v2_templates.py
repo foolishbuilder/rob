@@ -78,6 +78,8 @@ def test_send_card_renders_thumbnail_image_and_currency_name():
         "TextDisplay",
         "Separator",
         "Section",
+        "Separator",
+        "TextDisplay",
     ]
     assert type(section.accessory).__name__ == "Thumbnail"
     assert "New Send to @Domme" in all_text
@@ -101,9 +103,12 @@ def test_send_card_without_image_uses_text_display_and_no_footer():
         "TextDisplay",
         "Separator",
         "TextDisplay",
+        "Separator",
+        "TextDisplay",
     ]
     assert "gifter_name with no nickname claimed" in contents
-    assert "-#" not in contents
+    # Footer is a quiet metadata line
+    assert "-# Rob kept the paperwork tidy." in contents
 
 
 def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
@@ -145,6 +150,8 @@ def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
     container = msg.view.children[0]
     assert [type(child).__name__ for child in container.children] == [
         "TextDisplay",
+        "TextDisplay",
+        "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",

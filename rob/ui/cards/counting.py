@@ -4,7 +4,7 @@ import discord
 
 from rob.ui.components import make_card, render
 from rob.ui.render import CardSection, RenderedMessage, require_components_v2
-from rob.ui.theme import COLOR_INFO, COLOR_SUCCESS
+from rob.ui.theme import COLOR_DANGER, COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING
 
 
 def counting_status_card(*, current_number: int, enabled: bool) -> RenderedMessage:
@@ -28,7 +28,7 @@ def counting_updated_card(number: int) -> RenderedMessage:
             title="Rob | Count Updated",
             body=f"Counting has been set to **{number}**.",
             color=COLOR_SUCCESS,
-            variant="counting",
+            variant="success",
         )
     )
 
@@ -38,13 +38,13 @@ def counting_same_user_reminder_card() -> RenderedMessage:
     view = discord.ui.LayoutView(timeout=30)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Hold up there, speedy."),
+            discord.ui.TextDisplay("### ⚠️ Hold up there, speedy."),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "One number per person at a time.\n"
                 "Let someone else have a go before you count again."
             ),
-            accent_color=COLOR_INFO,
+            accent_color=COLOR_WARNING,
         )
     )
     return RenderedMessage(view=view)
@@ -85,7 +85,7 @@ def count_rescue_needed_for_role_card(
         )
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Count Rescue Needed"),
+            discord.ui.TextDisplay("## ⚠️ Count Rescue Needed"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "The count is wobbling.\n"
@@ -96,7 +96,7 @@ def count_rescue_needed_for_role_card(
                 "-# Deadline:\n"
                 f"<t:{deadline_unix}:R> / <t:{deadline_unix}:f>"
             ),
-            accent_color=COLOR_INFO,
+            accent_color=COLOR_WARNING,
         )
     )
     return RenderedMessage(view=view)
@@ -107,7 +107,7 @@ def count_saved_card(*, next_number: int) -> RenderedMessage:
     view = discord.ui.LayoutView(timeout=600)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Count Saved"),
+            discord.ui.TextDisplay("## ✅ Count Saved"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "Rob saw the send and duct-taped the count back together.\n"
@@ -128,13 +128,15 @@ def count_failed_reset_card() -> RenderedMessage:
     view = discord.ui.LayoutView(timeout=600)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Count Failed"),
+            discord.ui.TextDisplay("## 🚨 Count Failed"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "No qualifying send arrived in time.\n"
                 "Rob has reset the count to **1**."
             ),
-            accent_color=COLOR_INFO,
+            discord.ui.Separator(),
+            discord.ui.TextDisplay("-# Better luck next time."),
+            accent_color=COLOR_DANGER,
         )
     )
     return RenderedMessage(view=view)
@@ -145,14 +147,14 @@ def count_failed_sub_blocked_card(*, blocked_until_unix: int) -> RenderedMessage
     view = discord.ui.LayoutView(timeout=600)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Count Failed"),
+            discord.ui.TextDisplay("## 🚨 Count Failed"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "No recovery send was detected.\n"
                 "You fumbled the count and missed the recovery window, so you are blocked from counting for 12 hours.\n\n"
-                f"You can count again <t:{blocked_until_unix}:R>."
+                f"-# You can count again:\n**<t:{blocked_until_unix}:R>**"
             ),
-            accent_color=COLOR_INFO,
+            accent_color=COLOR_DANGER,
         )
     )
     return RenderedMessage(view=view)
@@ -163,13 +165,13 @@ def count_blocked_sub_card(*, blocked_until_unix: int) -> RenderedMessage:
     view = discord.ui.LayoutView(timeout=120)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("## Count Blocked"),
+            discord.ui.TextDisplay("### 🚨 Count Blocked"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(
                 "You fumbled the count and missed the recovery window, so you are blocked from counting for 12 hours.\n\n"
-                f"You can count again <t:{blocked_until_unix}:R>."
+                f"-# You can count again:\n**<t:{blocked_until_unix}:R>**"
             ),
-            accent_color=COLOR_INFO,
+            accent_color=COLOR_DANGER,
         )
     )
     return RenderedMessage(view=view)

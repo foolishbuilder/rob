@@ -50,7 +50,7 @@ def _latest_send_details_section(
     image_url: str | None,
 ) -> discord.ui.Container:
     children: list[discord.ui.Item] = [
-        discord.ui.TextDisplay(f"## {title}"),
+        discord.ui.TextDisplay(f"### {title}"),
         discord.ui.Separator(),
     ]
     if image_url:
@@ -77,9 +77,11 @@ def leaderboard_personal_stats_card(
     if domme_stats is None and sub_stats is None:
         view.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay("## You're not on the leaderboard just yet"),
+                discord.ui.TextDisplay("## 📊 You're not on the leaderboard just yet"),
                 discord.ui.Separator(),
                 discord.ui.TextDisplay(unregistered_text),
+                discord.ui.Separator(),
+                discord.ui.TextDisplay("-# Run /register to get started."),
                 accent_color=COLOR_LEADERBOARD,
             )
         )
@@ -87,16 +89,16 @@ def leaderboard_personal_stats_card(
 
     if domme_stats is not None:
         domme_body = (
-            "-# Leaderboard Rank:\n"
+            f"-# Leaderboard Rank:\n"
             f"**{_rank_label(domme_stats.rank)}**\n\n"
-            "-# Sends to date:\n"
-            f"**Sends: {domme_stats.send_count} | Dollar Amount: {format_money_from_cents(domme_stats.total_cents)}**\n\n"
-            "-# Top Sending Sub:\n"
+            f"-# Sends to date:\n"
+            f"**{domme_stats.send_count} sends · {format_money_from_cents(domme_stats.total_cents)}**\n\n"
+            f"-# Top Sending Sub:\n"
             f"**{domme_stats.top_sub_label}**"
         )
         view.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay(f"## {domme_stats.display_name}'s Send Stats | Dom/me"),
+                discord.ui.TextDisplay(f"## 📊 {domme_stats.display_name}'s Send Stats | Dom/me"),
                 discord.ui.Separator(),
                 discord.ui.TextDisplay(domme_body),
                 accent_color=COLOR_LEADERBOARD,
@@ -130,7 +132,7 @@ def leaderboard_personal_stats_card(
         )
         view.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay(f"## {sub_stats.display_name}'s Send Stats | Sub"),
+                discord.ui.TextDisplay(f"## 📊 {sub_stats.display_name}'s Send Stats | Sub"),
                 discord.ui.Separator(),
                 discord.ui.TextDisplay(sub_body),
                 accent_color=COLOR_LEADERBOARD,

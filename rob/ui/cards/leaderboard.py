@@ -43,7 +43,7 @@ def leaderboard_card(
         for i, entry in enumerate(entries[:10], 1):
             lines.append(
                 f"{_line(i, entry.label)} **{entry.label}**\n"
-                f"Amount: {format_money_from_cents(entry.total_cents)} | Total Sends: {entry.send_count}"
+                f"Amount: {format_money_from_cents(entry.total_cents)} · Sends: {entry.send_count}"
             )
         entries_text = "\n\n".join(lines)
 
@@ -78,9 +78,11 @@ def leaderboard_stats_card(
         )
     else:
         now = int(time.time())
+        leader_name = entries[0].label if entries else "Nobody yet"
+        leader_amount = format_money_from_cents(entries[0].total_cents if entries else 0)
         stats_text = (
             f"-# Leaderboard last updated: <t:{now}:R> / <t:{now}:f>\n\n"
-            f"-# Leaderboard Leader:\n**{entries[0].label if entries else 'Nobody yet'} - {format_money_from_cents(entries[0].total_cents if entries else 0)}**\n\n"
+            f"-# Leaderboard Leader:\n**{leader_name} — {leader_amount}**\n\n"
             f"-# Total Dom/mes on Leaderboard:\n**{summary.domme_count}**\n\n"
             f"-# Total Sends Tracked:\n**{summary.send_count}**\n\n"
             f"-# Total Amount Tracked:\n**{format_money_from_cents(summary.total_cents)}**\n\n"

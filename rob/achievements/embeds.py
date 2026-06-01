@@ -31,23 +31,25 @@ def achievement_unlocked_card(
 ) -> RenderedMessage:
     require_components_v2()
     view = discord.ui.LayoutView(timeout=1800)
+    rarity_emoji = _RARITY_EMOJIS.get(achievement.rarity, "⚪")
     children: list[discord.ui.Item] = [
-        discord.ui.TextDisplay(f"### {achievement.title}"),
+        discord.ui.TextDisplay("## 🎉 Achievement Unlocked!"),
         discord.ui.Separator(),
+        discord.ui.TextDisplay(f"### {rarity_emoji} {achievement.title}"),
         discord.ui.TextDisplay(achievement.description),
     ]
     if include_meta_line:
         children.append(discord.ui.Separator())
         children.append(
             discord.ui.TextDisplay(
-                f"-# Key: {achievement.key} | Category: {achievement.category} | Rarity: {achievement.rarity}"
+                f"-# Key: {achievement.key} · Category: {achievement.category} · Rarity: {achievement.rarity}"
             )
         )
     if unlocked_by_display_name:
         children.append(discord.ui.Separator())
         children.append(
             discord.ui.TextDisplay(
-                f"-# Achievement Unlocked by {unlocked_by_display_name}"
+                f"-# Unlocked by {unlocked_by_display_name}"
             )
         )
     view.add_item(discord.ui.Container(*children, accent_color=COLOR_SUCCESS))
@@ -67,7 +69,8 @@ def achievements_overview_cards(
     require_components_v2()
     unlocked_total = len(unlocked_achievements)
     page_count = max(1, math.ceil(unlocked_total / _ENTRIES_PER_PAGE)) if unlocked_total else 1
-    summary_line = f"Achievements unlocked: **{unlocked_total}/{len(ENABLED_ACHIEVEMENTS)}**"
+    progress_bar = _progress_bar(unlocked_total, len(ENABLED_ACHIEVEMENTS))
+    summary_line = f"{progress_bar}\nAchievements unlocked: **{unlocked_total}/{len(ENABLED_ACHIEVEMENTS)}**"
     if newly_unlocked_count and newly_unlocked_count > 0:
         summary_line = f"{summary_line} *(+{newly_unlocked_count} just unlocked)*"
     subtitle = "Your unlocked achievements" if for_self else f"{display_name}'s unlocked achievements"
@@ -78,7 +81,7 @@ def achievements_overview_cards(
         page_achievements = unlocked_achievements[start : start + _ENTRIES_PER_PAGE]
         view = discord.ui.LayoutView(timeout=1800)
         children: list[discord.ui.Item] = [
-            discord.ui.TextDisplay("## Rob Achievements"),
+            discord.ui.TextDisplay("## 🏅 Rob Achievements"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(summary_line),
             discord.ui.TextDisplay(subtitle),
@@ -95,7 +98,7 @@ def achievements_overview_cards(
                 ]
             )
             if for_self:
-                children.append(discord.ui.TextDisplay("Go do something suspiciously Rob-shaped."))
+                children.append(discord.ui.TextDisplay("-# Go do something suspiciously Rob-shaped."))
         else:
             for achievement_index, achievement in enumerate(page_achievements):
                 rarity_emoji = _RARITY_EMOJIS.get(achievement.rarity, "⚪")
@@ -117,3 +120,11 @@ def achievements_overview_cards(
         cards.append(RenderedMessage(view=view))
 
     return cards
+
+
+def _progress_bar(current: int, total: int, *, width: int = 10) -> str:
+    """Generate a simple Unicode progress bar."""
+    if total == 0:
+        return "░" * width
+    filled = round((current / total) * width)
+    return "▓" * filled + "░" * (width - filled)
