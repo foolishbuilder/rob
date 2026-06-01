@@ -8,13 +8,11 @@ from rob.ui.theme import COLOR_SEND
 from rob.utils.money import format_money_from_cents, format_money_with_currency_name
 
 
-def _normalized_amount_text(send: SendRecord) -> str:
-    normalized_usd = format_money_from_cents(send.amount_cents, "USD")
+def _amount_text(send: SendRecord) -> str:
     currency = (send.currency or "USD").upper()
     if currency == "USD":
-        return normalized_usd
-    original = format_money_with_currency_name(send.amount_cents, send.currency)
-    return f"{normalized_usd} (normalized from {original})"
+        return format_money_from_cents(send.amount_cents, "USD")
+    return format_money_with_currency_name(send.amount_cents, send.currency)
 
 
 def send_card(
@@ -32,27 +30,24 @@ def send_card(
         expected_fallback_note = f"Manual send via {send.method}" if send.method else "Manual send"
         lines = [
             f"**Sub:** {sub_display}",
-            f"**Amount:** {_normalized_amount_text(send)}",
+            f"**Amount:** {_amount_text(send)}",
         ]
         if send.item_name and send.item_name != expected_fallback_note:
             lines.append(f"**Note:** {send.item_name}")
         lines.append(f"**Service:** {send.method or 'other'}")
-        if adjustment_note:
-            lines.append(adjustment_note)
         body = "\n\n".join(lines)
     else:
-        lines = [
+        body = (
             f"**Sub:** {sub_display}\n\n"
-            f"**Amount:** {_normalized_amount_text(send)}\n\n"
+            f"**Amount:** {_amount_text(send)}\n\n"
             f"**Item:** {send.item_name or 'Mystery send'}"
-        ]
-        if adjustment_note:
-            lines.append(adjustment_note)
-        body = "\n\n".join(lines)
+        )
     children: list[discord.ui.Item] = [
         discord.ui.TextDisplay(f"## 💸 New Send to {domme_label}! 💸"),
-        discord.ui.Separator(),
     ]
+    if adjustment_note:
+        children.append(discord.ui.TextDisplay(adjustment_note))
+    children.append(discord.ui.Separator())
     if send.item_image_url:
         children.append(
             discord.ui.Section(

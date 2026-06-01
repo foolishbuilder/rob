@@ -100,7 +100,7 @@ def test_send_card_without_image_uses_text_display_and_no_footer():
     assert "-#" not in contents
 
 
-def test_send_card_adjustment_note_and_currency_normalization_for_non_usd():
+def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
     now = datetime.now(timezone.utc)
     send = SendRecord(
         2,
@@ -136,9 +136,19 @@ def test_send_card_adjustment_note_and_currency_normalization_for_non_usd():
         sub_display="gifter_name with no nickname claimed",
         adjustment_note="-# NOTE: This send has been adjusted by Pat on 1717000000 | Reason: Price correction",
     )
-    contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
-    assert "$10.99 (normalized from EUR 10.99 (Euro))" in contents
-    assert "NOTE: This send has been adjusted by Pat" in contents
+    container = msg.view.children[0]
+    assert [type(child).__name__ for child in container.children] == [
+        "TextDisplay",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+    ]
+    # Adjustment note is the second element, directly below the title.
+    assert container.children[1].content == "-# NOTE: This send has been adjusted by Pat on 1717000000 | Reason: Price correction"
+    # Body shows original currency — no fake USD normalization.
+    body_content = container.children[3].content
+    assert "EUR 10.99 (Euro)" in body_content
+    assert "normalized from" not in body_content
 
 
 def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():

@@ -70,7 +70,7 @@ def send_change_request_card(
             ("Dom/me", domme_label),
             ("Send ID", str(request.target_send_id or 0)),
             ("Current Amount", existing_amount),
-            ("New Amount", format_money_from_cents(request.amount_cents or 0, "USD")),
+            ("New Amount (USD)", format_money_from_cents(request.amount_cents or 0, "USD")),
             ("Requested By", request.requested_by),
             ("Reason", request.note or "No reason provided."),
         ]
