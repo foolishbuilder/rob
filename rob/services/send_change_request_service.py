@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import discord
 
@@ -17,7 +18,7 @@ from rob.ui.cards.send_change_requests import (
     send_change_result_card,
 )
 from rob.ui.render import add_card_actions
-from rob.utils.money import format_money_from_cents
+from rob.utils.money import format_money_from_cents, format_money_with_currency_name
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,18 @@ def _normalize_lookup(value: str) -> str:
     if cleaned.startswith("@"):
         cleaned = cleaned[1:]
     return cleaned
+
+
+def _send_amount_text(send: SendRecord) -> str:
+    currency = (send.currency or "USD").upper()
+    amount = format_money_from_cents(send.amount_cents, currency)
+    original_currency = (send.original_currency or "").upper()
+    if currency == "USD" and send.original_amount_cents is not None and original_currency and original_currency != "USD":
+        original = format_money_with_currency_name(send.original_amount_cents, original_currency)
+        return f"{amount} (converted from {original})"
+    if currency != "USD":
+        return format_money_with_currency_name(send.amount_cents, currency)
+    return amount
 
 
 class _SendChangeDecisionButton(discord.ui.Button):
@@ -176,6 +189,43 @@ class SendChangeRequestService:
         )
         return await self._deliver_request(request, domme=domme, target_send=send)
 
+    async def create_send_update_request(
+        self,
+        *,
+        guild_id: int,
+        domme_lookup: str,
+        send_id: int,
+        amount_cents: int,
+        message_id: int,
+        reason: str,
+        requested_by: str,
+        currency: str = "USD",
+    ) -> SendChangeRequest:
+        domme = await self._resolve_domme(guild_id, domme_lookup)
+        if domme is None:
+            raise ValueError("That Dom/me lookup did not match a registered profile.")
+
+        send = await self.sends.get(send_id)
+        if send is None or send.guild_id != guild_id:
+            raise ValueError("That send ID was not found for this guild.")
+        if send.domme_user_id != domme.discord_user_id:
+            raise ValueError("That send does not belong to the selected Dom/me.")
+        if send.discord_message_id is None:
+            raise ValueError("That send is missing a posted Discord message reference.")
+        if send.discord_message_id != message_id:
+            raise ValueError("That message ID does not match the target send announcement.")
+
+        request = await self.requests.create_send_update_request(
+            guild_id=guild_id,
+            domme_user_id=domme.discord_user_id,
+            requested_by=requested_by,
+            target_send_id=send_id,
+            amount_cents=amount_cents,
+            currency=currency,
+            note=reason,
+        )
+        return await self._deliver_request(request, domme=domme, target_send=send)
+
     async def approve_request(
         self,
         *,
@@ -250,6 +300,62 @@ class SendChangeRequestService:
                 decision_reason="Target send was no longer available during approval.",
             )
             raise ValueError("The target send was no longer available.")
+
+        if request.action == "send_update":
+            old_amount = _send_amount_text(target_send)
+            updated_send = await self.sends.update_amount(
+                target_send.id,
+                amount_cents=request.amount_cents or 0,
+                currency=request.currency or "USD",
+            )
+            if updated_send is None:
+                await self.requests.mark_failed(
+                    request_id=request_id,
+                    approved_by_user_id=approved_by_user_id,
+                    decision_reason="Target send amount could not be updated.",
+                )
+                raise ValueError("Rob could not update that send amount.")
+
+            unix_timestamp = int(time.time())
+            reason = request.note or "No reason provided."
+            adjustment_note = (
+                f"-# NOTE: This send has been adjusted by {request.requested_by} "
+                f"on {unix_timestamp} | Reason: {reason}"
+            )
+            approved = await self.requests.mark_approved(
+                request_id=request_id,
+                approved_by_user_id=approved_by_user_id,
+                approved_send_id=updated_send.id,
+                decision_reason=adjustment_note,
+            )
+            if approved is None:
+                raise ValueError("This request was already processed.")
+
+            message_refresh_status = "not requested"
+            if target_send.discord_message_id is not None and self.send_queue_service is not None:
+                refreshed = await self.send_queue_service.refresh_send_message(
+                    send_id=updated_send.id,
+                    message_id=target_send.discord_message_id,
+                    adjustment_note=adjustment_note,
+                )
+                message_refresh_status = "updated in place" if refreshed else "update failed"
+            elif target_send.discord_message_id is None:
+                message_refresh_status = "missing message reference"
+
+            if self.leaderboard_service is not None:
+                await self.leaderboard_service.refresh_guild(request.guild_id)
+
+            return send_change_result_card(
+                title="Rob | Send Updated",
+                summary="Rob updated the approved send amount and refreshed tracked totals.",
+                details=[
+                    ("Send ID", str(updated_send.id)),
+                    ("Previous Amount", old_amount),
+                    ("Updated Amount", format_money_from_cents(updated_send.amount_cents, "USD")),
+                    ("Message", message_refresh_status),
+                ],
+                approved=True,
+            )
 
         updated = await self.sends.mark_ignored(
             target_send.id,

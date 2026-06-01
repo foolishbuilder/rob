@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from rob.database.repositories.models import NewSend, SendRecord, ThroneCreator
 from rob.services.send_service import SendService
 from rob.throne.payloads import ThroneSendPayload
+from rob.utils.fx import convert_cents_to_usd
 
 
 @dataclass
@@ -108,6 +109,23 @@ def _payload(gifter_username: str | None) -> ThroneSendPayload:
     )
 
 
+def _payload_non_usd(gifter_username: str | None) -> ThroneSendPayload:
+    now = datetime.now(timezone.utc)
+    return ThroneSendPayload(
+        event_id="evt_2",
+        event_type="gift_purchased",
+        order_id="order_2",
+        gifter_username=gifter_username,
+        item_name="Flowers",
+        item_image_url="https://example.com/item.png",
+        amount_cents=1099,
+        currency="EUR",
+        is_private=False,
+        purchased_at=now,
+        fallback_event_hash="hash_2",
+    )
+
+
 def test_known_test_sender_is_stored_as_test_send():
     sends = _FakeSendsRepo()
     subs = _FakeSubsRepo()
@@ -176,3 +194,23 @@ def test_anonymous_sender_does_not_attempt_sub_alias_lookup():
     assert sends.inserted.sub_id is None
     assert sends.inserted.sub_user_id is None
     assert subs.lookup_calls == []
+
+
+def test_non_usd_throne_send_is_converted_to_usd_with_original_metadata():
+    sends = _FakeSendsRepo()
+    subs = _FakeSubsRepo()
+    service = SendService(
+        sends=sends,
+        subs=subs,
+        maintenance=_FakeMaintenance(),
+        throne_test_gifter_usernames=("marie_123",),
+    )
+
+    asyncio.run(service.record_throne_send(creator=_creator(), payload=_payload_non_usd("euro_sender")))
+
+    assert sends.inserted is not None
+    assert sends.inserted.currency == "USD"
+    assert sends.inserted.amount_cents == convert_cents_to_usd(1099, "EUR")
+    assert sends.inserted.amount_cents != 1099
+    assert sends.inserted.original_amount_cents == 1099
+    assert sends.inserted.original_currency == "EUR"

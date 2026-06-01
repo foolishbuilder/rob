@@ -6,7 +6,19 @@ from rob.database.repositories.models import SendChangeRequest, SendRecord
 from rob.ui.components import make_card, render
 from rob.ui.render import CardSection, RenderedMessage
 from rob.ui.theme import COLOR_DANGER, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_WARNING
-from rob.utils.money import format_money_from_cents
+from rob.utils.money import format_money_from_cents, format_money_with_currency_name
+
+
+def _send_amount_text(send: SendRecord) -> str:
+    currency = (send.currency or "USD").upper()
+    amount = format_money_from_cents(send.amount_cents, currency)
+    original_currency = (send.original_currency or "").upper()
+    if currency == "USD" and send.original_amount_cents is not None and original_currency and original_currency != "USD":
+        original = format_money_with_currency_name(send.original_amount_cents, original_currency)
+        return f"{amount} (converted from {original})"
+    if currency != "USD":
+        return format_money_with_currency_name(send.amount_cents, currency)
+    return amount
 
 
 def send_change_request_card(
@@ -32,9 +44,9 @@ def send_change_request_card(
             details.append(("Note", request.note))
         color = COLOR_WARNING
         title = "Rob | Approve Send Add"
-    else:
+    elif request.action == "send_remove":
         existing_amount = (
-            format_money_from_cents(target_send.amount_cents)
+            _send_amount_text(target_send)
             if target_send is not None
             else "(unknown)"
         )
@@ -56,6 +68,26 @@ def send_change_request_card(
         ]
         color = COLOR_DANGER
         title = "Rob | Approve Send Removal"
+    else:
+        existing_amount = (
+            _send_amount_text(target_send)
+            if target_send is not None
+            else "(unknown)"
+        )
+        summary = (
+            "A backend send amount adjustment is waiting for your approval.\n\n"
+            "Rob will not edit the tracked send or announcement until you approve it here."
+        )
+        details = [
+            ("Dom/me", domme_label),
+            ("Send ID", str(request.target_send_id or 0)),
+            ("Current Amount", existing_amount),
+            ("New Amount (USD)", format_money_from_cents(request.amount_cents or 0, "USD")),
+            ("Requested By", request.requested_by),
+            ("Reason", request.note or "No reason provided."),
+        ]
+        color = COLOR_WARNING
+        title = "Rob | Approve Send Update"
 
     return render(
         make_card(

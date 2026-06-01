@@ -37,6 +37,16 @@ def _build_send(row: Record) -> SendRecord:
         created_at=row["created_at"],
         is_test_send=bool(row["is_test_send"]) if "is_test_send" in row else False,
         _public_send_id=row["public_send_id"] if "public_send_id" in row else None,
+        original_amount_cents=(
+            int(row["original_amount_cents"])
+            if "original_amount_cents" in row and row["original_amount_cents"] is not None
+            else None
+        ),
+        original_currency=(
+            str(row["original_currency"])
+            if "original_currency" in row and row["original_currency"] is not None
+            else None
+        ),
     )
 
 
@@ -60,6 +70,8 @@ class SendsRepository:
                         sub_name,
                         amount_cents,
                         currency,
+                        original_amount_cents,
+                        original_currency,
                         method,
                         source,
                         item_name,
@@ -77,7 +89,8 @@ class SendsRepository:
                         $1, $2, $3, $4, $5,
                         $6, $7, $8, $9, $10,
                         $11, $12, $13, $14, $15,
-                        $16, $17, $18, $19, $20
+                        $16, $17, $18, $19, $20,
+                        $21, $22
                     )
                     RETURNING *
                     """,
@@ -89,6 +102,8 @@ class SendsRepository:
                     send.sub_name,
                     send.amount_cents,
                     send.currency,
+                    send.original_amount_cents,
+                    send.original_currency,
                     send.method,
                     send.source,
                     send.item_name,
@@ -304,6 +319,31 @@ class SendsRepository:
                 reason,
             )
         return int(result.rsplit(" ", 1)[-1])
+
+    async def update_amount(
+        self,
+        send_id: int,
+        *,
+        amount_cents: int,
+        currency: str = "USD",
+    ) -> SendRecord | None:
+        async with self.database.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                UPDATE sends
+                SET
+                    amount_cents = $2,
+                    currency = $3
+                WHERE id = $1
+                RETURNING *
+                """,
+                send_id,
+                amount_cents,
+                (currency or "USD").upper(),
+            )
+        if row is None:
+            return None
+        return _build_send(row)
 
     async def count_statuses(self) -> QueueStatus:
         async with self.database.acquire() as connection:

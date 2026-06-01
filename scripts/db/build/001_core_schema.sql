@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS sends (
     sub_name TEXT,
     amount_cents INTEGER NOT NULL DEFAULT 0,
     currency TEXT NOT NULL DEFAULT 'USD',
+    original_amount_cents INTEGER,
+    original_currency TEXT,
     method TEXT,
     source TEXT NOT NULL DEFAULT 'unknown',
     item_name TEXT,
@@ -166,4 +168,3 @@ CREATE TABLE IF NOT EXISTS inactive_users (
 INSERT INTO db_build_version (version, notes)
 VALUES ('001_core_schema', 'Initial Rob v2 core schema')
 ON CONFLICT (version) DO NOTHING;
-
