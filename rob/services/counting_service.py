@@ -29,6 +29,10 @@ log = logging.getLogger(__name__)
 _CLAIMED_ROLE_PREFIX_KEY = "count_claimed_role_prefix"
 _DEFAULT_CLAIMED_ROLE_PREFIX = "Claimed by "
 _CLAIM_UNRESOLVED_SENTINEL = 0
+
+# Special-case sub: this user may only recover the count by sending to one specific domme.
+_SPECIAL_SUB_USER_ID = 1299308718009356289
+_SPECIAL_SUB_REQUIRED_DOMME_USER_ID = 712738633391800320
 _COUNT_HIGH_WATERMARK_KEY_PREFIX = "count_high_watermark:"
 _MAX_COUNT_EXPRESSION_LENGTH = 80
 _ALLOWED_EXPRESSION_CHARS = set("0123456789+-*/() ")
@@ -321,23 +325,22 @@ class CountingService:
                 )
 
             if is_sub:
-                claim = await self._resolve_claim_requirement(
-                    guild=message.guild,
-                    guild_id=message.guild.id,
-                    member=message.author if isinstance(message.author, discord.Member) else None,
-                )
+                if message.author.id == _SPECIAL_SUB_USER_ID:
+                    sub_required_domme_user_id: int | None = _SPECIAL_SUB_REQUIRED_DOMME_USER_ID
+                else:
+                    sub_required_domme_user_id = None
                 window = await self._start_recovery_window(
                     guild_id=message.guild.id,
                     channel_id=message.channel.id,
                     failed_user_id=message.author.id,
                     failed_user_role="sub",
-                    required_domme_user_id=claim.required_domme_user_id,
-                    required_domme_id=claim.required_domme_id,
+                    required_domme_user_id=sub_required_domme_user_id,
+                    required_domme_id=None,
                     expected_number=expected,
                     attempted_content=content,
                     deadline=deadline,
-                    claimed_restriction=claim.claimed_restriction,
-                    claimed_unresolved=claim.claimed_unresolved,
+                    claimed_restriction=False,
+                    claimed_unresolved=False,
                 )
                 await self._ensure_window_message(window, force_post_if_missing=True)
                 return CountingProcessResult(

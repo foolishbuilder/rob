@@ -538,10 +538,11 @@ def test_domme_recovery_expiry_resets_count_to_one_visible_start():
     assert repo.state.pending_restore is False
 
 
-def test_sub_recovery_unclaimed_allows_any_domme_but_claimed_requires_claimed_domme():
+def test_sub_recovery_allows_any_domme_regardless_of_claim():
     service, repo, _channel, guild, _domme, domme_alt, sub, claimed_sub, _achievements = _make_setup()
     repo.state = CountingState(1, 100, 12, 9, True, False, datetime.now(timezone.utc))
 
+    # Unclaimed sub can send to any domme.
     unclaimed_message = _FakeMessageEvent(guild=guild, author=sub, content="99", channel=guild.get_channel(100))
     unclaimed_result = asyncio.run(service.process_message(unclaimed_message))
     assert unclaimed_result is not None
@@ -561,12 +562,13 @@ def test_sub_recovery_unclaimed_allows_any_domme_but_claimed_requires_claimed_do
     )
     assert unclaimed_recovered is True
 
+    # Claimed sub can also send to any domme (claim restriction no longer applies).
     repo.state = CountingState(1, 100, 12, 9, True, False, datetime.now(timezone.utc))
     claimed_message = _FakeMessageEvent(guild=guild, author=claimed_sub, content="99", channel=guild.get_channel(100))
     claimed_result = asyncio.run(service.process_message(claimed_message))
     assert claimed_result is not None
     assert claimed_result.reason == "wrong_number_sub_recovery"
-    wrong_domme_recovered = asyncio.run(
+    any_domme_recovered = asyncio.run(
         service.process_send_for_count_rescue(
             SimpleNamespace(
                 guild_id=1,
@@ -579,14 +581,52 @@ def test_sub_recovery_unclaimed_allows_any_domme_but_claimed_requires_claimed_do
             )
         )
     )
+    assert any_domme_recovered is True
+
+
+def test_special_sub_recovery_requires_specific_domme():
+    from rob.services.counting_service import _SPECIAL_SUB_REQUIRED_DOMME_USER_ID, _SPECIAL_SUB_USER_ID
+
+    channel = _FakeChannel(channel_id=100)
+    special_sub = _FakeMember(_SPECIAL_SUB_USER_ID, [_Role(22, "Sub")], display_name="Patty", name="pattyboy03")
+    domme_required = _FakeMember(
+        _SPECIAL_SUB_REQUIRED_DOMME_USER_ID, [_Role(33, "Dom/me")], display_name="Angel", name="angel2adore"
+    )
+    domme_other = _FakeMember(20, [_Role(33, "Dom/me")], display_name="Other Domme", name="otherdomme")
+    guild = _FakeGuild(1, channel, [special_sub, domme_required, domme_other])
+    repo = _FakeCountingRepo()
+    service = _service(repo=repo, guild=guild)
+
+    repo.state = CountingState(1, 100, 12, 9, True, False, datetime.now(timezone.utc))
+    message = _FakeMessageEvent(guild=guild, author=special_sub, content="99", channel=guild.get_channel(100))
+    result = asyncio.run(service.process_message(message))
+    assert result is not None
+    assert result.reason == "wrong_number_sub_recovery"
+
+    # Sending to a different domme does not recover.
+    wrong_domme_recovered = asyncio.run(
+        service.process_send_for_count_rescue(
+            SimpleNamespace(
+                guild_id=1,
+                domme_user_id=domme_other.id,
+                sub_user_id=_SPECIAL_SUB_USER_ID,
+                sub_name="pattyboy03",
+                sent_at=datetime.now(timezone.utc),
+                is_private=False,
+                is_test_send=False,
+            )
+        )
+    )
     assert wrong_domme_recovered is False
+
+    # Sending to the required domme recovers the count.
     correct_domme_recovered = asyncio.run(
         service.process_send_for_count_rescue(
             SimpleNamespace(
                 guild_id=1,
-                domme_user_id=20,
-                sub_user_id=claimed_sub.id,
-                sub_name="claimedsub",
+                domme_user_id=_SPECIAL_SUB_REQUIRED_DOMME_USER_ID,
+                sub_user_id=_SPECIAL_SUB_USER_ID,
+                sub_name="pattyboy03",
                 sent_at=datetime.now(timezone.utc),
                 is_private=False,
                 is_test_send=False,
