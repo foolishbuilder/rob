@@ -88,6 +88,8 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "sub_name",
         "amount_cents",
         "currency",
+        "original_amount_cents",
+        "original_currency",
         "method",
         "source",
         "item_name",
