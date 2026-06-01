@@ -202,6 +202,8 @@ def render_card(card: RobCard, *, view: discord.ui.LayoutView | None = None) -> 
     # Title — variant drives heading level and optional emoji prefix
     items.append(discord.ui.TextDisplay(_format_title(card.title, card.variant)))
 
+    items.append(discord.ui.Separator())
+
     # Body — optionally as a Section with thumbnail accessory
     if card.thumbnail_url:
         items.append(

@@ -8,7 +8,8 @@ from rob.achievements.definitions import (
     ENABLED_ACHIEVEMENTS,
     AchievementDefinition,
 )
-from rob.ui.render import RenderedMessage, require_components_v2
+from rob.ui.components import make_card, render
+from rob.ui.render import CardSection, RenderedMessage, require_components_v2
 from rob.ui.theme import COLOR_ROB_PURPLE, COLOR_SUCCESS
 
 _ENTRIES_PER_PAGE = 10
@@ -29,34 +30,33 @@ def achievement_unlocked_card(
     unlocked_by_user_id: int | None = None,
     include_meta_line: bool = False,
 ) -> RenderedMessage:
-    require_components_v2()
-    view = discord.ui.LayoutView(timeout=1800)
     rarity_emoji = _RARITY_EMOJIS.get(achievement.rarity, "⚪")
-    children: list[discord.ui.Item] = [
-        discord.ui.TextDisplay("## 🎉 Achievement Unlocked!"),
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(f"### {rarity_emoji} {achievement.title}"),
-        discord.ui.TextDisplay(achievement.description),
-    ]
+    body = f"### {rarity_emoji} {achievement.title}\n{achievement.description}"
+
+    sections: list[CardSection] = []
     if include_meta_line:
-        children.append(discord.ui.Separator())
-        children.append(
-            discord.ui.TextDisplay(
-                f"-# Key: {achievement.key} · Category: {achievement.category} · Rarity: {achievement.rarity}"
-            )
-        )
+        sections.append(CardSection(title="Key", text=achievement.key, inline=True))
+        sections.append(CardSection(title="Category", text=achievement.category, inline=True))
+        sections.append(CardSection(title="Rarity", text=achievement.rarity, inline=True))
+
+    footer = None
     if unlocked_by_display_name:
-        children.append(discord.ui.Separator())
-        children.append(
-            discord.ui.TextDisplay(
-                f"-# Unlocked by {unlocked_by_display_name}"
-            )
+        footer = f"Unlocked by {unlocked_by_display_name}"
+
+    rendered = render(
+        make_card(
+            title="Achievement Unlocked!",
+            body=body,
+            color=COLOR_SUCCESS,
+            variant="celebration",
+            sections=sections,
+            footer=footer,
         )
-    view.add_item(discord.ui.Container(*children, accent_color=COLOR_SUCCESS))
+    )
     content = None
     if unlocked_by_user_id is not None:
         content = f"<@{unlocked_by_user_id}>"
-    return RenderedMessage(content=content, view=view)
+    return RenderedMessage(content=content, view=rendered.view)
 
 
 def achievements_overview_cards(

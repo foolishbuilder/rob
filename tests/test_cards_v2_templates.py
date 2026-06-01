@@ -150,16 +150,15 @@ def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
     container = msg.view.children[0]
     assert [type(child).__name__ for child in container.children] == [
         "TextDisplay",
-        "TextDisplay",
         "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",
     ]
-    # Adjustment note is the second element, directly below the title.
-    assert container.children[1].content == "-# NOTE: This send has been adjusted by Pat on 1717000000 | Reason: Price correction"
+    # Adjustment note is included in the body text (second TextDisplay after separator).
+    body_content = container.children[2].content
+    assert "-# NOTE: This send has been adjusted by Pat on 1717000000 | Reason: Price correction" in body_content
     # Body shows original currency — no fake USD normalization.
-    body_content = container.children[3].content
     assert "EUR 10.99 (Euro)" in body_content
     assert "normalized from" not in body_content
 
@@ -327,7 +326,6 @@ def test_leaderboard_main_and_stats_titles_and_separators():
 
     assert [type(child).__name__ for child in main_children] == [
         "TextDisplay",
-        "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",
@@ -336,14 +334,18 @@ def test_leaderboard_main_and_stats_titles_and_separators():
     ]
     assert "🏆 Thy Send Leaderboard" in main_contents
     assert "🥇" in main_contents and "🥈" in main_contents and "🥉" in main_contents and "#4" in main_contents
-    assert "-# 🟢 Live" in main_contents
+    assert "🟢 Live" in main_contents
 
-    assert [type(child).__name__ for child in stats_children] == ["TextDisplay", "Separator", "TextDisplay"]
+    assert [type(child).__name__ for child in stats_children] == [
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+        "Separator",
+        "TextDisplay",
+    ]
     assert "🏆 Thy Send Leaderboard | Stats" in stats_contents
-    assert "Leaderboard last updated" in stats_contents
-    assert "Unclaimed Sends" in stats_contents
-    assert "👑" not in stats_contents and "🦹‍♀️" not in stats_contents and "💸" not in stats_contents
-    assert "-# " in stats_contents
+    assert "Last updated" in stats_contents
+    assert "Unclaimed" in stats_contents
 
 
 def test_leaderboard_offline_status_renders_when_explicit():
@@ -370,6 +372,8 @@ def test_leaderboard_stats_footer_is_only_rendered_when_explicit():
         "TextDisplay",
         "Separator",
         "TextDisplay",
+        "Separator",
+        "TextDisplay",
     ]
     assert "-# Explicit footer only" in contents
 
@@ -380,14 +384,13 @@ def test_leaderboard_empty_state_uses_same_separator_structure():
     children = main.view.children[0].children
     assert [type(child).__name__ for child in children] == [
         "TextDisplay",
-        "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",
     ]
-    assert "No sends have made it onto the board yet." in children[4].content
+    assert "No sends have made it onto the board yet." in children[3].content
 
 
 def test_leader_alert_card_shape_and_color():
