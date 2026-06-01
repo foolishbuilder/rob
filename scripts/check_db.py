@@ -16,6 +16,7 @@ REQUIRED_DB_BUILD_VERSIONS = (
     "005_count_recovery",
     "006_send_change_requests",
     "007_send_update_requests",
+    "008_main_chat_channel",
 )
 
 REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
@@ -120,6 +121,7 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "mod_role_id",
         "inactive_role_id",
         "carlbot_user_id",
+        "main_chat_channel_id",
         "created_at",
         "updated_at",
     },
