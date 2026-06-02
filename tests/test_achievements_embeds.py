@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import discord
+
 from rob.achievements.definitions import ACHIEVEMENTS, ACHIEVEMENTS_BY_KEY
 from rob.achievements.embeds import achievement_unlocked_card, achievements_overview_cards
 
@@ -40,7 +42,7 @@ def _text_display_contents(card) -> list[str]:
         str(item.content)
         for container in view.children
         for item in getattr(container, "children", [])
-        if item.__class__.__name__ == "TextDisplay"
+        if isinstance(item, discord.ui.TextDisplay)
     ]
 
 
