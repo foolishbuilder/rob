@@ -76,11 +76,11 @@ def achievement_unlocked_card(
                 f"-# Achievement Unlocked by {unlocked_by_display_name}"
             )
         )
-    view.add_item(discord.ui.Container(*children, accent_color=accent))
-    content = None
     if unlocked_by_user_id is not None:
-        content = f"<@{unlocked_by_user_id}>"
-    return RenderedMessage(content=content, view=view)
+        children.append(discord.ui.Separator())
+        children.append(discord.ui.TextDisplay(f"<@{unlocked_by_user_id}>"))
+    view.add_item(discord.ui.Container(*children, accent_color=accent))
+    return RenderedMessage(view=view)
 
 
 def achievements_overview_cards(
