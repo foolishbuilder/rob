@@ -28,6 +28,7 @@ def _compute_content_hash(
         "summary": {
             "domme_count": summary.domme_count,
             "send_count": summary.send_count,
+            "sub_count": summary.sub_count,
             "total_cents": summary.total_cents,
             "unclaimed_send_count": summary.unclaimed_send_count,
             "unclaimed_total_cents": summary.unclaimed_total_cents,

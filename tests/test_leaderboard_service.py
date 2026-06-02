@@ -327,7 +327,7 @@ def test_refresh_updates_discord_when_content_changes(monkeypatch: pytest.Monkey
     assert len(existing_stats.edits) == 2
 
 
-
+def test_refresh_skips_duplicate_concurrent_syncs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
     channel = _FakeChannel()
     service = _service(channel)
