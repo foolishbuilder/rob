@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 
 import discord
@@ -8,11 +10,31 @@ import discord
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
+from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary
 from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 from rob.services.maintenance_service import MaintenanceService
 
 log = logging.getLogger(__name__)
+
+
+def _compute_content_hash(
+    entries: list[LeaderboardEntry],
+    summary: LeaderboardSummary,
+    maintenance_enabled: bool,
+) -> str:
+    data = {
+        "entries": [(e.label, e.total_cents, e.send_count) for e in entries],
+        "summary": {
+            "domme_count": summary.domme_count,
+            "send_count": summary.send_count,
+            "total_cents": summary.total_cents,
+            "unclaimed_send_count": summary.unclaimed_send_count,
+            "unclaimed_total_cents": summary.unclaimed_total_cents,
+        },
+        "maintenance": maintenance_enabled,
+    }
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
 class LeaderboardService:
@@ -39,6 +61,7 @@ class LeaderboardService:
         self.test_gifter_usernames = test_gifter_usernames
         self.owner_test_user_id = owner_test_user_id
         self._refresh_locks: dict[int, asyncio.Lock] = {}
+        self._content_hashes: dict[int, str] = {}
 
     async def refresh_all_guilds(self) -> None:
         for guild_id in await self.guild_settings.list_guild_ids():
@@ -108,6 +131,12 @@ class LeaderboardService:
                 guild_id,
             )
             maintenance_enabled = await self.maintenance.is_enabled()
+            content_hash = _compute_content_hash(dommes, summary, maintenance_enabled)
+            if self._content_hashes.get(guild_id) == content_hash:
+                log.info("Leaderboard content unchanged; skipping Discord edits guild_id=%s", guild_id)
+                return True
+            self._content_hashes[guild_id] = content_hash
+
             dommes_msg = leaderboard_card(
                 title="ignored",
                 entries=dommes,
