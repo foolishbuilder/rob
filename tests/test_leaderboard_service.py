@@ -276,6 +276,57 @@ def test_refresh_recreates_full_pair_when_ref_channel_mismatches(monkeypatch: py
     assert repo.refs[(1, "leaderboard_stats")].channel_id == channel.id
 
 
+def test_refresh_skips_discord_edits_when_content_unchanged(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
+    channel = _FakeChannel()
+    existing_main = _FakeMessage(101)
+    existing_stats = _FakeMessage(102)
+    channel._messages[101] = existing_main
+    channel._messages[102] = existing_stats
+    repo = _FakeLeaderboardsRepo()
+    repo.refs[(1, "leaderboard")] = SimpleNamespace(message_id=101, channel_id=channel.id)
+    repo.refs[(1, "leaderboard_stats")] = SimpleNamespace(message_id=102, channel_id=channel.id)
+    service = _service(channel, repo=repo)
+
+    asyncio.run(service.refresh_guild(1))
+    asyncio.run(service.refresh_guild(1))
+
+    assert len(existing_main.edits) == 1
+    assert len(existing_stats.edits) == 1
+
+
+def test_refresh_updates_discord_when_content_changes(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
+    channel = _FakeChannel()
+    existing_main = _FakeMessage(101)
+    existing_stats = _FakeMessage(102)
+    channel._messages[101] = existing_main
+    channel._messages[102] = existing_stats
+    repo = _FakeLeaderboardsRepo()
+    repo.refs[(1, "leaderboard")] = SimpleNamespace(message_id=101, channel_id=channel.id)
+    repo.refs[(1, "leaderboard_stats")] = SimpleNamespace(message_id=102, channel_id=channel.id)
+    service = _service(channel, repo=repo)
+
+    asyncio.run(service.refresh_guild(1))
+    repo.current_leader = LeaderboardEntry(label='@Domme', user_id=1, total_cents=9999, send_count=5)
+
+    async def updated_get_top_dommes(*args, **kwargs):
+        repo.top_domme_limits.append(int(kwargs.get("limit", 0)))
+        return [LeaderboardEntry(label='@Domme', user_id=1, total_cents=9999, send_count=5)]
+
+    repo.get_top_dommes = updated_get_top_dommes  # type: ignore[method-assign]
+
+    async def updated_get_summary(*args, **kwargs):
+        return LeaderboardSummary(total_cents=9999, send_count=5, domme_count=1, sub_count=1, unclaimed_send_count=0, unclaimed_total_cents=0)
+
+    repo.get_summary = updated_get_summary  # type: ignore[method-assign]
+
+    asyncio.run(service.refresh_guild(1))
+
+    assert len(existing_main.edits) == 2
+    assert len(existing_stats.edits) == 2
+
+
 def test_refresh_skips_duplicate_concurrent_syncs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("rob.services.leaderboard_service.discord.TextChannel", _FakeChannel)
     channel = _FakeChannel()
