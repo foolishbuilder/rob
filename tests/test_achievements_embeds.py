@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import discord
+
 from rob.achievements.definitions import ACHIEVEMENTS, ACHIEVEMENTS_BY_KEY
 from rob.achievements.embeds import achievement_unlocked_card, achievements_overview_cards
 
@@ -31,6 +33,17 @@ def _separator_count(card) -> int:
         for item in getattr(container, "children", [])
         if item.__class__.__name__ == "Separator"
     )
+
+
+def _text_display_contents(card) -> list[str]:
+    view = card.view
+    assert view is not None
+    return [
+        str(item.content)
+        for container in view.children
+        for item in getattr(container, "children", [])
+        if isinstance(item, discord.ui.TextDisplay)
+    ]
 
 
 def test_achievements_catalogue_uses_compact_embed_field_layout():
@@ -122,7 +135,9 @@ def test_unlock_card_uses_plain_title_and_unlocked_by_line():
     assert f"### {achievement.title}" in text
     assert achievement.description in text
     assert "Achievement Unlocked by Adore's Pickle Pat" in text
-    assert card.content == "<@42>"
+    assert card.view is not None
+    assert "content" not in card.send_kwargs()
+    assert "<@42>" in _text_display_contents(card)
 
 
 def test_unlock_card_hides_debug_metadata_by_default():
@@ -158,6 +173,13 @@ def test_unlock_card_shows_achievement_unlocked_header():
     card = achievement_unlocked_card(achievement, unlocked_by_display_name="Pat")
     text = _card_text(card)
     assert "Achievement Unlocked" in text
+
+
+def test_unlock_card_without_user_id_has_view_and_no_content():
+    achievement = ACHIEVEMENTS_BY_KEY["count_10"]
+    card = achievement_unlocked_card(achievement, unlocked_by_display_name="Alice")
+    assert card.view is not None
+    assert "content" not in card.send_kwargs()
 
 
 def test_overview_progress_bar_shows_for_partial_progress():
