@@ -179,8 +179,10 @@ async def test_known_test_sender_triggers_auto_advance(
 
     assert resp.status == 200
     assert body.get("setup_verified") is True
-    # Should be called at least once for the known-test-sender path.
-    assert notify_mock.await_count >= 1
+    # The known-test-sender branch + the real-send branch are both
+    # eligible to fire; the handler de-duplicates so exactly one
+    # notification is sent per inbound webhook.
+    notify_mock.assert_awaited_once()
     assert notify_mock.await_args.kwargs["guild_id"] == TEST_GUILD_ID
     assert notify_mock.await_args.kwargs["discord_user_id"] == 42
 
@@ -215,7 +217,7 @@ async def test_known_test_sender_parsed_as_real_triggers_auto_advance(
     )
 
     assert resp.status == 200
-    assert notify_mock.await_count >= 1
+    notify_mock.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

@@ -108,12 +108,17 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
         in_test_guild,
     )
 
+    notify_state: dict[str, bool] = {"sent": False}
+
     async def _maybe_auto_advance(reason: str) -> None:
         """Best-effort auto-advance of the DM onboarding flow.
 
         Always safe to call multiple times: the bot-side cog gates on the
         current onboarding stage and is a no-op for completed / unknown
         users. Failures here must never break the webhook response.
+
+        We additionally guard against multiple notifications per webhook
+        delivery so the bot ops endpoint sees one POST per inbound event.
         """
 
         if not in_test_guild:
@@ -125,6 +130,16 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
                 reason,
             )
             return
+        if notify_state["sent"]:
+            log.info(
+                "Onboarding auto-advance already notified for this webhook "
+                "guild_id=%s discord_user_id=%s skipped_reason=%s",
+                matched_creator.guild_id,
+                matched_creator.discord_user_id,
+                reason,
+            )
+            return
+        notify_state["sent"] = True
         log.info(
             "Onboarding auto-advance notifying bot guild_id=%s "
             "discord_user_id=%s reason=%s",
@@ -179,10 +194,15 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
         )
         await dommes.mark_setup_verified(matched_creator.id)
         await _maybe_auto_advance("known_test_sender")
+        # Intentionally fall through: known_test_sender rows are still
+        # inserted via ``record_throne_send`` below so the public send
+        # tracker flow can render them (they're stored with
+        # ``is_test_send=true`` and filtered out of leaderboards).
     if known_test_sender and settings.throne_parse_test_sends_as_real_sends:
         log.warning("Known Throne test sender accepted as real send due to THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS=true. creator_id=%s gifter_username=%s", creator_id, parsed.gifter_username)
         # Still mark setup and auto-advance: this is the same Throne test
         # webhook click, just stored as a real send for visual flow testing.
+        # Intentionally fall through to ``record_throne_send`` below.
         await dommes.mark_setup_verified(matched_creator.id)
         await _maybe_auto_advance("known_test_sender_parsed_as_real")
 
