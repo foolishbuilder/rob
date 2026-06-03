@@ -185,6 +185,10 @@ class BotOpsServer:
         )
         app.router.add_post("/block", self._handle_block_user)
         app.router.add_post("/unblock", self._handle_unblock_user)
+        app.router.add_post(
+            "/onboarding/webhook_verified",
+            self._handle_onboarding_webhook_verified,
+        )
 
         self._runner = web.AppRunner(app, access_log=None)
         await self._runner.setup()
@@ -421,6 +425,55 @@ class BotOpsServer:
                 "queued": True,
                 "send_id": send_id,
                 "guild_id": guild_id,
+            }
+        )
+
+    async def _handle_onboarding_webhook_verified(
+        self, request: web.Request
+    ) -> web.Response:
+        """Auto-advance an in-progress DM onboarding flow when the
+        Throne test webhook arrives. Test-guild-only by spec; the cog
+        also enforces this gate."""
+
+        if not self._is_authorized(request):
+            return web.json_response({"error": "forbidden"}, status=403)
+
+        payload = await self._json_payload(request)
+        try:
+            guild_id = int(payload.get("guild_id"))
+            discord_user_id = int(payload.get("discord_user_id"))
+        except (TypeError, ValueError):
+            return web.json_response({"error": "invalid_payload"}, status=400)
+
+        cog = self.bot.get_cog("DMOnboardingCog") if hasattr(self.bot, "get_cog") else None
+        if cog is None:
+            return web.json_response(
+                {"error": "dm_onboarding_cog_unavailable"}, status=500
+            )
+        try:
+            advanced = await cog.on_throne_test_webhook_received(
+                guild_id=guild_id,
+                discord_user_id=discord_user_id,
+            )
+        except Exception:
+            log.exception(
+                "Auto-advance onboarding DM failed guild_id=%s user_id=%s",
+                guild_id,
+                discord_user_id,
+            )
+            return web.json_response({"error": "auto_advance_failed"}, status=500)
+        log.info(
+            "Onboarding webhook auto-advance guild_id=%s user_id=%s advanced=%s",
+            guild_id,
+            discord_user_id,
+            advanced,
+        )
+        return web.json_response(
+            {
+                "ok": True,
+                "advanced": bool(advanced),
+                "guild_id": guild_id,
+                "discord_user_id": discord_user_id,
             }
         )
 
