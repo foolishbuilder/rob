@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiohttp import web
-from aiohttp.test_utils import TestClient
+from aiohttp.test_utils import TestClient, TestServer
 
 from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID
 from rob.throne import webhooks as webhooks_mod
@@ -128,7 +128,7 @@ def _post(client: TestClient, body: dict):
 
 
 async def test_explicit_test_webhook_triggers_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings()
     creator = _fake_creator()
@@ -136,16 +136,16 @@ async def test_explicit_test_webhook_triggers_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator
     )
 
-    client = await aiohttp_client(app)
-    resp = await _post(client, {"type": "test_webhook", "data": {}})
-    body = await resp.json()
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(client, {"type": "test_webhook", "data": {}})
+        body = await resp.json()
 
-    assert resp.status == 200
-    assert body.get("setup_verified") is True
-    notify_mock.assert_awaited_once()
-    call = notify_mock.await_args
-    assert call.kwargs["guild_id"] == TEST_GUILD_ID
-    assert call.kwargs["discord_user_id"] == 42
+        assert resp.status == 200
+        assert body.get("setup_verified") is True
+        notify_mock.assert_awaited_once()
+        call = notify_mock.await_args
+        assert call.kwargs["guild_id"] == TEST_GUILD_ID
+        assert call.kwargs["discord_user_id"] == 42
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ async def test_explicit_test_webhook_triggers_auto_advance(
 
 
 async def test_known_test_sender_triggers_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings(parse_test_as_real=False)
     creator = _fake_creator()
@@ -163,28 +163,28 @@ async def test_known_test_sender_triggers_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
     )
 
-    client = await aiohttp_client(app)
-    resp = await _post(
-        client,
-        {
-            "type": "gift_purchased",
-            "data": {
-                "gifter": {"username": "marie_123"},
-                "orderId": "ord-1",
-                "price": "1.00",
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(
+            client,
+            {
+                "type": "gift_purchased",
+                "data": {
+                    "gifter": {"username": "marie_123"},
+                    "orderId": "ord-1",
+                    "price": "1.00",
+                },
             },
-        },
-    )
-    body = await resp.json()
+        )
+        body = await resp.json()
 
-    assert resp.status == 200
-    assert body.get("setup_verified") is True
-    # The known-test-sender branch + the real-send branch are both
-    # eligible to fire; the handler de-duplicates so exactly one
-    # notification is sent per inbound webhook.
-    notify_mock.assert_awaited_once()
-    assert notify_mock.await_args.kwargs["guild_id"] == TEST_GUILD_ID
-    assert notify_mock.await_args.kwargs["discord_user_id"] == 42
+        assert resp.status == 200
+        assert body.get("setup_verified") is True
+        # The known-test-sender branch + the real-send branch are both
+        # eligible to fire; the handler de-duplicates so exactly one
+        # notification is sent per inbound webhook.
+        notify_mock.assert_awaited_once()
+        assert notify_mock.await_args.kwargs["guild_id"] == TEST_GUILD_ID
+        assert notify_mock.await_args.kwargs["discord_user_id"] == 42
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ async def test_known_test_sender_triggers_auto_advance(
 
 
 async def test_known_test_sender_parsed_as_real_triggers_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings(parse_test_as_real=True)
     creator = _fake_creator()
@@ -203,21 +203,21 @@ async def test_known_test_sender_parsed_as_real_triggers_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
     )
 
-    client = await aiohttp_client(app)
-    resp = await _post(
-        client,
-        {
-            "type": "gift_purchased",
-            "data": {
-                "gifter": {"username": "marie_123"},
-                "orderId": "ord-2",
-                "price": "1.00",
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(
+            client,
+            {
+                "type": "gift_purchased",
+                "data": {
+                    "gifter": {"username": "marie_123"},
+                    "orderId": "ord-2",
+                    "price": "1.00",
+                },
             },
-        },
-    )
+        )
 
-    assert resp.status == 200
-    notify_mock.assert_awaited_once()
+        assert resp.status == 200
+        notify_mock.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +227,7 @@ async def test_known_test_sender_parsed_as_real_triggers_auto_advance(
 
 
 async def test_real_send_in_test_guild_triggers_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings()
     creator = _fake_creator()
@@ -236,21 +236,21 @@ async def test_real_send_in_test_guild_triggers_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
     )
 
-    client = await aiohttp_client(app)
-    resp = await _post(
-        client,
-        {
-            "type": "gift_purchased",
-            "data": {
-                "gifter": {"username": "real_user"},
-                "orderId": "ord-3",
-                "price": "5.00",
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(
+            client,
+            {
+                "type": "gift_purchased",
+                "data": {
+                    "gifter": {"username": "real_user"},
+                    "orderId": "ord-3",
+                    "price": "5.00",
+                },
             },
-        },
-    )
-    assert resp.status == 200
-    notify_mock.assert_awaited_once()
-    assert notify_mock.await_args.kwargs["guild_id"] == TEST_GUILD_ID
+        )
+        assert resp.status == 200
+        notify_mock.assert_awaited_once()
+        assert notify_mock.await_args.kwargs["guild_id"] == TEST_GUILD_ID
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +259,7 @@ async def test_real_send_in_test_guild_triggers_auto_advance(
 
 
 async def test_main_guild_webhook_does_not_trigger_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings()
     creator = _fake_creator(guild_id=MAIN_GUILD_ID)
@@ -268,24 +268,24 @@ async def test_main_guild_webhook_does_not_trigger_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
     )
 
-    client = await aiohttp_client(app)
-    # Explicit test path
-    resp1 = await _post(client, {"type": "test_webhook", "data": {}})
-    assert resp1.status == 200
-    # Real send path
-    resp2 = await _post(
-        client,
-        {
-            "type": "gift_purchased",
-            "data": {
-                "gifter": {"username": "real_user"},
-                "orderId": "ord-4",
-                "price": "5.00",
+    async with TestClient(TestServer(app)) as client:
+        # Explicit test path
+        resp1 = await _post(client, {"type": "test_webhook", "data": {}})
+        assert resp1.status == 200
+        # Real send path
+        resp2 = await _post(
+            client,
+            {
+                "type": "gift_purchased",
+                "data": {
+                    "gifter": {"username": "real_user"},
+                    "orderId": "ord-4",
+                    "price": "5.00",
+                },
             },
-        },
-    )
-    assert resp2.status == 200
-    notify_mock.assert_not_called()
+        )
+        assert resp2.status == 200
+        notify_mock.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ async def test_main_guild_webhook_does_not_trigger_auto_advance(
 
 
 async def test_duplicate_send_still_triggers_auto_advance(
-    aiohttp_client, monkeypatch
+    monkeypatch,
 ):
     settings = _fake_settings()
     creator = _fake_creator()
@@ -302,19 +302,19 @@ async def test_duplicate_send_still_triggers_auto_advance(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=None
     )
 
-    client = await aiohttp_client(app)
-    resp = await _post(
-        client,
-        {
-            "type": "gift_purchased",
-            "data": {
-                "gifter": {"username": "real_user"},
-                "orderId": "ord-dup",
-                "price": "1.00",
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(
+            client,
+            {
+                "type": "gift_purchased",
+                "data": {
+                    "gifter": {"username": "real_user"},
+                    "orderId": "ord-dup",
+                    "price": "1.00",
+                },
             },
-        },
-    )
-    body = await resp.json()
-    assert resp.status == 200
-    assert body.get("duplicate") is True
-    notify_mock.assert_awaited_once()
+        )
+        body = await resp.json()
+        assert resp.status == 200
+        assert body.get("duplicate") is True
+        notify_mock.assert_awaited_once()
