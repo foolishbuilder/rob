@@ -27,6 +27,7 @@ from rob.discord.cogs.leaderboards import LeaderboardsCog
 from rob.discord.cogs.registration import RegistrationCog
 from rob.discord.cogs.reports import ReportsCog
 from rob.discord.cogs.sends import SendsCog
+from rob.discord.cogs.settings import SettingsCog
 from rob.discord.cogs.warn_relay import WarnRelayCog
 from rob.services.counting_service import CountingService
 from rob.services.bot_ops_server import BotOpsServer
@@ -85,6 +86,7 @@ class RobBot(commands.Bot):
             leaderboards=self.leaderboards_repo,
             bot_state=self.bot_settings_repo,
             maintenance=self.maintenance_service,
+            dommes=self.dommes_repo,
             leaderboard_limit=self.settings.leaderboard_limit,
             include_test_sends=self.settings.throne_parse_test_sends_as_real_sends,
             test_gifter_usernames=self.settings.throne_test_gifter_usernames,
@@ -138,6 +140,7 @@ class RobBot(commands.Bot):
             leaderboard_service=self.leaderboard_service,
             counting_service=self.counting_service,
             leaderboards=self.leaderboards_repo,
+            dommes=self.dommes_repo,
             include_test_sends=self.settings.throne_parse_test_sends_as_real_sends,
             owner_test_user_id=self.settings.throne_test_send_leaderboard_owner_user_id,
             test_gifter_usernames=self.settings.throne_test_gifter_usernames,
@@ -168,6 +171,7 @@ class RobBot(commands.Bot):
         await self.add_cog(InactivityCog(self))
         await self.add_cog(WarnRelayCog(self))
         await self.add_cog(AdminToolsCog(self))
+        await self.add_cog(SettingsCog(self))
 
         self.tree.interaction_check = self._global_blacklist_interaction_check
         await self.send_change_request_service.rebind_pending_views()

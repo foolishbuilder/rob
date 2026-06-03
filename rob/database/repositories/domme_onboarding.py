@@ -22,6 +22,14 @@ ALLOWED_STAGES: tuple[str, ...] = (
     "completed",
 )
 
+# Friendly aliases used by service / cog layers.
+STAGE_INTRO = "intro"
+STAGE_AWAITING_THRONE_INPUT = "awaiting_throne_input"
+STAGE_CONFIRMING_IDENTITY = "awaiting_identity_confirm"
+STAGE_AWAITING_WEBHOOK_TEST = "awaiting_webhook"
+STAGE_AWAITING_PREFERENCES = "awaiting_preferences"
+STAGE_COMPLETE = "completed"
+
 
 def _build(row: Record) -> DommeOnboardingState:
     return DommeOnboardingState(
