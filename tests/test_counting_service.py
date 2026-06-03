@@ -442,8 +442,8 @@ def test_successful_count_returns_standard_high_score_and_special_reactions():
     assert service.bot_settings.values["count_high_watermark:1"] == "67"
 
 
-def test_successful_count_posts_achievement_card_when_new_unlocks_occur():
-    service, repo, channel, guild, _domme, _domme_alt, sub, _claimed_sub, achievements = _make_setup()
+def test_successful_count_does_not_unlock_achievements():
+    service, repo, _channel, guild, _domme, _domme_alt, sub, _claimed_sub, achievements = _make_setup()
     repo.state = CountingState(1, 100, 0, None, True, False, datetime.now(timezone.utc))
 
     result = asyncio.run(
@@ -454,18 +454,10 @@ def test_successful_count_posts_achievement_card_when_new_unlocks_occur():
 
     assert result is not None
     assert result.success is True
-    assert "count_start" in achievements.unlock_calls
-    assert "count_after_reset" not in achievements.unlock_calls
-    rendered = "\n".join(
-        str(getattr(item, "content", ""))
-        for container in channel.sent[0]["view"].children
-        for item in getattr(container, "children", [])
-    )
-    assert "count_start" in rendered
-    assert "Achievement Unlocked by Subby" in rendered
+    assert achievements.unlock_calls == []
 
 
-def test_restart_at_one_unlocks_count_after_reset_only_when_count_start_already_unlocked():
+def test_restart_at_one_does_not_unlock_achievements():
     channel = _FakeChannel(channel_id=100)
     sub = _FakeMember(10, [_Role(22, "Sub")], display_name="Subby", name="subby")
     guild = _FakeGuild(1, channel, [sub])
@@ -482,7 +474,7 @@ def test_restart_at_one_unlocks_count_after_reset_only_when_count_start_already_
 
     assert result is not None
     assert result.success is True
-    assert achievements.unlock_calls == ["count_start", "count_after_reset"]
+    assert achievements.unlock_calls == []
 
 
 def test_domme_wrong_count_creates_recovery_window_and_qualifying_send_recovers():

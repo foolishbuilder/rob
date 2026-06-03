@@ -28,6 +28,9 @@ def _build_domme(row: Record) -> Domme:
         last_successful_event_at=row["last_successful_event_at"],
         public_display_name=row["public_display_name"],
         public_display_name_updated_at=row["public_display_name_updated_at"],
+        notification_mode=str(row["notification_mode"]),
+        summary_cadence=row["summary_cadence"],
+        last_summary_sent_at=row["last_summary_sent_at"],
         registered_at=row["registered_at"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -51,6 +54,8 @@ class DommesRepository:
         profile_status: str = "active",
         webhook_secret: str | None = None,
         webhook_secret_hash: str | None = None,
+        notification_mode: str = "public",
+        summary_cadence: str | None = "weekly",
     ) -> Domme:
         registered_at = datetime.now(timezone.utc)
         async with self.database.acquire() as connection:
@@ -67,9 +72,11 @@ class DommesRepository:
                     profile_status,
                     webhook_secret,
                     webhook_secret_hash,
+                    notification_mode,
+                    summary_cadence,
                     registered_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ON CONFLICT (guild_id, discord_user_id) DO UPDATE SET
                     throne_url = EXCLUDED.throne_url,
                     throne_handle = EXCLUDED.throne_handle,
@@ -79,6 +86,8 @@ class DommesRepository:
                     profile_status = EXCLUDED.profile_status,
                     webhook_secret = COALESCE(dommes.webhook_secret, EXCLUDED.webhook_secret),
                     webhook_secret_hash = COALESCE(dommes.webhook_secret_hash, EXCLUDED.webhook_secret_hash),
+                    notification_mode = EXCLUDED.notification_mode,
+                    summary_cadence = EXCLUDED.summary_cadence,
                     updated_at = now()
                 RETURNING *
                 """,
@@ -92,6 +101,8 @@ class DommesRepository:
                 profile_status,
                 webhook_secret,
                 webhook_secret_hash,
+                notification_mode,
+                summary_cadence,
                 registered_at,
             )
         assert row is not None
@@ -211,6 +222,64 @@ class DommesRepository:
                 SET tracking_status = 'active',
                     webhook_connected_at = COALESCE(webhook_connected_at, now()),
                     last_successful_event_at = now(),
+                    updated_at = now()
+                WHERE id = $1
+                """,
+                domme_id,
+            )
+
+    async def set_notification_mode(
+        self,
+        *,
+        guild_id: int,
+        discord_user_id: int,
+        notification_mode: str,
+    ) -> None:
+        async with self.database.acquire() as connection:
+            await connection.execute(
+                """
+                UPDATE dommes
+                SET notification_mode = $3,
+                    updated_at = now()
+                WHERE guild_id = $1
+                  AND discord_user_id = $2
+                """,
+                guild_id,
+                discord_user_id,
+                notification_mode,
+            )
+
+    async def set_summary_cadence(
+        self,
+        *,
+        guild_id: int,
+        discord_user_id: int,
+        summary_cadence: str | None,
+    ) -> None:
+        async with self.database.acquire() as connection:
+            await connection.execute(
+                """
+                UPDATE dommes
+                SET summary_cadence = $3,
+                    updated_at = now()
+                WHERE guild_id = $1
+                  AND discord_user_id = $2
+                """,
+                guild_id,
+                discord_user_id,
+                summary_cadence,
+            )
+
+    async def set_last_summary_sent_at(
+        self,
+        *,
+        domme_id: int,
+    ) -> None:
+        async with self.database.acquire() as connection:
+            await connection.execute(
+                """
+                UPDATE dommes
+                SET last_summary_sent_at = now(),
                     updated_at = now()
                 WHERE id = $1
                 """,

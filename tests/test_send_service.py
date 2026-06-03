@@ -87,6 +87,9 @@ def _creator() -> ThroneCreator:
         None,
         None,
         None,
+        "public",
+        "weekly",
+        None,
         now,
         now,
     )

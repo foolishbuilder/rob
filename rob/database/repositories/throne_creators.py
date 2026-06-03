@@ -24,6 +24,9 @@ def _build_compat_creator(row: Record) -> ThroneCreator:
         last_successful_event_at=row["last_successful_event_at"],
         last_test_webhook_at=None,
         setup_verified_at=row["last_successful_event_at"],
+        notification_mode=str(row["notification_mode"]),
+        summary_cadence=row["summary_cadence"],
+        last_summary_sent_at=row["last_summary_sent_at"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -66,10 +69,12 @@ class ThroneCreatorsRepository:
                     profile_status,
                     webhook_secret,
                     webhook_secret_hash,
+                    notification_mode,
+                    summary_cadence,
                     throne_url,
                     registered_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, NULL, now())
+                VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, 'public', 'weekly', NULL, now())
                 ON CONFLICT (guild_id, discord_user_id) DO UPDATE SET
                     throne_handle = EXCLUDED.throne_handle,
                     throne_creator_id = EXCLUDED.throne_creator_id,

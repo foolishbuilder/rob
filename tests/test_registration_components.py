@@ -19,12 +19,12 @@ def test_registration_card_has_no_footer_unless_explicit():
     assert "-# Explicit footer only" in contents
 
 
-def test_domme_registered_card_has_no_footer_unless_explicit():
+def test_domme_registered_card_includes_settings_note_footer():
     msg = domme_registered_card()
     contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
     assert f"## {DOMME_REGISTERED_TITLE}" in contents
     assert DOMME_REGISTERED_BODY in contents
-    assert "-#" not in contents
+    assert "-# Need to change anything later? Use /settings anytime." in contents
 
     msg = domme_registered_card(footer="Explicit footer only")
     contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)

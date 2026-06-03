@@ -104,6 +104,11 @@ class LeaderboardsCog(commands.Cog):
                 latest_amount_cents=latest.amount_cents if latest is not None else None,
                 latest_currency=latest.currency if latest is not None else None,
                 latest_item_image_url=latest.item_image_url if latest is not None else None,
+                latest_sub_label=(
+                    f"<@{latest.sub_user_id}>"
+                    if latest is not None and latest.sub_user_id is not None
+                    else (latest.sub_name if latest is not None else None)
+                ),
             )
 
         sub_stats_data: SubStatsCardData | None = None
@@ -154,8 +159,7 @@ class LeaderboardsCog(commands.Cog):
             domme_stats=domme_stats_data,
             sub_stats=sub_stats_data,
             unregistered_text=(
-                "Rob could not find Dom/me or Sub roles on that member yet.\n\n"
-                "Ask a moderator to apply the Dom/me or Sub role, then run this command again."
+                "Rob could not find a Dom/me or Sub role on that account yet. Ask a moderator to apply the right role and then run this again."
             ),
         )
         await interaction.response.send_message(**rendered.send_kwargs(), ephemeral=False)

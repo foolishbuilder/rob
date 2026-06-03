@@ -5,7 +5,8 @@
 - `/register domme` (no options; starts Dom/me DM setup flow and collects Throne profile in modal)
 - `/register sub` (no options; opens modal for up to 3 Throne usernames/send names)
 - `/leaderboard`
-- `/achievements`
+- `/settings mode` (test guild only)
+- `/settings summary` (test guild only, private modes)
 - `/report`
 
 ## Dom/me commands
@@ -15,10 +16,6 @@
 ## Counting commands
 
 - `/count set {number}`
-
-## Developer test commands
-
-- `/test achievements` (requires owner/mod/manage-guild permissions)
 
 ## Inactivity commands
 

@@ -9,11 +9,11 @@ def error_card(message: str, detail: str | None = None):
     description = message if detail is None else f"{message}\n\n{detail}"
     return render(
         make_card(
-            title="Rob hit a snag",
+            title="Hmm, something is not quite right.",
             body=description,
             color=COLOR_DANGER,
             variant="error",
-            callout="What to try next: double-check the details and try again.",
+            callout="If this keeps happening let a staff member know.",
         )
     )
 

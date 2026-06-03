@@ -37,8 +37,8 @@ def _send(sub_name: str | None, *, sub_user_id: int | None = None) -> SendRecord
     )
 
 
-def test_anonymous_sender_displays_flying_dutchman():
-    assert build_sub_display(_send("Anonymous")) == "The Flying Dutchman"
+def test_anonymous_sender_displays_secret_admirer():
+    assert build_sub_display(_send("Anonymous")) == "a secret admirer"
 
 
 def test_known_test_sender_displays_throne_test_user():

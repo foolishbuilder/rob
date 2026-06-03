@@ -73,18 +73,20 @@ def leaderboard_stats_card(
     view = discord.ui.LayoutView(timeout=1800)
     if maintenance_enabled:
         stats_text = (
-            "Rob is currently under maintenance, so we've paused the send tracker and leaderboard just until he's done.\n\n"
-            "Fear not, once the maintenance is over. All untracked sends made during this time will be sent out and the leaderboard will be updated."
+            "Rob is currently under maintenance, so we have paused the send tracker and leaderboard just until he is done.\n\n"
+            "Once the maintenance is over, all untracked sends made during this time will be sent out and the leaderboard will be updated."
         )
     else:
         now = int(time.time())
         stats_text = (
-            f"-# Leaderboard last updated: <t:{now}:R> / <t:{now}:f>\n\n"
-            f"-# Leaderboard Leader:\n**{entries[0].label if entries else 'Nobody yet'} - {format_money_from_cents(entries[0].total_cents if entries else 0)}**\n\n"
-            f"-# Total Dom/mes on Leaderboard:\n**{summary.domme_count}**\n\n"
-            f"-# Total Sends Tracked:\n**{summary.send_count}**\n\n"
-            f"-# Total Amount Tracked:\n**{format_money_from_cents(summary.total_cents)}**\n\n"
-            f"-# Unclaimed Sends:\n**{summary.unclaimed_send_count} sends / {format_money_from_cents(summary.unclaimed_total_cents)}**"
+            "Rob has been keeping count. Here is where things stand.\n\n"
+            "👑 Leading the board\n"
+            f"{entries[0].label if entries else 'Nobody yet'} at {format_money_from_cents(entries[0].total_cents if entries else 0)}\n\n"
+            f"📊 Dom/mes on the board: {summary.domme_count}\n"
+            f"📬 Total sends tracked: {summary.send_count}\n"
+            f"💰 Total amount tracked: {format_money_from_cents(summary.total_cents)}\n"
+            f"🕵️ Unclaimed: {summary.unclaimed_send_count} sends worth {format_money_from_cents(summary.unclaimed_total_cents)}\n\n"
+            f"-# Last updated <t:{now}:R>"
         )
 
     children = [

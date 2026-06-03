@@ -48,12 +48,17 @@ CREATE TABLE IF NOT EXISTS dommes (
     last_successful_event_at TIMESTAMPTZ,
     public_display_name TEXT,
     public_display_name_updated_at TIMESTAMPTZ,
+    notification_mode TEXT NOT NULL DEFAULT 'public',
+    summary_cadence TEXT DEFAULT 'weekly',
+    last_summary_sent_at TIMESTAMPTZ,
     registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (guild_id, discord_user_id),
     CHECK (tracking_status IN ('active', 'disabled')),
-    CHECK (profile_status IN ('active', 'pending_removal', 'disabled'))
+    CHECK (profile_status IN ('active', 'pending_removal', 'disabled')),
+    CHECK (notification_mode IN ('public', 'private', 'private_leaderboard')),
+    CHECK (summary_cadence IN ('weekly', 'fortnightly', 'monthly') OR summary_cadence IS NULL)
 );
 
 CREATE TABLE IF NOT EXISTS subs (

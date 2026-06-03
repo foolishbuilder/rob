@@ -8,7 +8,6 @@ from discord.ext import commands
 
 from rob.ui.cards.counting import (
     count_blocked_sub_card,
-    count_failed_card,
     counting_same_user_reminder_card,
     counting_updated_card,
 )
@@ -97,7 +96,9 @@ class CountingCog(commands.Cog):
             return
 
         if result.reason == "wrong_number_reset":
-            await message.channel.send(**count_failed_card().send_kwargs())
+            await message.channel.send(
+                f"That was {message.content.strip()}. The count was {result.expected_number}. Back to 1."
+            )
 
         try:
             await message.add_reaction("❌")

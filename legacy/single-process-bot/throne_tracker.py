@@ -1264,7 +1264,7 @@ class ThroneTrackerCog(commands.Cog):
         sender_is_test_name = sender_name_cf in {"marie_123", "rob test send"}
 
         if sender_is_anonymous:
-            sub_label = "*👻 The Flying Dutchman*"
+            sub_label = "*👻 a secret admirer*"
         elif sender_is_test_name:
             sub_label = "Rob's Testy Westy Notification"
         elif send.claimed_sub_user_id is None or sub_member is None:
@@ -1305,7 +1305,7 @@ class ThroneTrackerCog(commands.Cog):
                 event_key=send.event_key,
             )
             dutchman_rank_value = dutchman_rank if dutchman_rank is not None else "?"
-            anonymous_rank_line = f"The Flying Dutchmans Rank: #{dutchman_rank_value}"
+            anonymous_rank_line = f"a secret admirer's Rank: #{dutchman_rank_value}"
 
         amount_label = (
             format_money(send.amount_usd) if not send.is_private else "Unknown"

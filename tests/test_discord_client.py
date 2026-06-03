@@ -16,7 +16,7 @@ class _FakeTree:
 
     async def sync(self, *, guild=None):
         self.sync_calls.append(guild)
-        return [SimpleNamespace(name="achievements")]
+        return [SimpleNamespace(name="leaderboard")]
 
 
 def test_single_guild_sync_clears_stale_guild_commands_before_global_sync():

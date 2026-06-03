@@ -16,6 +16,7 @@ REQUIRED_DB_BUILD_VERSIONS = (
     "005_count_recovery",
     "006_send_change_requests",
     "007_send_update_requests",
+    "008_notification_modes",
 )
 
 REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
@@ -52,6 +53,9 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "last_successful_event_at",
         "public_display_name",
         "public_display_name_updated_at",
+        "notification_mode",
+        "summary_cadence",
+        "last_summary_sent_at",
         "registered_at",
         "created_at",
         "updated_at",

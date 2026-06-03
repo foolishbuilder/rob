@@ -46,6 +46,9 @@ class Domme:
     last_successful_event_at: datetime | None
     public_display_name: str | None
     public_display_name_updated_at: datetime | None
+    notification_mode: str
+    summary_cadence: str | None
+    last_summary_sent_at: datetime | None
     registered_at: datetime
     created_at: datetime
     updated_at: datetime
@@ -92,6 +95,9 @@ class ThroneCreator:
     last_successful_event_at: datetime | None
     last_test_webhook_at: datetime | None
     setup_verified_at: datetime | None
+    notification_mode: str
+    summary_cadence: str | None
+    last_summary_sent_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

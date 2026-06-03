@@ -130,8 +130,9 @@ def test_leaderboard_is_not_ephemeral_for_member_with_both_roles():
     payload = interaction.response.messages[0]
     assert payload["ephemeral"] is False
     text = _message_text(payload)
-    assert "Send Stats | Dom/me" in text
-    assert "Send Stats | Sub" in text
+    assert "Pat's Stats" in text
+    assert "Most recent send received" in text
+    assert "Last thing they sent" in text
     assert "👑 #1" in text
 
 
@@ -145,8 +146,9 @@ def test_leaderboard_can_show_another_members_role_based_stats():
     asyncio.run(LeaderboardsCog.leaderboard.callback(cog, interaction, user=target))
 
     text = _message_text(interaction.response.messages[0])
-    assert "Alex's Send Stats | Sub" in text
-    assert "Send Stats | Dom/me" not in text
+    assert "Alex's Stats" in text
+    assert "Last thing they sent" in text
+    assert "Most recent send received" not in text
 
 
 def test_leaderboard_member_without_roles_gets_role_guidance():
@@ -160,4 +162,4 @@ def test_leaderboard_member_without_roles_gets_role_guidance():
     payload = interaction.response.messages[0]
     assert payload["ephemeral"] is False
     text = _message_text(payload)
-    assert "could not find Dom/me or Sub roles" in text
+    assert "could not find a Dom/me or Sub role" in text

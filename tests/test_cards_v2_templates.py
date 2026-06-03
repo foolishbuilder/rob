@@ -55,9 +55,9 @@ def _send(
     )
 
 
-def test_setup_step_2_contains_almighty_link():
+def test_setup_steps_include_webhook_link():
     text = throne_setup_steps("https://example.com/hook")
-    assert "The almighty link" in text
+    assert "Rob here" in text
     assert "https://example.com/hook" in text
 
 
@@ -71,21 +71,23 @@ def test_send_card_renders_thumbnail_image_and_currency_name():
     section = container.children[2]
     all_text = "\n".join(
         str(getattr(child, "content", ""))
-        for child in [container.children[0], section.children[0]]
+        for child in [container.children[0], section.children[0], container.children[4]]
     )
 
     assert [type(child).__name__ for child in container.children] == [
         "TextDisplay",
         "Separator",
         "Section",
+        "Separator",
+        "TextDisplay",
     ]
     assert type(section.accessory).__name__ == "Thumbnail"
-    assert "New Send to @Domme" in all_text
+    assert "@Domme" in all_text
     assert "Throne's Test User" in all_text
-    assert "**Amount:** $10.99" in all_text
+    assert "$10.99" in all_text
     assert "Rob Send ID" not in all_text
     assert "rank after this send" not in all_text
-    assert "<t:" not in all_text
+    assert "<t:" in all_text
     assert msg.view.children[0].accent_color == COLOR_SEND
     payload = msg.view.to_components()
     assert payload[0]["components"][2]["type"] == 9
@@ -101,9 +103,11 @@ def test_send_card_without_image_uses_text_display_and_no_footer():
         "TextDisplay",
         "Separator",
         "TextDisplay",
+        "Separator",
+        "TextDisplay",
     ]
     assert "gifter_name with no nickname claimed" in contents
-    assert "-#" not in contents
+    assert "-#" in contents
 
 
 def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
@@ -145,6 +149,8 @@ def test_send_card_adjustment_note_placement_and_non_usd_currency_display():
     container = msg.view.children[0]
     assert [type(child).__name__ for child in container.children] == [
         "TextDisplay",
+        "TextDisplay",
+        "Separator",
         "TextDisplay",
         "Separator",
         "TextDisplay",
@@ -234,8 +240,8 @@ def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():
         sub_display=build_sub_display(send),
     )
     contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
-    assert "**Sub:** <@42>" in contents
-    assert "**Service:** paypal" in contents
+    assert "Sub: <@42>" in contents
+    assert "Method: paypal" in contents
     assert "Rob Send ID" not in contents
 
 
@@ -333,9 +339,12 @@ def test_leaderboard_main_and_stats_titles_and_separators():
 
     assert [type(child).__name__ for child in stats_children] == ["TextDisplay", "Separator", "TextDisplay"]
     assert "🏆 Thy Send Leaderboard | Stats" in stats_contents
-    assert "Leaderboard last updated" in stats_contents
-    assert "Unclaimed Sends" in stats_contents
-    assert "👑" not in stats_contents and "🦹‍♀️" not in stats_contents and "💸" not in stats_contents
+    assert "Rob has been keeping count" in stats_contents
+    assert "Unclaimed:" in stats_contents
+    assert "👑 Leading the board" in stats_contents
+    assert "📊 Dom/mes on the board:" in stats_contents
+    assert "📬 Total sends tracked:" in stats_contents
+    assert "💰 Total amount tracked:" in stats_contents
     assert "-# " in stats_contents
 
 

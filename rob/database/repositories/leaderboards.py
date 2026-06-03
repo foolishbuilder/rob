@@ -100,7 +100,7 @@ class LeaderboardsRepository:
                 SELECT
                     COALESCE((SELECT SUM(amount_cents) FROM valid_sends), 0) AS total_cents,
                     (SELECT COUNT(*) FROM valid_sends) AS send_count,
-                    (SELECT COUNT(*) FROM dommes WHERE guild_id = $1) AS domme_count,
+                    (SELECT COUNT(*) FROM dommes WHERE guild_id = $1 AND notification_mode <> 'private') AS domme_count,
                     (
                         SELECT COUNT(DISTINCT sub_user_id)
                         FROM valid_sends
@@ -155,6 +155,7 @@ class LeaderboardsRepository:
                     ON v.guild_id = d.guild_id
                     AND v.recipient_user_id = d.discord_user_id
                 WHERE d.guild_id = $1
+                  AND d.notification_mode <> 'private'
                 GROUP BY d.discord_user_id
                 ORDER BY total_cents DESC, send_count DESC, d.discord_user_id ASC
                 LIMIT $5
@@ -220,6 +221,7 @@ class LeaderboardsRepository:
                     ON v.guild_id = d.guild_id
                     AND v.recipient_user_id = d.discord_user_id
                 WHERE d.guild_id = $1
+                  AND d.notification_mode <> 'private'
                 GROUP BY d.discord_user_id, d.public_display_name, d.throne_handle
                 ORDER BY total_cents DESC, send_count DESC, d.discord_user_id ASC
                 LIMIT $5
@@ -369,6 +371,7 @@ class LeaderboardsRepository:
                         ON v.guild_id = d.guild_id
                         AND v.recipient_user_id = d.discord_user_id
                     WHERE d.guild_id = $1
+                      AND d.notification_mode <> 'private'
                     GROUP BY d.discord_user_id
                 ) ranked
                 WHERE ranked.user_id = $5
@@ -566,7 +569,7 @@ class LeaderboardsRepository:
         async with self.database.acquire() as connection:
             registered_dommes = int(
                 await connection.fetchval(
-                    "SELECT COUNT(*) FROM dommes WHERE guild_id = $1",
+                    "SELECT COUNT(*) FROM dommes WHERE guild_id = $1 AND notification_mode <> 'private'",
                     guild_id,
                 )
                 or 0
@@ -684,6 +687,7 @@ class LeaderboardsRepository:
                     ON v.guild_id = d.guild_id
                     AND v.recipient_user_id = d.discord_user_id
                 WHERE d.guild_id = $1
+                  AND d.notification_mode <> 'private'
                 GROUP BY d.discord_user_id
                 ORDER BY total_cents DESC, send_count DESC, d.discord_user_id ASC
                 LIMIT $5

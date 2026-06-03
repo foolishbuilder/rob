@@ -9,7 +9,7 @@ from rob.throne.payloads import is_known_test_sender
 def build_sub_display(send: SendRecord, *, test_gifter_usernames: Iterable[str] = ()) -> str:
     sub_name = (send.sub_name or "").strip()
     if sub_name.lower() == "anonymous":
-        return "The Flying Dutchman"
+        return "a secret admirer"
     if is_known_test_sender(sub_name, test_gifter_usernames=set(test_gifter_usernames)):
         return "Throne's Test User"
     if send.sub_user_id is not None:
