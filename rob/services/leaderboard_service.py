@@ -7,6 +7,7 @@ import logging
 
 import discord
 
+from rob.config.guilds import is_test_guild
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
@@ -47,6 +48,7 @@ class LeaderboardService:
         leaderboards: LeaderboardsRepository,
         bot_state: BotStateRepository,
         maintenance: MaintenanceService,
+        dommes=None,
         leaderboard_limit: int = 10,
         include_test_sends: bool = False,
         test_gifter_usernames: tuple[str, ...] = (),
@@ -57,12 +59,35 @@ class LeaderboardService:
         self.leaderboards = leaderboards
         self.bot_state = bot_state
         self.maintenance = maintenance
+        self.dommes = dommes
         self.leaderboard_limit = leaderboard_limit
         self.include_test_sends = include_test_sends
         self.test_gifter_usernames = test_gifter_usernames
         self.owner_test_user_id = owner_test_user_id
         self._refresh_locks: dict[int, asyncio.Lock] = {}
         self._content_hashes: dict[int, str] = {}
+
+    async def _filter_entries_for_guild(
+        self,
+        guild_id: int,
+        entries: list[LeaderboardEntry],
+    ) -> list[LeaderboardEntry]:
+        """For the test guild only, drop entries whose Dom/me opted out of the
+        leaderboard. Outside the test guild this is a no-op."""
+
+        if not is_test_guild(guild_id):
+            return entries
+        if self.dommes is None or not entries:
+            return entries
+        registered = await self.dommes.list_for_guild(guild_id)
+        opted_in_user_ids = {
+            int(d.discord_user_id) for d in registered if d.leaderboard_visible
+        }
+        return [
+            entry
+            for entry in entries
+            if entry.user_id is not None and int(entry.user_id) in opted_in_user_ids
+        ]
 
     async def refresh_all_guilds(self) -> None:
         for guild_id in await self.guild_settings.list_guild_ids():
@@ -125,6 +150,7 @@ class LeaderboardService:
                 test_gifter_usernames=self.test_gifter_usernames,
                 owner_test_user_id=self.owner_test_user_id,
             )
+            dommes = await self._filter_entries_for_guild(guild_id, dommes)
             log.info(
                 "Leaderboard entries rendered=%s leaderboard_limit=%s guild_id=%s",
                 len(dommes),
@@ -177,9 +203,18 @@ class LeaderboardService:
             return None
         if leader.total_cents <= 0 and leader.send_count <= 0:
             return None
+        if is_test_guild(guild_id):
+            filtered = await self._filter_entries_for_guild(guild_id, [leader])
+            if not filtered:
+                return None
+            leader = filtered[0]
         return leader
 
     async def maybe_post_leader_alert(self, guild_id: int, *, previous_leader_user_id: int | None) -> bool:
+        # NEW LEADER ALERT is disabled in the test guild as part of the
+        # DM-first preference system.
+        if is_test_guild(guild_id):
+            return False
         if await self.maintenance.is_enabled():
             return False
         current_leader = await self.get_current_leader(guild_id)
