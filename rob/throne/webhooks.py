@@ -6,13 +6,17 @@ from typing import Any
 
 from aiohttp import web
 
+from rob.config.guilds import is_test_guild
 from rob.config.settings import WebhookSettings
 from rob.database.connection import Database
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.dommes import DommesRepository
 from rob.database.repositories.sends import SendsRepository
 from rob.services.maintenance_service import MaintenanceService
-from rob.services.bot_notify_client import notify_bot_send
+from rob.services.bot_notify_client import (
+    notify_bot_onboarding_webhook_verified,
+    notify_bot_send,
+)
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import is_explicit_test_webhook_payload, is_known_test_sender, is_supported_event_type, parse_throne_send_payload
@@ -90,6 +94,23 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
     known_test_sender = is_known_test_sender(parsed.gifter_username, test_gifter_usernames=set(settings.throne_test_gifter_usernames))
     if explicit_test:
         await dommes.mark_setup_verified(matched_creator.id)
+        # In the test guild, auto-advance any in-progress DM onboarding flow
+        # for this Dom/me so the user doesn't have to click a "Yes it worked"
+        # button. Failures here must never break the webhook response.
+        if is_test_guild(matched_creator.guild_id):
+            try:
+                await notify_bot_onboarding_webhook_verified(
+                    notify_base_url=settings.rob_bot_notify_url,
+                    secret=settings.rob_ops_secret,
+                    guild_id=int(matched_creator.guild_id),
+                    discord_user_id=int(matched_creator.discord_user_id),
+                )
+            except Exception:
+                log.exception(
+                    "Onboarding auto-advance notification raised for guild_id=%s user_id=%s",
+                    matched_creator.guild_id,
+                    matched_creator.discord_user_id,
+                )
         return web.json_response(
             {
                 "ok": True,
@@ -98,6 +119,20 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
         )
     if known_test_sender and not settings.throne_parse_test_sends_as_real_sends:
         await dommes.mark_setup_verified(matched_creator.id)
+        if is_test_guild(matched_creator.guild_id):
+            try:
+                await notify_bot_onboarding_webhook_verified(
+                    notify_base_url=settings.rob_bot_notify_url,
+                    secret=settings.rob_ops_secret,
+                    guild_id=int(matched_creator.guild_id),
+                    discord_user_id=int(matched_creator.discord_user_id),
+                )
+            except Exception:
+                log.exception(
+                    "Onboarding auto-advance notification raised for guild_id=%s user_id=%s",
+                    matched_creator.guild_id,
+                    matched_creator.discord_user_id,
+                )
     if known_test_sender and settings.throne_parse_test_sends_as_real_sends:
         log.warning("Known Throne test sender accepted as real send due to THRONE_PARSE_TEST_SENDS_AS_REAL_SENDS=true. creator_id=%s gifter_username=%s", creator_id, parsed.gifter_username)
 

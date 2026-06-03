@@ -19,9 +19,11 @@ from rob.database.repositories import (
     SubsRepository,
     VibSettingsRepository,
 )
+from rob.database.repositories.domme_onboarding import DommeOnboardingRepository
 from rob.discord.cogs.admin_tools import AdminToolsCog
 from rob.discord.cogs.activity_tracker import ActivityTrackerCog
 from rob.discord.cogs.counting import CountingCog
+from rob.discord.cogs.dm_onboarding import DMOnboardingCog
 from rob.discord.cogs.inactivity import InactivityCog
 from rob.discord.cogs.leaderboards import LeaderboardsCog
 from rob.discord.cogs.registration import RegistrationCog
@@ -31,6 +33,7 @@ from rob.discord.cogs.settings import SettingsCog
 from rob.discord.cogs.warn_relay import WarnRelayCog
 from rob.services.counting_service import CountingService
 from rob.services.bot_ops_server import BotOpsServer
+from rob.services.dm_onboarding_service import DMOnboardingService
 from rob.services.inactivity_service import InactivityService
 from rob.services.leaderboard_service import LeaderboardService
 from rob.services.maintenance_service import MaintenanceService
@@ -77,6 +80,7 @@ class RobBot(commands.Bot):
         self.leaderboards_repo = LeaderboardsRepository(self.database)
         self.counting_repo = CountingRepository(self.database)
         self.send_change_requests_repo = SendChangeRequestsRepository(self.database)
+        self.domme_onboarding_repo = DommeOnboardingRepository(self.database)
 
         self.throne_service = ThroneService()
         self.maintenance_service = MaintenanceService(self.bot_settings_repo)
@@ -121,6 +125,12 @@ class RobBot(commands.Bot):
             throne=self.throne_service,
             webhook_base_url=os.getenv("THRONE_WEBHOOK_BASE_URL") or None,
         )
+        self.dm_onboarding_service = DMOnboardingService(
+            onboarding=self.domme_onboarding_repo,
+            dommes=self.dommes_repo,
+            throne=self.throne_service,
+            registration=self.registration_service,
+        )
         self.send_service = SendService(
             sends=self.sends_repo,
             subs=self.subs_repo,
@@ -163,6 +173,7 @@ class RobBot(commands.Bot):
         )
 
         await self.add_cog(RegistrationCog(self))
+        await self.add_cog(DMOnboardingCog(self))
         await self.add_cog(SendsCog(self))
         await self.add_cog(LeaderboardsCog(self))
         await self.add_cog(ActivityTrackerCog(self))
@@ -175,6 +186,10 @@ class RobBot(commands.Bot):
 
         self.tree.interaction_check = self._global_blacklist_interaction_check
         await self.send_change_request_service.rebind_pending_views()
+
+        dm_onboarding_cog = self.get_cog("DMOnboardingCog")
+        if dm_onboarding_cog is not None:
+            dm_onboarding_cog.register_persistent_views()
 
         guild_ids = await self.vib_settings_repo.list_guild_ids()
         await self._sync_application_commands(guild_ids)

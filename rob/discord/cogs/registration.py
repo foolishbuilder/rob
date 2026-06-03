@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from rob.config.guilds import is_test_guild
 from rob.discord.permissions import member_has_role
 from rob.ui.cards.errors import error_card, error_permission
 from rob.ui.cards.registration import registration_card, throne_setup_card
@@ -161,6 +162,47 @@ class RegistrationCog(commands.Cog):
             role_id=settings.domme_role_id if settings is not None else None,
         ):
             return
+
+        # ------------------------------------------------------------------
+        # TEST GUILD ONLY: route to the new DM-first onboarding flow.
+        # Outside the test guild we keep using the existing "Continue Setup"
+        # + webhook yes/not-yet flow below, unchanged.
+        # ------------------------------------------------------------------
+        if is_test_guild(interaction.guild.id):
+            dm_cog = self.bot.get_cog("DMOnboardingCog")
+            if dm_cog is not None:
+                ok, _message, error_text = await dm_cog.start_onboarding_dm(
+                    user=interaction.user,
+                    guild_id=interaction.guild.id,
+                )
+                if ok:
+                    await interaction.response.send_message(
+                        **registration_card(
+                            title="Rob | Setup Sent",
+                            summary=(
+                                "I've sent your setup to your DMs. Open that "
+                                "message and tap **Enter Throne details** to begin."
+                            ),
+                        ).send_kwargs(),
+                        ephemeral=True,
+                    )
+                else:
+                    await interaction.response.send_message(
+                        **_dm_blocked_error_card().send_kwargs(),
+                        ephemeral=True,
+                    )
+                    if error_text:
+                        log.info(
+                            "DM onboarding start failed guild_id=%s user_id=%s: %s",
+                            interaction.guild.id,
+                            interaction.user.id,
+                            error_text,
+                        )
+                return
+            log.warning(
+                "Test guild /register domme: DMOnboardingCog not loaded, "
+                "falling back to legacy flow."
+            )
 
         try:
             invite = registration_card(

@@ -45,3 +45,69 @@ async def notify_bot_send(
             guild_id,
         )
         return False
+
+
+async def notify_bot_onboarding_webhook_verified(
+    *,
+    notify_base_url: str | None,
+    secret: str | None,
+    guild_id: int,
+    discord_user_id: int,
+    timeout_seconds: float = 5.0,
+) -> bool:
+    """POST to the bot ops server to advance an in-progress DM onboarding
+    flow when the Throne test webhook arrives.
+
+    ``notify_base_url`` should be the same base used by the existing
+    ``ROB_BOT_NOTIFY_URL`` (e.g. ``http://127.0.0.1:8090/sends/process``);
+    this function derives the onboarding endpoint from the same origin.
+    """
+
+    if not notify_base_url:
+        return False
+
+    # Derive ``<origin>/onboarding/webhook_verified`` from the configured
+    # notify URL so deployments don't need a new env var.
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(notify_base_url)
+        if not parts.scheme or not parts.netloc:
+            return False
+        endpoint = urlunsplit(
+            (parts.scheme, parts.netloc, "/onboarding/webhook_verified", "", "")
+        )
+    except ValueError:
+        return False
+
+    headers: dict[str, str] = {}
+    if secret:
+        headers["X-Rob-Ops-Secret"] = secret
+
+    payload = {
+        "guild_id": int(guild_id),
+        "discord_user_id": int(discord_user_id),
+    }
+    timeout = ClientTimeout(total=timeout_seconds)
+    try:
+        async with ClientSession(timeout=timeout) as session:
+            async with session.post(endpoint, json=payload, headers=headers) as response:
+                if 200 <= response.status < 300:
+                    return True
+                body = await response.text()
+                log.warning(
+                    "Onboarding webhook-verified notification failed status=%s "
+                    "guild_id=%s discord_user_id=%s response=%s",
+                    response.status,
+                    guild_id,
+                    discord_user_id,
+                    body[:200],
+                )
+                return False
+    except (ClientError, TimeoutError):
+        log.exception(
+            "Onboarding webhook-verified notification failed guild_id=%s discord_user_id=%s.",
+            guild_id,
+            discord_user_id,
+        )
+        return False
