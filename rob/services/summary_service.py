@@ -16,6 +16,11 @@ log = logging.getLogger(__name__)
 
 
 _CADENCE_DAYS = {"weekly": 7, "fortnightly": 14, "monthly": 30}
+_NEXT_PERIOD_LABELS = {
+    "weekly": "next week",
+    "fortnightly": "next fortnight",
+    "monthly": "next month",
+}
 
 
 class SummaryService:
@@ -73,12 +78,20 @@ class SummaryService:
             sends = await self.sends.list_sends_for_domme(domme.guild_id, domme.discord_user_id, limit=500)
             sends = [send for send in sends if send.sent_at >= period_start]
             total_cents = sum(send.amount_cents for send in sends)
-            sender_names = [send.sub_name or "someone" for send in sends]
+            sender_names = list(dict.fromkeys(send.sub_name or "someone" for send in sends))
             user = self.bot.get_user(domme.discord_user_id)
             if user is None:
-                user = await self.bot.fetch_user(domme.discord_user_id)
+                try:
+                    user = await self.bot.fetch_user(domme.discord_user_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    log.warning(
+                        "Skipping summary DM for guild_id=%s user_id=%s: user not accessible.",
+                        domme.guild_id,
+                        domme.discord_user_id,
+                    )
+                    continue
             period = cadence
-            next_period = "next week" if cadence == "weekly" else "next fortnight" if cadence == "fortnightly" else "next month"
+            next_period = _NEXT_PERIOD_LABELS.get(cadence, "next week")
             rendered = summary_card(
                 display_name=getattr(user, "display_name", getattr(user, "name", str(domme.discord_user_id))),
                 period=period,
