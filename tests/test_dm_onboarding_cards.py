@@ -124,6 +124,69 @@ def test_migration_card_has_save_and_defer_buttons_inside_container():
 
 
 # ---------------------------------------------------------------------------
+# Theme: Bright Blue accent on all onboarding cards
+# ---------------------------------------------------------------------------
+
+
+def _container_accent(view: discord.ui.LayoutView) -> discord.Colour | None:
+    for item in view.children:
+        if isinstance(item, discord.ui.Container):
+            return item.accent_color
+    return None
+
+
+@pytest.mark.parametrize(
+    "rendered",
+    [
+        intro_card(),
+        identity_confirm_card(throne_handle="a", throne_display_name="A"),
+        webhook_setup_card(webhook_url="https://x/y"),
+        preferences_card(),
+        success_card(),
+        onboarding_error_card("oops"),
+    ],
+)
+def test_onboarding_cards_use_bright_blue_accent(rendered):
+    from rob.ui.theme import COLOR_BRIGHT_BLUE
+
+    color = _container_accent(rendered.view)
+    assert color == COLOR_BRIGHT_BLUE, (
+        f"Expected Bright Blue accent ({COLOR_BRIGHT_BLUE!r}), got {color!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Button styles: primary actions use ButtonStyle.primary (Bright Blue)
+# ---------------------------------------------------------------------------
+
+
+def _button_style(view: discord.ui.LayoutView, custom_id: str) -> discord.ButtonStyle | None:
+    for item in view.walk_children():
+        if isinstance(item, discord.ui.Button) and item.custom_id == custom_id:
+            return item.style
+    return None
+
+
+@pytest.mark.parametrize(
+    "rendered,button_id",
+    [
+        (intro_card(), "rob:dm_onboarding:intro:open_modal"),
+        (
+            identity_confirm_card(throne_handle="a", throne_display_name="A"),
+            "rob:dm_onboarding:identity:yes",
+        ),
+        (webhook_setup_card(webhook_url="https://x/y"), "rob:dm_onboarding:webhook:retry"),
+        (preferences_card(), "rob:dm_onboarding:prefs:save"),
+    ],
+)
+def test_primary_action_buttons_are_primary_style(rendered, button_id):
+    style = _button_style(rendered.view, button_id)
+    assert style == discord.ButtonStyle.primary, (
+        f"Button {button_id!r} should be primary style, got {style!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Layout regression: literal divider text is gone, action rows live inside
 # the Container, and bound callbacks route to the cog.
 # ---------------------------------------------------------------------------

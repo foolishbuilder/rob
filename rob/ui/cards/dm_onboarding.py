@@ -32,7 +32,7 @@ from typing import Any
 import discord
 
 from rob.ui.render import RenderedMessage
-from rob.ui.theme import COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING
+from rob.ui.theme import COLOR_BRIGHT_BLUE, COLOR_INFO
 
 log = logging.getLogger(__name__)
 
@@ -167,8 +167,8 @@ class IdentityYesButton(_BoundButton):
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
             cog,
-            style=discord.ButtonStyle.success,
-            label="Sure does!",
+            style=discord.ButtonStyle.primary,
+            label="Yes, that's me!",
             custom_id=ID_IDENTITY_YES,
         )
 
@@ -179,8 +179,8 @@ class IdentityNoButton(_BoundButton):
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
             cog,
-            style=discord.ButtonStyle.danger,
-            label="Not quite!",
+            style=discord.ButtonStyle.secondary,
+            label="Not quite",
             custom_id=ID_IDENTITY_NO,
         )
 
@@ -191,8 +191,8 @@ class WebhookRetryButton(_BoundButton):
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
             cog,
-            style=discord.ButtonStyle.secondary,
-            label="Doesn’t look to have worked!",
+            style=discord.ButtonStyle.primary,
+            label="Check for test send",
             custom_id=ID_WEBHOOK_RETRY,
         )
 
@@ -203,7 +203,7 @@ class SavePrefsButton(_BoundButton):
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
             cog,
-            style=discord.ButtonStyle.success,
+            style=discord.ButtonStyle.primary,
             label="Save preferences",
             custom_id=ID_PREFS_SAVE,
         )
@@ -215,7 +215,7 @@ class MigrationSaveButton(_BoundButton):
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
             cog,
-            style=discord.ButtonStyle.success,
+            style=discord.ButtonStyle.primary,
             label="Save preferences",
             custom_id=ID_MIGRATION_SAVE,
         )
@@ -278,19 +278,13 @@ class _IntroLayout(discord.ui.LayoutView):
         super().__init__(timeout=None)
         display = (name or "there").strip() or "there"
 
-        container = discord.ui.Container(accent_color=COLOR_INFO)
-        container.add_item(discord.ui.TextDisplay(f"## Hey {display}, Rob here!"))
-        container.add_item(
-            discord.ui.TextDisplay(
-                "Thanks for wanting to sign up to Throne tracking. Before we "
-                "can start tracking your notifications, we need to do some "
-                "initial setup first."
-            )
-        )
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
+        container.add_item(discord.ui.TextDisplay(f"## Hey {display}! 👋"))
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
-                "Firstly, what was your Throne username or link?"
+                "Let's set up your Throne notifications. "
+                "First, we need your Throne profile."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -350,19 +344,20 @@ class _IdentityConfirmLayout(discord.ui.LayoutView):
         super().__init__(timeout=None)
         display = (throne_display_name or throne_handle or "").strip() or throne_handle
 
-        container = discord.ui.Container(accent_color=COLOR_INFO)
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
         container.add_item(
             discord.ui.TextDisplay(
-                "Thanks! Just to make sure I’ve got the right details does "
-                "this look right?"
+                "Thanks! Just to make sure I've got the right details, "
+                "does this look right?"
             )
         )
         container.add_item(discord.ui.Separator())
         container.add_item(
-            discord.ui.TextDisplay(f"**Throne Username:** {throne_handle}")
+            discord.ui.TextDisplay(f"**Throne username:** {throne_handle}")
         )
+        container.add_item(discord.ui.Separator())
         container.add_item(
-            discord.ui.TextDisplay(f"**Name as appears on Throne:** {display}")
+            discord.ui.TextDisplay(f"**Display name:** {display}")
         )
         container.add_item(discord.ui.Separator())
         container.add_item(
@@ -391,36 +386,28 @@ def identity_confirm_card(
 class _WebhookSetupLayout(discord.ui.LayoutView):
     def __init__(self, *, webhook_url: str, cog: Any | None) -> None:
         super().__init__(timeout=None)
-        container = discord.ui.Container(accent_color=COLOR_WARNING)
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
         container.add_item(
-            discord.ui.TextDisplay(
-                "## Awesome, now here comes the bit with the most steps."
-            )
-        )
-        container.add_item(
-            discord.ui.TextDisplay(
-                "To help Rob get your sends the second they are sent, we "
-                "need to setup “Webhooks” inside of Throne. Here’s how:"
-            )
+            discord.ui.TextDisplay("## Set up your Throne webhook")
         )
         container.add_item(discord.ui.Separator())
         container.add_item(
+            discord.ui.TextDisplay("Follow these steps in Throne:")
+        )
+        container.add_item(
             discord.ui.TextDisplay(
-                "**1.** Open Throne\n"
-                "**2.** Go to your webhook settings / integrations area\n"
-                "**3.** Add Rob’s webhook URL (below)\n"
-                "**4.** Save the settings\n"
-                "**5.** Click Test Webhook in Throne"
+                "**1.** Open your webhook settings\n"
+                "**2.** Add Rob's webhook URL (below)\n"
+                "**3.** Save and click Test Webhook"
             )
         )
         container.add_item(discord.ui.Separator())
-        container.add_item(discord.ui.TextDisplay("**Rob’s webhook URL:**"))
+        container.add_item(discord.ui.TextDisplay("**Your webhook URL:**"))
         container.add_item(discord.ui.TextDisplay(f"```\n{webhook_url}\n```"))
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
-                "Once you’ve clicked “Test Webhook” come back here to see if "
-                "Rob picked up your Test Send!"
+                "Once you've tested in Throne, come back here."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -468,14 +455,14 @@ class PreferencesView(discord.ui.LayoutView):
         leaderboard_custom_id: str = ID_PREFS_LEADERBOARD,
         save_custom_id: str = ID_PREFS_SAVE,
         intro_lines: tuple[str, ...] = (
-            "## And just like that, the hard bit is done.",
-            "Now just tell Rob how you want things handled from here.",
+            "## Almost there!",
+            "Just tell us your preferences.",
         ),
         cog: Any | None = None,
     ) -> None:
         super().__init__(timeout=None)
 
-        container = discord.ui.Container(accent_color=COLOR_INFO)
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
         for line in intro_lines:
             container.add_item(discord.ui.TextDisplay(line))
         container.add_item(discord.ui.Separator())
@@ -484,7 +471,7 @@ class PreferencesView(discord.ui.LayoutView):
         container.add_item(discord.ui.TextDisplay("### 📬 Send notifications"))
         container.add_item(
             discord.ui.TextDisplay(
-                "How should Rob notify you when a send comes in?"
+                "How should Rob notify you about sends?"
             )
         )
         self.notifications_select = _AckSelect(
@@ -512,7 +499,7 @@ class PreferencesView(discord.ui.LayoutView):
         container.add_item(discord.ui.TextDisplay("### 📊 Leaderboard visibility"))
         container.add_item(
             discord.ui.TextDisplay(
-                "Should Rob show you on the server leaderboard?"
+                "Should Rob show you on the leaderboard?"
             )
         )
         self.leaderboard_select = _AckSelect(
@@ -537,8 +524,7 @@ class PreferencesView(discord.ui.LayoutView):
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
-                "-# You can always change these settings later with `/settings` "
-                "in your DMs or in the server."
+                "-# Change these anytime with `/settings` in the server or DMs."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -593,27 +579,31 @@ class _SuccessLayout(discord.ui.LayoutView):
         leaderboard_visible: bool,
     ) -> None:
         super().__init__(timeout=None)
-        container = discord.ui.Container(accent_color=COLOR_SUCCESS)
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
         container.add_item(
-            discord.ui.TextDisplay(
-                "## And just like that, you’ve now got me tracking your "
-                "throne sends!"
-            )
+            discord.ui.TextDisplay("## You're all set! ✓")
+        )
+        container.add_item(discord.ui.Separator())
+        notify_summary = (
+            "your Throne sends will show up as DMs"
+            if notifications_enabled
+            else "DM notifications are off"
+        )
+        lb_summary = (
+            "we've got your leaderboard visibility set"
+            if leaderboard_visible
+            else "you're hidden from the leaderboard"
         )
         container.add_item(
             discord.ui.TextDisplay(
-                "Keep in mind I’ll always respect your wishes when it comes "
-                "to being notified about a send or being shown on the "
-                "leaderboard. And you can always change these settings in "
-                "future by running `/settings` in these DM’s or in the "
-                "server!"
+                f"{notify_summary.capitalize()}, and {lb_summary}."
             )
         )
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
-                "If something stops working or doesn’t appear to be working "
-                "correctly, then report it via `/report`!"
+                "You can change these settings anytime with `/settings` "
+                "in the server or DMs."
             )
         )
         notify_line = (
@@ -791,8 +781,9 @@ def migration_prompt_card(
 class _OnboardingErrorLayout(discord.ui.LayoutView):
     def __init__(self, *, message: str, cog: Any | None) -> None:
         super().__init__(timeout=None)
-        container = discord.ui.Container(accent_color=COLOR_WARNING)
+        container = discord.ui.Container(accent_color=COLOR_BRIGHT_BLUE)
         container.add_item(discord.ui.TextDisplay("## Hmm, that didn’t work"))
+        container.add_item(discord.ui.Separator())
         container.add_item(discord.ui.TextDisplay(message))
         container.add_item(discord.ui.Separator())
         container.add_item(

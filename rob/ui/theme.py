@@ -11,6 +11,7 @@ ROB_RED = discord.Colour.from_rgb(198, 40, 40)
 ROB_STONE = discord.Colour.from_rgb(108, 117, 125)
 ROB_PINK = discord.Colour.from_rgb(214, 93, 177)
 COLOR_ROB_PURPLE = discord.Colour(0x7B61FF)
+COLOR_BRIGHT_BLUE = discord.Colour(0x0099FF)
 
 COLOR_INFO = ROB_SKY
 COLOR_SUCCESS = ROB_GREEN
