@@ -160,7 +160,6 @@ class _TermsPromptLayout(discord.ui.LayoutView):
                 "Once you've reviewed both documents, you can accept or decline below."
             )
         )
-        container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.ActionRow(
                 _document_link_button(label="Terms of Use", url=terms_url),
@@ -229,7 +228,7 @@ def terms_declined_card() -> RenderedMessage:
                 "If you ever change your mind, run any Rob command in the server "
                 "and I'll send these through again."
             ),
-            color=COLOR_WARNING,
+            color=COLOR_DANGER,
             button=DeclineButton(label="Declined", disabled=True),
         )
     )
