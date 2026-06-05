@@ -13,6 +13,10 @@ log = logging.getLogger(__name__)
 TERMS_PREFIX = "rob:terms:"
 ID_TERMS_ACCEPT = f"{TERMS_PREFIX}accept"
 ID_TERMS_DECLINE = f"{TERMS_PREFIX}decline"
+ROBYES = "<:robyes:1512405535582982144>"
+ROBNO = "<:robno:1512403862609461338>"
+ROBYES_EMOJI = discord.PartialEmoji.from_str(ROBYES)
+ROBNO_EMOJI = discord.PartialEmoji.from_str(ROBNO)
 
 _UNAVAILABLE_MESSAGE = (
     "These Terms are not available right now. Run any Rob command in the test "
@@ -47,12 +51,14 @@ class _BoundButton(discord.ui.Button):
         label: str,
         custom_id: str,
         disabled: bool = False,
+        emoji: discord.PartialEmoji | None = None,
     ) -> None:
         super().__init__(
             style=style,
             label=label,
             custom_id=custom_id,
             disabled=disabled,
+            emoji=emoji,
         )
         self._cog = cog
 
@@ -84,6 +90,7 @@ class AcceptButton(_BoundButton):
             label=label,
             custom_id=ID_TERMS_ACCEPT,
             disabled=disabled,
+            emoji=ROBYES_EMOJI,
         )
 
 
@@ -103,6 +110,7 @@ class DeclineButton(_BoundButton):
             label=label,
             custom_id=ID_TERMS_DECLINE,
             disabled=disabled,
+            emoji=ROBNO_EMOJI,
         )
 
 

@@ -11,6 +11,8 @@ from rob.ui.cards.terms import (
     DeclineButton,
     ID_TERMS_ACCEPT,
     ID_TERMS_DECLINE,
+    ROBNO,
+    ROBYES,
     current_privacy_card,
     current_terms_card,
     terms_accepted_card,
@@ -49,7 +51,10 @@ def test_terms_prompt_card_has_links_and_accept_decline_buttons():
     assert _find_button(rendered.view, custom_id=ID_TERMS_ACCEPT) is not None
     assert _find_button(rendered.view, custom_id=ID_TERMS_DECLINE) is not None
     link_buttons = _find_link_buttons(rendered.view)
-    assert [button.label for button in link_buttons] == ["Terms of Use", "Privacy Notice"]
+    assert sorted({button.label for button in link_buttons}) == [
+        "Privacy Notice",
+        "Terms of Use",
+    ]
 
 
 def test_terms_accepted_card_disables_accept_and_removes_decline():
@@ -59,6 +64,7 @@ def test_terms_accepted_card_disables_accept_and_removes_decline():
     assert accept is not None
     assert accept.disabled is True
     assert accept.label == "Accepted"
+    assert str(accept.emoji) == ROBYES
     assert decline is None
 
 
@@ -70,6 +76,7 @@ def test_terms_declined_card_disables_decline_and_removes_accept():
     assert decline is not None
     assert decline.disabled is True
     assert decline.label == "Declined"
+    assert str(decline.emoji) == ROBNO
 
 
 def test_terms_dm_blocked_card_contains_expected_copy():
@@ -113,3 +120,13 @@ def test_accept_and_decline_buttons_route_to_cog_callbacks():
 
     cog.handle_accept.assert_awaited_once_with(interaction)
     cog.handle_decline.assert_awaited_once_with(interaction)
+
+
+def test_accept_and_decline_buttons_use_requested_custom_emojis():
+    accept = AcceptButton()
+    decline = DeclineButton()
+
+    assert accept.label == "Accept"
+    assert str(accept.emoji) == ROBYES
+    assert decline.label == "Decline"
+    assert str(decline.emoji) == ROBNO

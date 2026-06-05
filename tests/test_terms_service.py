@@ -25,6 +25,7 @@ class _FakeTermsRepo:
         self.pending_calls: list[dict] = []
         self.accept_calls: list[int] = []
         self.decline_calls: list[int] = []
+        self.clear_calls: list[int] = []
 
     async def get(self, *, discord_user_id):
         return self.state
@@ -57,6 +58,12 @@ class _FakeTermsRepo:
         state["status"] = STATUS_DECLINED
         self.state = SimpleNamespace(**state)
         return self.state
+
+    async def clear(self, *, discord_user_id):
+        self.clear_calls.append(discord_user_id)
+        had_state = self.state is not None
+        self.state = None
+        return had_state
 
 
 def _service(*, repo=None, version="2026-06-05", terms_url=None, privacy_url=None, owner_user_id=None):
@@ -165,3 +172,25 @@ def test_accept_and_decline_delegate_to_repository():
     assert declined.status == STATUS_DECLINED
     assert repo.accept_calls == [9]
     assert repo.decline_calls == [9]
+
+
+def test_reset_for_user_clears_saved_state():
+    repo = _FakeTermsRepo(
+        SimpleNamespace(status=STATUS_ACCEPTED, terms_version="2026-06-05")
+    )
+    service = _service(repo=repo)
+
+    had_state = asyncio.run(service.reset_for_user(discord_user_id=9))
+
+    assert had_state is True
+    assert repo.clear_calls == [9]
+
+
+def test_reset_for_user_returns_false_when_no_state_exists():
+    repo = _FakeTermsRepo()
+    service = _service(repo=repo)
+
+    had_state = asyncio.run(service.reset_for_user(discord_user_id=9))
+
+    assert had_state is False
+    assert repo.clear_calls == [9]

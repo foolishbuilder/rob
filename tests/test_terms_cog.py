@@ -41,10 +41,12 @@ class _FakeBot:
         self.terms_service.get_state = AsyncMock(return_value=state)
         self.terms_service.accept = AsyncMock(return_value=state)
         self.terms_service.decline = AsyncMock(return_value=state)
+        self.terms_service.reset_for_user = AsyncMock(return_value=True)
         self.terms_service.terms_url = "https://example.com/terms"
         self.terms_service.privacy_url = "https://example.com/privacy"
         self.terms_service.terms_version = "2026-06-05"
         self.terms_service.owner_mention = "<@55>"
+        self.terms_service.owner_user_id = 55
         self.added_views: list[discord.ui.View] = []
 
     def add_view(self, view):
@@ -64,10 +66,21 @@ def _make_interaction(
     return SimpleNamespace(
         user=user or _FakeUser(),
         guild_id=guild_id,
+        guild=SimpleNamespace(id=guild_id) if guild_id is not None else None,
         message=message,
         response=response,
         command=SimpleNamespace(qualified_name=command_name),
     )
+
+
+def _member_like(*, user_id=1, name="Tester", manage_guild=False, administrator=False):
+    user = _FakeUser(user_id=user_id, name=name)
+    user.mention = f"<@{user_id}>"
+    user.guild_permissions = SimpleNamespace(
+        manage_guild=manage_guild,
+        administrator=administrator,
+    )
+    return user
 
 
 def test_register_persistent_views_registers_terms_buttons():
@@ -198,3 +211,66 @@ def test_terms_interaction_detection_supports_commands_and_buttons():
 
     assert TermsCog.is_terms_interaction(command_interaction) is True
     assert TermsCog.is_terms_interaction(button_interaction) is True
+
+
+def test_terms_reset_command_allows_configured_owner_to_reset_self():
+    bot = _FakeBot()
+    cog = TermsCog(bot)
+    interaction = _make_interaction(
+        user=_member_like(user_id=55, name="Pat"),
+        command_name="termsreset",
+    )
+
+    asyncio.run(TermsCog.terms_reset.callback(cog, interaction, None))
+
+    bot.terms_service.reset_for_user.assert_awaited_once_with(discord_user_id=55)
+    message = interaction.response.send_message.await_args.args[0]
+    assert "Your Terms acceptance state has been reset" in message
+
+
+def test_terms_reset_command_allows_server_manager_to_reset_other_user():
+    bot = _FakeBot()
+    cog = TermsCog(bot)
+    interaction = _make_interaction(
+        user=_member_like(user_id=9, name="Mod", manage_guild=True),
+        command_name="termsreset",
+    )
+    target = _member_like(user_id=77, name="Aria")
+
+    asyncio.run(TermsCog.terms_reset.callback(cog, interaction, target))
+
+    bot.terms_service.reset_for_user.assert_awaited_once_with(discord_user_id=77)
+    message = interaction.response.send_message.await_args.args[0]
+    assert "Reset Terms acceptance for <@77>" in message
+
+
+def test_terms_reset_command_rejects_non_privileged_user():
+    bot = _FakeBot()
+    cog = TermsCog(bot)
+    interaction = _make_interaction(
+        user=_member_like(user_id=9, name="User"),
+        command_name="termsreset",
+    )
+
+    asyncio.run(TermsCog.terms_reset.callback(cog, interaction, None))
+
+    bot.terms_service.reset_for_user.assert_not_awaited()
+    message = interaction.response.send_message.await_args.args[0]
+    assert "Only the bot owner or a server manager" in message
+
+
+def test_terms_reset_command_is_test_guild_only():
+    bot = _FakeBot()
+    bot.terms_service.is_enabled_for.return_value = False
+    cog = TermsCog(bot)
+    interaction = _make_interaction(
+        user=_member_like(user_id=55, name="Pat"),
+        guild_id=123,
+        command_name="termsreset",
+    )
+
+    asyncio.run(TermsCog.terms_reset.callback(cog, interaction, None))
+
+    bot.terms_service.reset_for_user.assert_not_awaited()
+    message = interaction.response.send_message.await_args.args[0]
+    assert "only available in the test guild" in message

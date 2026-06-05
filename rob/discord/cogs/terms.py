@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-ALLOWED_TERMS_COMMANDS = frozenset({"terms", "privacy"})
+ALLOWED_TERMS_COMMANDS = frozenset({"terms", "privacy", "termsreset"})
 
 
 class _PersistentTermsView(discord.ui.View):
@@ -85,6 +85,18 @@ class TermsCog(commands.Cog):
         if display_name:
             return display_name
         return user.name
+
+    def _can_reset_terms(self, user: discord.abc.User) -> bool:
+        service = self.service
+        if service is not None and service.owner_user_id is not None and user.id == service.owner_user_id:
+            return True
+        permissions = getattr(user, "guild_permissions", None)
+        if permissions is None:
+            return False
+        return bool(
+            getattr(permissions, "administrator", False)
+            or getattr(permissions, "manage_guild", False)
+        )
 
     def _welcome_text(self, *, name: str) -> str:
         return (
@@ -285,3 +297,62 @@ class TermsCog(commands.Cog):
             ).send_kwargs(),
             ephemeral=True,
         )
+
+    @app_commands.command(
+        name="termsreset",
+        description="Reset a user's Terms acceptance state for testing.",
+    )
+    @app_commands.describe(user="Optional user to reset. Defaults to yourself.")
+    async def terms_reset(
+        self,
+        interaction: discord.Interaction,
+        user: discord.Member = None,
+    ) -> None:
+        service = self.service
+        if service is None:
+            await interaction.response.send_message(
+                "Rob couldn't load the Terms tools right now.",
+                ephemeral=True,
+            )
+            return
+        if interaction.guild is None or not service.is_enabled_for(interaction.guild_id):
+            await interaction.response.send_message(
+                "This command is only available in the test guild.",
+                ephemeral=True,
+            )
+            return
+        if interaction.user is None or not self._can_reset_terms(interaction.user):
+            await interaction.response.send_message(
+                "Only the bot owner or a server manager can run this command.",
+                ephemeral=True,
+            )
+            return
+
+        target = user or interaction.user
+        had_state = await service.reset_for_user(discord_user_id=target.id)
+        if target.id == interaction.user.id:
+            if had_state:
+                message = (
+                    "Your Terms acceptance state has been reset. The next gated "
+                    "command you run in the test guild will send a fresh Terms DM."
+                )
+            else:
+                message = (
+                    "You didn't have an active Terms state, so there was nothing "
+                    "to clear. The next gated command you run in the test guild "
+                    "will still send a fresh Terms DM."
+                )
+        else:
+            mention = getattr(target, "mention", None) or self._display_name(target)
+            if had_state:
+                message = (
+                    f"Reset Terms acceptance for {mention}. Their next gated "
+                    "command in the test guild will send a fresh Terms DM."
+                )
+            else:
+                message = (
+                    f"{mention} didn't have an active Terms state, so there was "
+                    "nothing to clear. Their next gated command in the test guild "
+                    "will still send a fresh Terms DM."
+                )
+        await interaction.response.send_message(message, ephemeral=True)

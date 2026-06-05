@@ -109,3 +109,8 @@ class TermsService:
         if updated is None:
             raise TermsError("These Terms are not active right now.")
         return updated
+
+    async def reset_for_user(self, *, discord_user_id: int) -> bool:
+        state = await self.get_state(discord_user_id)
+        await self.terms.clear(discord_user_id=discord_user_id)
+        return state is not None

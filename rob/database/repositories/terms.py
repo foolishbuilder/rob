@@ -151,3 +151,14 @@ class TermsRepository:
             discord_user_id=discord_user_id,
             status=STATUS_DECLINED,
         )
+
+    async def clear(self, *, discord_user_id: int) -> bool:
+        async with self.database.acquire() as connection:
+            result = await connection.execute(
+                """
+                DELETE FROM user_terms_acceptance
+                WHERE discord_user_id = $1
+                """,
+                discord_user_id,
+            )
+        return result.endswith("1")
