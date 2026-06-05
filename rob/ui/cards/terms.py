@@ -161,12 +161,6 @@ class _TermsPromptLayout(discord.ui.LayoutView):
             )
         )
         container.add_item(
-            discord.ui.ActionRow(
-                _document_link_button(label="Terms of Use", url=terms_url),
-                _document_link_button(label="Privacy Notice", url=privacy_url),
-            )
-        )
-        container.add_item(
             discord.ui.ActionRow(AcceptButton(cog), DeclineButton(cog))
         )
         self.add_item(container)
