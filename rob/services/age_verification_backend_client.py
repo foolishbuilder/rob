@@ -4,13 +4,24 @@ import asyncio
 import logging
 from typing import Any
 
-from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 log = logging.getLogger(__name__)
 
 
 class AgeVerificationBackendClientError(RuntimeError):
     """Raised when the backend age-verification bridge fails."""
+
+
+def _response_detail_preview(value: str | None, *, limit: int = 300) -> str | None:
+    if not value:
+        return None
+    compact = " ".join(value.split())
+    if not compact:
+        return None
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[: limit - 3]}..."
 
 
 class AgeVerificationBackendClient:
@@ -83,19 +94,48 @@ class AgeVerificationBackendClient:
                     json=json_payload,
                     headers=headers,
                 ) as response:
-                    response.raise_for_status()
-                    data = await response.json()
-        except ClientResponseError as exc:
-            log.warning(
-                "Age verification backend returned HTTP %s method=%s url=%s",
-                exc.status,
-                method,
-                url,
-                exc_info=True,
-            )
-            raise AgeVerificationBackendClientError(
-                f"Age verification backend returned HTTP {exc.status}."
-            ) from exc
+                    if response.status >= 400:
+                        detail = _response_detail_preview(await response.text())
+                        if detail:
+                            log.warning(
+                                "Age verification backend returned HTTP %s method=%s url=%s detail=%s",
+                                response.status,
+                                method,
+                                url,
+                                detail,
+                            )
+                        else:
+                            log.warning(
+                                "Age verification backend returned HTTP %s method=%s url=%s",
+                                response.status,
+                                method,
+                                url,
+                            )
+                        raise AgeVerificationBackendClientError(
+                            f"Age verification backend returned HTTP {response.status}."
+                        )
+                    try:
+                        data = await response.json()
+                    except Exception as exc:
+                        detail = _response_detail_preview(await response.text())
+                        if detail:
+                            log.warning(
+                                "Age verification backend returned invalid JSON status=%s method=%s url=%s detail=%s",
+                                response.status,
+                                method,
+                                url,
+                                detail,
+                            )
+                        else:
+                            log.warning(
+                                "Age verification backend returned invalid JSON status=%s method=%s url=%s",
+                                response.status,
+                                method,
+                                url,
+                            )
+                        raise AgeVerificationBackendClientError(
+                            "Age verification backend returned an unexpected response."
+                        ) from exc
         except asyncio.TimeoutError as exc:
             log.exception(
                 "Age verification backend timed out method=%s url=%s",

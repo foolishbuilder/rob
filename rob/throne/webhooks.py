@@ -141,8 +141,20 @@ async def handle_age_verification_start(request: web.Request) -> web.Response:
     except AgeVerificationUnavailableError as exc:
         return web.json_response({"error": str(exc)}, status=403)
     except AgeVerificationConfigError as exc:
+        log.warning(
+            "Age verification start configuration error guild_id=%s discord_user_id=%s error=%s",
+            guild_id,
+            discord_user_id,
+            exc,
+        )
         return web.json_response({"error": str(exc)}, status=503)
     except AgeVerificationError as exc:
+        log.warning(
+            "Age verification start provider error guild_id=%s discord_user_id=%s error=%s",
+            guild_id,
+            discord_user_id,
+            exc,
+        )
         return web.json_response({"error": str(exc)}, status=502)
 
     record = await repository.get(
@@ -218,8 +230,10 @@ async def handle_yoti_notification(request: web.Request) -> web.Response:
     try:
         record = await service.handle_notification(payload)
     except AgeVerificationConfigError as exc:
+        log.warning("Yoti notification configuration error error=%s", exc)
         return web.json_response({"ok": False, "error": str(exc)}, status=503)
     except AgeVerificationError as exc:
+        log.warning("Yoti notification processing error error=%s", exc)
         return web.json_response({"ok": False, "error": str(exc)}, status=400)
 
     if record is not None:
@@ -249,7 +263,12 @@ async def handle_yoti_callback(request: web.Request) -> web.Response:
     if session_id:
         try:
             record = await service.refresh_session(session_id=session_id)
-        except AgeVerificationError:
+        except AgeVerificationError as exc:
+            log.warning(
+                "Yoti callback refresh failed session_id=%s error=%s",
+                session_id,
+                exc,
+            )
             record = None
         if record is not None:
             status_text = record.status

@@ -5,10 +5,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from rob.services.yoti_age_provider import YotiAgeProvider, YotiConfigurationError
+from rob.services.yoti_age_provider import (
+    YotiAgeProvider,
+    YotiConfigurationError,
+    YotiProviderError,
+)
 
 
 def _write_test_private_key(tmp_path: Path) -> Path:
@@ -67,3 +73,29 @@ def test_yoti_provider_requires_existing_private_key_file(tmp_path):
 
     with pytest.raises(YotiConfigurationError, match="does not exist"):
         provider.validate_startup_configuration()
+
+
+@pytest.mark.asyncio
+async def test_yoti_provider_includes_upstream_error_detail(tmp_path):
+    async def create_session(_request: web.Request) -> web.Response:
+        return web.json_response({"error": "missing token"}, status=401)
+
+    pem_path = _write_test_private_key(tmp_path)
+    app = web.Application()
+    app.router.add_post("/api/v1/sessions", create_session)
+
+    async with TestServer(app) as server:
+        provider = YotiAgeProvider(
+            environment="sandbox",
+            sdk_id="sdk-123",
+            private_key_path=str(pem_path),
+            public_base_url="https://age.robthebot.com",
+        )
+        provider.api_origin = str(server.make_url("")).rstrip("/")
+        try:
+            with pytest.raises(YotiProviderError, match="status 401") as exc_info:
+                await provider.create_session(discord_user_id=42, guild_id=123)
+        finally:
+            await provider.close()
+
+    assert "missing token" in str(exc_info.value)

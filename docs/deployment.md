@@ -73,6 +73,14 @@ Current production examples live in:
 
 The webhook host should stay on `127.0.0.1:8080` behind Cloudflared, and it should notify the bot over the private ops bridge (`ROB_BOT_NOTIFY_URL`) instead of polling the database for send cards.
 
+If age verification is enabled, there is still no separate age-verification
+service to deploy. The existing webhook app serves those routes. The bot should
+point `ROB_BACKEND_URL` at either:
+
+- `https://throne.robthebot.com` for the simplest setup, or
+- `https://age.robthebot.com` if that hostname is explicitly routed to the same
+  webhook origin
+
 If either service points at an older database, `scripts/check_db.py` will fail because Rob v2 expects `db_build_version` and the new v2 schema tables.
 
 ## Manual DB bootstrap

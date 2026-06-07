@@ -40,6 +40,8 @@ def test_deploy_workflow_rebuild():
 def test_deploy_scripts_and_docs():
     pre_bot = Path('deploy/scripts/precheck-bot.sh').read_text()
     pre_webhook = Path('deploy/scripts/precheck-webhook.sh').read_text()
+    check_bot = Path('deploy/scripts/check-bot-runtime.sh').read_text()
+    check_webhook = Path('deploy/scripts/check-webhook-runtime.sh').read_text()
     deploy_bot = Path('deploy/scripts/deploy-bot.sh').read_text()
     deploy_webhook = Path('deploy/scripts/deploy-webhook.sh').read_text()
     bot_dev = Path('deploy/scripts/deploy-bot-dev.sh').read_text()
@@ -53,11 +55,20 @@ def test_deploy_scripts_and_docs():
     prod_webhook_service = Path('deploy/systemd/rob-webhook.service')
 
     assert 'scripts/check_db.py' in pre_bot and 'scripts/check_db.py' in pre_webhook
+    assert 'scripts/check_db.py' in check_bot and 'scripts/check_db.py' in check_webhook
     assert 'systemctl restart' not in pre_bot and 'systemctl restart' not in pre_webhook
+    assert 'systemctl restart' not in check_bot and 'systemctl restart' not in check_webhook
     assert 'echo .env' not in pre_bot and 'echo .env' not in pre_webhook
     assert 'source .env' not in pre_bot and 'source .env' not in pre_webhook
+    assert 'source .env' not in check_bot and 'source .env' not in check_webhook
     assert 'load_env_file ".env"' in pre_bot and 'load_env_file ".env"' in pre_webhook
+    assert 'load_env_file ".env"' in check_bot and 'load_env_file ".env"' in check_webhook
     assert 'Invalid .env syntax on line' in pre_bot and 'Invalid .env syntax on line' in pre_webhook
+    assert 'load_bot_settings' in check_bot
+    assert 'load_webhook_settings' in check_webhook
+    assert 'YotiAgeProvider' in check_webhook
+    assert 'ROB_BACKEND_URL' in check_bot
+    assert 'ROB_BOT_NOTIFY_URL' in check_webhook
     assert 'exec "${SCRIPT_DIR}/deploy-bot.sh" "$@"' in bot_dev
     assert 'exec "${SCRIPT_DIR}/deploy-webhook.sh" "$@"' in webhook_dev
     assert 'scripts/db/build/001_core_schema.sql' in deploy_bot

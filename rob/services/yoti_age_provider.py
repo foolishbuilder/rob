@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any
 from urllib.parse import quote, urlencode
 from uuid import uuid4
 
-from aiohttp import ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientSession, ClientTimeout
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
@@ -33,6 +34,8 @@ Sl9fi7VXlDTlv1jpk4DFMQYF2fpAyomm95GavhllJnDxC2t8ebu0O23B88hPGI3K
 kyLtPA8ie6UNmwNqLYpOEN/pwayYw75FcENBDxnWhoe9AgMBAAE=
 -----END PUBLIC KEY-----"""
 
+log = logging.getLogger(__name__)
+
 
 def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
@@ -41,6 +44,17 @@ def _parse_datetime(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _response_detail_preview(value: str | None, *, limit: int = 300) -> str | None:
+    if not value:
+        return None
+    compact = " ".join(value.split())
+    if not compact:
+        return None
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[: limit - 3]}..."
 
 
 @dataclass(frozen=True)
@@ -326,12 +340,52 @@ class YotiAgeProvider:
                 data=payload_bytes,
                 headers=headers,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
-        except ClientResponseError as exc:
-            raise YotiProviderError(
-                f"Yoti request failed with status {exc.status}."
-            ) from exc
+                if response.status >= 400:
+                    detail = _response_detail_preview(await response.text())
+                    if detail:
+                        log.warning(
+                            "Yoti request failed status=%s method=%s path=%s detail=%s",
+                            response.status,
+                            method,
+                            path,
+                            detail,
+                        )
+                        raise YotiProviderError(
+                            f"Yoti request failed with status {response.status}. Detail: {detail}"
+                        )
+                    log.warning(
+                        "Yoti request failed status=%s method=%s path=%s",
+                        response.status,
+                        method,
+                        path,
+                    )
+                    raise YotiProviderError(
+                        f"Yoti request failed with status {response.status}."
+                    )
+                try:
+                    data = await response.json()
+                except Exception as exc:
+                    detail = _response_detail_preview(await response.text())
+                    if detail:
+                        log.warning(
+                            "Yoti returned invalid JSON status=%s method=%s path=%s detail=%s",
+                            response.status,
+                            method,
+                            path,
+                            detail,
+                        )
+                    else:
+                        log.warning(
+                            "Yoti returned invalid JSON status=%s method=%s path=%s",
+                            response.status,
+                            method,
+                            path,
+                        )
+                    raise YotiProviderError(
+                        "Yoti returned an unexpected response body."
+                    ) from exc
+        except YotiProviderError:
+            raise
         except Exception as exc:  # pragma: no cover - defensive
             raise YotiProviderError("Yoti request failed.") from exc
         if not isinstance(data, dict):
