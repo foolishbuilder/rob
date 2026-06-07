@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
-from aiohttp import ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
+
+log = logging.getLogger(__name__)
 
 
 class AgeVerificationBackendClientError(RuntimeError):
@@ -82,14 +86,50 @@ class AgeVerificationBackendClient:
                     response.raise_for_status()
                     data = await response.json()
         except ClientResponseError as exc:
+            log.warning(
+                "Age verification backend returned HTTP %s method=%s url=%s",
+                exc.status,
+                method,
+                url,
+                exc_info=True,
+            )
             raise AgeVerificationBackendClientError(
                 f"Age verification backend returned HTTP {exc.status}."
             ) from exc
+        except asyncio.TimeoutError as exc:
+            log.exception(
+                "Age verification backend timed out method=%s url=%s",
+                method,
+                url,
+            )
+            raise AgeVerificationBackendClientError(
+                "Age verification backend timed out."
+            ) from exc
+        except ClientError as exc:
+            log.exception(
+                "Age verification backend request failed method=%s url=%s",
+                method,
+                url,
+            )
+            raise AgeVerificationBackendClientError(
+                "Rob couldn't reach the age verification backend."
+            ) from exc
         except Exception as exc:  # pragma: no cover - defensive network handling
+            log.exception(
+                "Age verification backend request crashed method=%s url=%s",
+                method,
+                url,
+            )
             raise AgeVerificationBackendClientError(
                 "Rob couldn't reach the age verification backend."
             ) from exc
         if not isinstance(data, dict):
+            log.warning(
+                "Age verification backend returned unexpected payload type=%s method=%s url=%s",
+                type(data).__name__,
+                method,
+                url,
+            )
             raise AgeVerificationBackendClientError(
                 "Age verification backend returned an unexpected response."
             )
