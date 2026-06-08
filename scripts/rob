@@ -90,6 +90,9 @@ Usage:
 
   rob count set <number> --guild <guild_id>
   rob count status --guild <guild_id>
+  rob inactivity status --guild <guild_id>
+  rob inactivity on --guild <guild_id>
+  rob inactivity off --guild <guild_id>
   rob scan --guild <guild_id>
   rob auto-apply --guild <guild_id> [all|channels|roles|field_a,field_b]
   rob migration audit --guild <guild_id>
@@ -641,6 +644,65 @@ count_command() {
   esac
 }
 
+inactivity_command() {
+  local action="${1:-status}"
+  shift || true
+
+  case "${action}" in
+    status|on|off)
+      collect_guild_option "$@"
+      if ((${#REMAINING_ARGS[@]})); then
+        set -- "${REMAINING_ARGS[@]}"
+      else
+        set --
+      fi
+      [[ $# -eq 0 ]] || die "usage: rob inactivity status|on|off --guild <guild_id>"
+      local key
+      local key_sql
+      key="inactivity:${GUILD_ID}:enabled"
+      key_sql="$(sql_quote_literal "${key}")"
+      ;;
+    *)
+      die "usage: rob inactivity status|on|off --guild <guild_id>"
+      ;;
+  esac
+
+  case "${action}" in
+    status)
+      local default_enabled="${INACTIVITY_ENABLED_DEFAULT:-false}"
+      case "${default_enabled,,}" in
+        1|true|yes|on)
+          default_enabled="true"
+          ;;
+        *)
+          default_enabled="false"
+          ;;
+      esac
+      local default_sql
+      default_sql="$(sql_quote_literal "${default_enabled}")"
+      local rows
+      local enabled
+      rows="$(psql_query "SELECT COALESCE((SELECT value->>'value' FROM bot_settings WHERE key = ${key_sql}), ${default_sql}) AS enabled")"
+      enabled="$(printf '%s\n' "${rows}" | tail -n 1)"
+      print_heading "Inactivity Status"
+      printf 'Guild ID: %s\n' "${GUILD_ID}"
+      printf 'Enabled: %s\n' "${enabled}"
+      ;;
+    on|off)
+      local enabled="false"
+      if [[ "${action}" == "on" ]]; then
+        enabled="true"
+      fi
+      local enabled_sql
+      enabled_sql="$(sql_quote_literal "${enabled}")"
+      psql_query "INSERT INTO bot_settings (key, value) VALUES (${key_sql}, jsonb_build_object('value', ${enabled_sql}::text)) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()" >/dev/null
+      print_heading "Inactivity"
+      printf 'Guild ID: %s\n' "${GUILD_ID}"
+      printf 'Enabled: %s\n' "${enabled}"
+      ;;
+  esac
+}
+
 scan_command() {
   collect_guild_option "$@"
   if ((${#REMAINING_ARGS[@]})); then
@@ -944,6 +1006,9 @@ case "${cmd}" in
     ;;
   count)
     count_command "$@"
+    ;;
+  inactivity)
+    inactivity_command "$@"
     ;;
   scan)
     scan_command "$@"
