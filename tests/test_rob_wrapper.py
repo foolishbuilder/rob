@@ -365,3 +365,52 @@ def test_rob_wrapper_send_add_uses_pat_actor_alias(tmp_path: Path):
     )
 
     assert "requested_by=Pat" in log_path.read_text(encoding="utf-8")
+
+
+def test_rob_wrapper_inactivity_toggles_via_psql(tmp_path: Path):
+    log_path = tmp_path / "psql.log"
+    _write_fake_command(
+        tmp_path,
+        "psql",
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' \"$*\" >> \"$ROB_TEST_LOG\"\n"
+        "if printf '%s\\n' \"$*\" | grep -q \"SELECT COALESCE\"; then printf 'enabled\\nfalse\\n'; else printf 'INSERT 0 1\\n'; fi\n",
+    )
+    symlink_path = tmp_path / "rob"
+    symlink_path.symlink_to(REPO_ROOT / "scripts" / "rob")
+
+    env = os.environ.copy()
+    env["PATH"] = f"{tmp_path}:{env['PATH']}"
+    env["ROB_TEST_LOG"] = str(log_path)
+    env["DATABASE_URL"] = "postgresql://runtime/db"
+
+    on_result = subprocess.run(
+        [str(symlink_path), "inactivity", "on", "--guild-id", "42"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    off_result = subprocess.run(
+        [str(symlink_path), "inactivity", "off", "--guild", "42"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    status_result = subprocess.run(
+        [str(symlink_path), "inactivity", "status", "--guild", "42"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "Enabled: true" in on_result.stdout
+    assert "Enabled: false" in off_result.stdout
+    assert "Inactivity Status" in status_result.stdout
+    assert "inactivity:42:enabled" in log_text
+    assert "jsonb_build_object('value', 'true'::text)" in log_text
+    assert "jsonb_build_object('value', 'false'::text)" in log_text
+    assert "SELECT COALESCE" in log_text
