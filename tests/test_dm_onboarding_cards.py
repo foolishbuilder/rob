@@ -10,7 +10,6 @@ from rob.ui.cards.dm_onboarding import (
     LEADERBOARD_ACCESS_OFF_VALUE,
     LEADERBOARD_ACCESS_ON_VALUE,
     LEADERBOARD_HIDE_VALUE,
-    LEADERBOARD_SHOW_VALUE,
     PreferencesView,
     build_intro_modal,
     identity_confirm_card,
