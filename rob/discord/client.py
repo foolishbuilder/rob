@@ -18,11 +18,13 @@ from rob.database.repositories import (
     SendChangeRequestsRepository,
     SendsRepository,
     SubsRepository,
+    UserDataRepository,
     VibSettingsRepository,
 )
 from rob.database.repositories.domme_onboarding import DommeOnboardingRepository
 from rob.discord.cogs.admin_tools import AdminToolsCog
 from rob.discord.cogs.counting import CountingCog
+from rob.discord.cogs.data_privacy import DataPrivacyCog
 from rob.discord.cogs.dm_onboarding import DMOnboardingCog
 from rob.discord.cogs.leaderboards import LeaderboardsCog
 from rob.discord.cogs.registration import RegistrationCog
@@ -80,6 +82,7 @@ class RobBot(commands.Bot):
         self.counting_repo = CountingRepository(self.database)
         self.send_change_requests_repo = SendChangeRequestsRepository(self.database)
         self.domme_onboarding_repo = DommeOnboardingRepository(self.database)
+        self.user_data_repo = UserDataRepository(self.database)
 
         self.throne_service = ThroneService()
         self.maintenance_service = MaintenanceService(self.bot_settings_repo)
@@ -169,6 +172,7 @@ class RobBot(commands.Bot):
         await self.add_cog(WarnRelayCog(self))
         await self.add_cog(AdminToolsCog(self))
         await self.add_cog(SettingsCog(self))
+        await self.add_cog(DataPrivacyCog(self))
 
         self.tree.interaction_check = self._global_interaction_check
         await self.send_change_request_service.rebind_pending_views()
