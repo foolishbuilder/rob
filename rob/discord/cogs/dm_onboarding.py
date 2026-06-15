@@ -45,14 +45,11 @@ from rob.services.dm_onboarding_service import (
     OnboardingError,
 )
 from rob.ui.cards.dm_onboarding import (
-    ID_MIGRATION_LEADERBOARD,
     ID_MIGRATION_LEADERBOARD_ACCESS,
-    ID_PREFS_LEADERBOARD,
     ID_PREFS_LEADERBOARD_ACCESS,
     IdentityNoButton,
     IdentityYesButton,
     LEADERBOARD_ACCESS_ON_VALUE,
-    LEADERBOARD_SHOW_VALUE,
     MigrationDeferButton,
     MigrationOpenPrefsButton,
     MigrationPromptView,
@@ -198,7 +195,6 @@ class DMOnboardingCog(commands.Cog):
         *,
         user: discord.abc.User,
         guild_id: int,
-        default_leaderboard_visible: bool = True,
     ) -> discord.Message | None:
         """Send the migration prompt DM to an already-registered Dom/me in
         the test guild. Returns the message (or ``None`` on failure)."""
@@ -207,7 +203,6 @@ class DMOnboardingCog(commands.Cog):
             return None
         rendered = migration_prompt_card(
             name=getattr(user, "display_name", None) or user.name,
-            default_leaderboard_visible=default_leaderboard_visible,
             cog=self,
         )
         try:
@@ -616,16 +611,13 @@ class DMOnboardingCog(commands.Cog):
             )
             return
 
-        leaderboard_visible, leaderboard_access = (
-            _read_prefs_from_interaction(interaction)
-        )
+        leaderboard_access = _read_prefs_from_interaction(interaction)
 
         await interaction.response.defer()
         try:
             await service.save_preferences(
                 guild_id=guild_id,
                 discord_user_id=interaction.user.id,
-                leaderboard_visible=leaderboard_visible,
             )
         except OnboardingError as exc:
             log.warning(
@@ -644,10 +636,7 @@ class DMOnboardingCog(commands.Cog):
             enabled=leaderboard_access,
         )
 
-        rendered = success_card(
-            leaderboard_visible=leaderboard_visible,
-            leaderboard_access=leaderboard_access,
-        )
+        rendered = success_card(leaderboard_access=leaderboard_access)
         await self._edit_or_resend(
             interaction=interaction,
             guild_id=guild_id,
@@ -676,15 +665,12 @@ class DMOnboardingCog(commands.Cog):
             )
             return
 
-        leaderboard_visible, leaderboard_access = (
-            _read_prefs_from_interaction(interaction)
-        )
+        leaderboard_access = _read_prefs_from_interaction(interaction)
         await interaction.response.defer()
         try:
             await dommes.set_preferences(
                 guild_id=guild_id,
                 discord_user_id=interaction.user.id,
-                leaderboard_visible=leaderboard_visible,
                 clear_defer=True,
                 confirm=True,
             )
@@ -706,10 +692,7 @@ class DMOnboardingCog(commands.Cog):
             enabled=leaderboard_access,
         )
 
-        rendered = success_card(
-            leaderboard_visible=leaderboard_visible,
-            leaderboard_access=leaderboard_access,
-        )
+        rendered = success_card(leaderboard_access=leaderboard_access)
         try:
             if interaction.message is not None:
                 await interaction.message.edit(**rendered.edit_kwargs())
@@ -942,33 +925,24 @@ def _read_prefs_from_interaction(
 
     Reads from the live :class:`PreferencesView` / :class:`MigrationPromptView`
     if the button belongs to one, falling back to scanning the message's
-    component data for select state. Returns
-    ``(leaderboard_visible, leaderboard_access)``, defaulting to
-    ``(True, False)``.
+    component data for select state. Returns ``leaderboard_access``,
+    defaulting to ``False``.
     """
 
-    leaderboard_visible = True
     leaderboard_access = False
 
     view = getattr(interaction, "view", None)
     if isinstance(view, (PreferencesView, MigrationPromptView)):
-        return (
-            view.chosen_leaderboard_visible,
-            view.chosen_leaderboard_access,
-        )
+        return view.chosen_leaderboard_access
 
     message = getattr(interaction, "message", None)
     if message is None:
-        return leaderboard_visible, leaderboard_access
+        return leaderboard_access
 
     def _match_select(item: Any) -> None:
-        nonlocal leaderboard_visible, leaderboard_access
+        nonlocal leaderboard_access
         custom_id = getattr(item, "custom_id", None)
-        if custom_id in (ID_PREFS_LEADERBOARD, ID_MIGRATION_LEADERBOARD):
-            values = getattr(item, "values", []) or []
-            if values:
-                leaderboard_visible = values[0] == LEADERBOARD_SHOW_VALUE
-        elif custom_id in (
+        if custom_id in (
             ID_PREFS_LEADERBOARD_ACCESS,
             ID_MIGRATION_LEADERBOARD_ACCESS,
         ):
@@ -983,7 +957,7 @@ def _read_prefs_from_interaction(
             # Check one level deeper (current: select inside ActionRow inside container).
             for grandchild in getattr(child, "children", []) or []:
                 _match_select(grandchild)
-    return leaderboard_visible, leaderboard_access
+    return leaderboard_access
 
 
 async def setup(bot: "RobBot") -> None:

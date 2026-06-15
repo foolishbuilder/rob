@@ -20,26 +20,21 @@ class _FakeTree:
         return [SimpleNamespace(name="achievements")]
 
 
-def test_single_guild_sync_clears_stale_guild_commands_before_global_sync():
+def test_sync_pushes_main_and_test_guild_commands_then_global():
+    from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID
+
     tree = _FakeTree()
     fake_bot = SimpleNamespace(tree=tree)
 
-    asyncio.run(RobBot._sync_application_commands(fake_bot, [123456789]))
+    asyncio.run(RobBot._sync_application_commands(fake_bot))
 
-    assert len(tree.clear_calls) == 1
-    assert len(tree.sync_calls) == 2
-    assert tree.sync_calls[0] is tree.clear_calls[0]
-    assert tree.sync_calls[1] is None
-
-
-def test_multi_guild_sync_keeps_global_only():
-    tree = _FakeTree()
-    fake_bot = SimpleNamespace(tree=tree)
-
-    asyncio.run(RobBot._sync_application_commands(fake_bot, [1, 2]))
-
+    # Two guild syncs (main + test) followed by the global sync (guild=None).
+    assert [getattr(guild, "id", None) for guild in tree.sync_calls] == [
+        MAIN_GUILD_ID,
+        TEST_GUILD_ID,
+        None,
+    ]
     assert tree.clear_calls == []
-    assert tree.sync_calls == [None]
 
 
 def _fake_interaction(*, guild_id=123, command_name="leaderboard"):

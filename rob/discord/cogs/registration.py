@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_test_guild
 from rob.discord.permissions import member_has_role
 from rob.ui.cards.errors import error_card, error_permission
 from rob.ui.cards.registration import registration_card, throne_setup_card
@@ -103,7 +103,11 @@ class NotYetButton(discord.ui.Button):
 
 
 class RegistrationCog(commands.Cog):
-    register_group = app_commands.Group(name="register", description="Register as a Dom/me or Sub.")
+    register_group = app_commands.Group(
+        name="register",
+        description="Register as a Dom/me or Sub.",
+        guild_ids=[MAIN_GUILD_ID, TEST_GUILD_ID],
+    )
 
     def __init__(self, bot: RobBot) -> None:
         self.bot = bot

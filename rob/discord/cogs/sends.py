@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from discord import app_commands
 from discord.ext import commands
 
+from rob.config.guilds import MAIN_GUILD_ID
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.registration import registration_card
 from rob.utils.money import dollars_to_cents, format_money_from_cents
@@ -23,6 +24,7 @@ class SendsCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="add", description="Log a manual send for the leaderboard.")
+    @app_commands.guilds(MAIN_GUILD_ID)
     @app_commands.describe(
         amount="Amount sent in USD.",
         method="Where the send happened.",

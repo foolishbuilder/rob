@@ -99,22 +99,12 @@ class LeaderboardService:
         guild_id: int,
         entries: list[LeaderboardEntry],
     ) -> list[LeaderboardEntry]:
-        """For the test guild only, drop entries whose Dom/me opted out of the
-        leaderboard. Outside the test guild this is a no-op."""
+        """Pass-through. The leaderboard-visibility opt-out was removed, so every
+        Dom/me with sends now appears. Kept as a thin hook so callers and any
+        future per-guild filtering stay in one place."""
 
-        if not is_test_guild(guild_id):
-            return entries
-        if self.dommes is None or not entries:
-            return entries
-        registered = await self.dommes.list_for_guild(guild_id)
-        opted_in_user_ids = {
-            int(d.discord_user_id) for d in registered if d.leaderboard_visible
-        }
-        return [
-            entry
-            for entry in entries
-            if entry.user_id is not None and int(entry.user_id) in opted_in_user_ids
-        ]
+        del guild_id
+        return entries
 
     async def refresh_all_guilds(self) -> None:
         for guild_id in await self.guild_settings.list_guild_ids():

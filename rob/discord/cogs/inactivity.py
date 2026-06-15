@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from rob.config.guilds import MAIN_GUILD_ID
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.inactivity import inactivity_empty_list_card, inactivity_list_card, inactivity_test_sent_card
 
@@ -56,6 +57,7 @@ class InactivityCog(commands.Cog):
         return isinstance(user, discord.Member) and user.guild_permissions.manage_guild
 
     @app_commands.command(name="inactivitytest", description="DM inactivity template messages to yourself.")
+    @app_commands.guilds(MAIN_GUILD_ID)
     @app_commands.choices(
         notice_type=[
             app_commands.Choice(name="All notices", value="all"),
@@ -105,6 +107,7 @@ class InactivityCog(commands.Cog):
         )
 
     @app_commands.command(name="inactivelist", description="List inactive members and scheduled removal times.")
+    @app_commands.guilds(MAIN_GUILD_ID)
     async def inactivity_list(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(

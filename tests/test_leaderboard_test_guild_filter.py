@@ -34,17 +34,20 @@ def _make_service(dommes_repo):
     )
 
 
-def test_filter_drops_opted_out_dommes_in_test_guild():
+def test_filter_keeps_all_entries_in_test_guild():
+    # The leaderboard-visibility opt-out was removed; everyone with sends now
+    # appears, even in the test guild.
     dommes = _FakeDommes([
-        SimpleNamespace(guild_id=TEST_GUILD_ID, discord_user_id=1, leaderboard_visible=True),
-        SimpleNamespace(guild_id=TEST_GUILD_ID, discord_user_id=2, leaderboard_visible=False),
+        SimpleNamespace(guild_id=TEST_GUILD_ID, discord_user_id=1),
+        SimpleNamespace(guild_id=TEST_GUILD_ID, discord_user_id=2),
     ])
     service = _make_service(dommes)
     entries = [_entry(1), _entry(2), _entry(3)]
 
     result = asyncio.run(service._filter_entries_for_guild(TEST_GUILD_ID, entries))
 
-    assert [e.user_id for e in result] == [1]
+    assert [e.user_id for e in result] == [1, 2, 3]
+    assert dommes.calls == 0
 
 
 def test_filter_is_noop_outside_test_guild():

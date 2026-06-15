@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from rob.config.guilds import MAIN_GUILD_ID
 from rob.ui.cards.counting import (
     count_blocked_sub_card,
     count_failed_card,
@@ -20,7 +21,9 @@ if TYPE_CHECKING:
 
 
 class CountingCog(commands.Cog):
-    count_group = app_commands.Group(name="count", description="Counting controls.")
+    count_group = app_commands.Group(
+        name="count", description="Counting controls.", guild_ids=[MAIN_GUILD_ID]
+    )
 
     def __init__(self, bot: RobBot) -> None:
         self.bot = bot

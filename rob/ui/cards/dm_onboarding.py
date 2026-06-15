@@ -48,20 +48,16 @@ ID_INTRO_MODAL_FIELD = f"{ONBOARDING_PREFIX}intro:modal:throne_input"
 ID_IDENTITY_YES = f"{ONBOARDING_PREFIX}identity:yes"
 ID_IDENTITY_NO = f"{ONBOARDING_PREFIX}identity:no"
 ID_WEBHOOK_RETRY = f"{ONBOARDING_PREFIX}webhook:retry"
-ID_PREFS_LEADERBOARD = f"{ONBOARDING_PREFIX}prefs:leaderboard"
 ID_PREFS_LEADERBOARD_ACCESS = f"{ONBOARDING_PREFIX}prefs:leaderboard_access"
 ID_PREFS_SAVE = f"{ONBOARDING_PREFIX}prefs:save"
 
 MIGRATION_PREFIX = "rob:dm_migration:"
 ID_MIGRATION_OPEN_PREFS = f"{MIGRATION_PREFIX}open_prefs"
 ID_MIGRATION_DEFER = f"{MIGRATION_PREFIX}defer_7d"
-ID_MIGRATION_LEADERBOARD = f"{MIGRATION_PREFIX}leaderboard"
 ID_MIGRATION_LEADERBOARD_ACCESS = f"{MIGRATION_PREFIX}leaderboard_access"
 ID_MIGRATION_SAVE = f"{MIGRATION_PREFIX}save"
 
 # Preference option values stored on each ``SelectOption``.
-LEADERBOARD_SHOW_VALUE = "leaderboard_show"
-LEADERBOARD_HIDE_VALUE = "leaderboard_hide"
 LEADERBOARD_ACCESS_ON_VALUE = "leaderboard_access_on"
 LEADERBOARD_ACCESS_OFF_VALUE = "leaderboard_access_off"
 
@@ -474,71 +470,43 @@ def webhook_waiting_card(*, cog: Any | None = None) -> RenderedMessage:
 
 
 class PreferencesView(discord.ui.LayoutView):
-    """Leaderboard visibility + access preferences via Components V2.
+    """Leaderboard access preference via Components V2.
 
-    Up to two selects live inside the container with a Save button as the
-    final action row. ``show_domme_controls`` toggles the Dom/me-only "appear
-    on leaderboard" select (turned off for non-Dom/mes using ``/preferences``).
-    ``show_leaderboard_access`` toggles the universal "leaderboard access"
-    select that, on save, has Rob grant/remove the access role (which opens
-    the #leaderboard channel and the /leaderboard command).
-
-    The select objects are always created so the ``chosen_*`` properties stay
-    safe to read; only the requested ones are rendered.
+    Renders the "leaderboard access" select (when ``show_leaderboard_access``
+    is set) plus a Save button. On save the cog grants/removes the access role,
+    which opens the #leaderboard channel and the /leaderboard command.
     """
 
     def __init__(
         self,
         *,
-        default_leaderboard_visible: bool = True,
         default_leaderboard_access: bool = False,
-        leaderboard_custom_id: str = ID_PREFS_LEADERBOARD,
         leaderboard_access_custom_id: str = ID_PREFS_LEADERBOARD_ACCESS,
         save_custom_id: str = ID_PREFS_SAVE,
-        show_domme_controls: bool = True,
         show_leaderboard_access: bool = True,
         intro_lines: tuple[str, ...] = (
-            "## 🎉 Almost there — the hard part’s done!",
-            "Now just tell Rob how you’d like things handled from here.",
+            "## Almost there — the hard part's done!",
+            "Just one choice left.",
         ),
         cog: Any | None = None,
     ) -> None:
         super().__init__(timeout=None)
-        self._default_leaderboard_visible = default_leaderboard_visible
         self._default_leaderboard_access = default_leaderboard_access
 
-        self.leaderboard_select = _AckSelect(
-            custom_id=leaderboard_custom_id,
-            placeholder="📊 Leaderboard visibility",
-            min_values=1,
-            max_values=1,
-            options=[
-                discord.SelectOption(
-                    label="👑 Show me on the leaderboard",
-                    value=LEADERBOARD_SHOW_VALUE,
-                    default=default_leaderboard_visible,
-                ),
-                discord.SelectOption(
-                    label="🙈 Keep me off the leaderboard",
-                    value=LEADERBOARD_HIDE_VALUE,
-                    default=not default_leaderboard_visible,
-                ),
-            ],
-        )
         self.leaderboard_access_select = _AckSelect(
             custom_id=leaderboard_access_custom_id,
-            placeholder="🔑 Leaderboard access",
+            placeholder="Leaderboard access",
             min_values=1,
             max_values=1,
             options=[
                 discord.SelectOption(
-                    label="🔑 Give me leaderboard access",
+                    label="Give me leaderboard access",
                     value=LEADERBOARD_ACCESS_ON_VALUE,
                     description="Unlocks #leaderboard and /leaderboard",
                     default=default_leaderboard_access,
                 ),
                 discord.SelectOption(
-                    label="🚫 No leaderboard access",
+                    label="No leaderboard access",
                     value=LEADERBOARD_ACCESS_OFF_VALUE,
                     description="Keep the leaderboard hidden from me",
                     default=not default_leaderboard_access,
@@ -551,21 +519,11 @@ class PreferencesView(discord.ui.LayoutView):
             container.add_item(discord.ui.TextDisplay(line))
         container.add_item(discord.ui.Separator())
 
-        if show_domme_controls:
-            container.add_item(discord.ui.TextDisplay("### 📊 Leaderboard visibility"))
-            container.add_item(
-                discord.ui.TextDisplay(
-                    "Should your totals appear **on** the leaderboard for others to see?"
-                )
-            )
-            container.add_item(discord.ui.ActionRow(self.leaderboard_select))
-            container.add_item(discord.ui.Separator())
-
         if show_leaderboard_access:
-            container.add_item(discord.ui.TextDisplay("### 🔑 Leaderboard access"))
+            container.add_item(discord.ui.TextDisplay("### Leaderboard access"))
             container.add_item(
                 discord.ui.TextDisplay(
-                    "Want to **see** the leaderboard? Rob will give you the access "
+                    "Want to see the leaderboard? Rob will give you the access "
                     "role so the #leaderboard channel and `/leaderboard` open up."
                 )
             )
@@ -574,7 +532,7 @@ class PreferencesView(discord.ui.LayoutView):
 
         container.add_item(
             discord.ui.TextDisplay(
-                "-# You can change these any time with `/preferences` in the server."
+                "-# You can change this any time with `/preferences` in the server."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -588,13 +546,6 @@ class PreferencesView(discord.ui.LayoutView):
         self.add_item(container)
 
     @property
-    def chosen_leaderboard_visible(self) -> bool:
-        values = self.leaderboard_select.values
-        if not values:
-            return self._default_leaderboard_visible
-        return values[0] == LEADERBOARD_SHOW_VALUE
-
-    @property
     def chosen_leaderboard_access(self) -> bool:
         values = self.leaderboard_access_select.values
         if not values:
@@ -604,16 +555,12 @@ class PreferencesView(discord.ui.LayoutView):
 
 def preferences_card(
     *,
-    default_leaderboard_visible: bool = True,
     default_leaderboard_access: bool = False,
-    show_domme_controls: bool = True,
     show_leaderboard_access: bool = True,
     cog: Any | None = None,
 ) -> RenderedMessage:
     view = PreferencesView(
-        default_leaderboard_visible=default_leaderboard_visible,
         default_leaderboard_access=default_leaderboard_access,
-        show_domme_controls=show_domme_controls,
         show_leaderboard_access=show_leaderboard_access,
         cog=cog,
     )
@@ -629,7 +576,6 @@ class _SuccessLayout(discord.ui.LayoutView):
     def __init__(
         self,
         *,
-        leaderboard_visible: bool,
         leaderboard_access: bool | None = None,
     ) -> None:
         super().__init__(timeout=None)
@@ -637,13 +583,13 @@ class _SuccessLayout(discord.ui.LayoutView):
         container.add_item(discord.ui.TextDisplay(_progress(5)))
         container.add_item(
             discord.ui.TextDisplay(
-                "## 🎉 You’re all set — Rob’s now tracking your Throne sends!"
+                "## You're all set — Rob's now tracking your Throne sends!"
             )
         )
         container.add_item(
             discord.ui.TextDisplay(
-                "I’ll always respect your leaderboard choices, and you can tweak "
-                "them any time with `/preferences` in the server."
+                "You can tweak your preferences any time with `/preferences` "
+                "in the server."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -652,34 +598,23 @@ class _SuccessLayout(discord.ui.LayoutView):
                 "If anything ever looks off, give me a shout with `/report`."
             )
         )
-        lb_line = (
-            "👑 Shown on the leaderboard"
-            if leaderboard_visible
-            else "🙈 Hidden from the leaderboard"
-        )
-        summary = lb_line
         if leaderboard_access is not None:
             access_line = (
-                "🔑 Leaderboard access on"
+                "Leaderboard access on"
                 if leaderboard_access
-                else "🚫 Leaderboard access off"
+                else "Leaderboard access off"
             )
-            summary = f"{summary}  •  {access_line}"
-        container.add_item(discord.ui.Separator())
-        container.add_item(discord.ui.TextDisplay(f"-# {summary}"))
+            container.add_item(discord.ui.Separator())
+            container.add_item(discord.ui.TextDisplay(f"-# {access_line}"))
         self.add_item(container)
 
 
 def success_card(
     *,
-    leaderboard_visible: bool = True,
     leaderboard_access: bool | None = None,
 ) -> RenderedMessage:
     return RenderedMessage(
-        view=_SuccessLayout(
-            leaderboard_visible=leaderboard_visible,
-            leaderboard_access=leaderboard_access,
-        )
+        view=_SuccessLayout(leaderboard_access=leaderboard_access)
     )
 
 
@@ -697,69 +632,38 @@ class MigrationPromptView(discord.ui.LayoutView):
         self,
         *,
         name: str | None = None,
-        default_leaderboard_visible: bool = True,
         default_leaderboard_access: bool = False,
         cog: Any | None = None,
     ) -> None:
         super().__init__(timeout=None)
         display = (name or "there").strip() or "there"
-        self._default_leaderboard_visible = default_leaderboard_visible
         self._default_leaderboard_access = default_leaderboard_access
 
         container = discord.ui.Container(accent_color=COLOR_INFO)
-        container.add_item(discord.ui.TextDisplay(f"## 👋 Hey {display}, Rob here!"))
+        container.add_item(discord.ui.TextDisplay(f"## Hey {display}, Rob here!"))
         container.add_item(
             discord.ui.TextDisplay(
-                "As announced by Pat earlier this week, I’ll be updating your "
-                "Rob preferences for sends made to you through automatic tracking."
-            )
-        )
-        container.add_item(discord.ui.Separator())
-        container.add_item(
-            discord.ui.TextDisplay(
-                "You can choose whether you appear on the leaderboard or keep "
-                "things private, and whether you want leaderboard access."
+                "As announced by Pat earlier this week, I'm updating your Rob "
+                "preferences for sends tracked automatically."
             )
         )
         container.add_item(discord.ui.Separator())
 
-        container.add_item(discord.ui.TextDisplay("### 📊 Leaderboard visibility"))
-        self.leaderboard_select = _AckSelect(
-            custom_id=ID_MIGRATION_LEADERBOARD,
-            placeholder="📊 Leaderboard visibility",
-            min_values=1,
-            max_values=1,
-            options=[
-                discord.SelectOption(
-                    label="👑 Show me on the leaderboard",
-                    value=LEADERBOARD_SHOW_VALUE,
-                    default=default_leaderboard_visible,
-                ),
-                discord.SelectOption(
-                    label="🔒 Keep me off the leaderboard",
-                    value=LEADERBOARD_HIDE_VALUE,
-                    default=not default_leaderboard_visible,
-                ),
-            ],
-        )
-        container.add_item(discord.ui.ActionRow(self.leaderboard_select))
-        container.add_item(discord.ui.Separator())
-
-        container.add_item(discord.ui.TextDisplay("### 🔑 Leaderboard access"))
+        container.add_item(discord.ui.TextDisplay("### Leaderboard access"))
         self.leaderboard_access_select = _AckSelect(
             custom_id=ID_MIGRATION_LEADERBOARD_ACCESS,
-            placeholder="🔑 Leaderboard access",
+            placeholder="Leaderboard access",
             min_values=1,
             max_values=1,
             options=[
                 discord.SelectOption(
-                    label="🔑 Give me leaderboard access",
+                    label="Give me leaderboard access",
                     value=LEADERBOARD_ACCESS_ON_VALUE,
                     description="Unlocks #leaderboard and /leaderboard",
                     default=default_leaderboard_access,
                 ),
                 discord.SelectOption(
-                    label="🚫 No leaderboard access",
+                    label="No leaderboard access",
                     value=LEADERBOARD_ACCESS_OFF_VALUE,
                     description="Keep the leaderboard hidden from me",
                     default=not default_leaderboard_access,
@@ -770,8 +674,7 @@ class MigrationPromptView(discord.ui.LayoutView):
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
-                "-# Please note you can defer for 7 days and we’ll revisit "
-                "these settings then."
+                "-# You can defer for 7 days and we'll revisit this then."
             )
         )
         container.add_item(discord.ui.Separator())
@@ -792,13 +695,6 @@ class MigrationPromptView(discord.ui.LayoutView):
         # attribute here for back-compat.
 
     @property
-    def chosen_leaderboard_visible(self) -> bool:
-        values = self.leaderboard_select.values
-        if not values:
-            return self._default_leaderboard_visible
-        return values[0] == LEADERBOARD_SHOW_VALUE
-
-    @property
     def chosen_leaderboard_access(self) -> bool:
         values = self.leaderboard_access_select.values
         if not values:
@@ -809,13 +705,11 @@ class MigrationPromptView(discord.ui.LayoutView):
 def migration_prompt_card(
     *,
     name: str | None = None,
-    default_leaderboard_visible: bool = True,
     default_leaderboard_access: bool = False,
     cog: Any | None = None,
 ) -> RenderedMessage:
     view = MigrationPromptView(
         name=name,
-        default_leaderboard_visible=default_leaderboard_visible,
         default_leaderboard_access=default_leaderboard_access,
         cog=cog,
     )

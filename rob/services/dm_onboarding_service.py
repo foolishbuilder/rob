@@ -177,7 +177,6 @@ class DMOnboardingService:
         *,
         guild_id: int,
         discord_user_id: int,
-        leaderboard_visible: bool,
     ) -> None:
         if not self.is_enabled_for(guild_id):
             raise OnboardingError("DM onboarding is only available in the test guild.")
@@ -187,7 +186,6 @@ class DMOnboardingService:
         await self.dommes.set_preferences(
             guild_id=guild_id,
             discord_user_id=discord_user_id,
-            leaderboard_visible=leaderboard_visible,
             confirm=True,
         )
         await self.onboarding.complete(
