@@ -53,10 +53,8 @@ class Domme:
     registered_at: datetime
     created_at: datetime
     updated_at: datetime
-    # DM notification / leaderboard preferences (test-guild only behavior).
-    send_notifications_enabled: bool = True
+    # Leaderboard + preference state (test-guild only behavior).
     leaderboard_visible: bool = True
-    notifications_snoozed_until: datetime | None = None
     preferences_deferred_until: datetime | None = None
     preferences_confirmed_at: datetime | None = None
 
