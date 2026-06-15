@@ -64,6 +64,7 @@ def test_setup_step_2_contains_almighty_link():
 
 
 def test_send_card_renders_thumbnail_image_and_currency_name():
+    # The test guild renders the same send card as the main server.
     msg = send_card(
         send=_send(
             "marie_123",
@@ -73,40 +74,33 @@ def test_send_card_renders_thumbnail_image_and_currency_name():
         ),
         domme_label="@Domme",
         sub_display="Throne's Test User",
-        throne_url="https://throne.com/missadore",
     )
     container = msg.view.children[0]
     section = container.children[2]
     all_text = "\n".join(
         str(getattr(child, "content", ""))
-        for child in [container.children[0], section.children[0], container.children[6]]
+        for child in [container.children[0], section.children[0]]
     )
 
     assert [type(child).__name__ for child in container.children] == [
         "TextDisplay",
         "Separator",
         "Section",
-        "Separator",
-        "ActionRow",
-        "Separator",
-        "TextDisplay",
     ]
     assert type(section.accessory).__name__ == "Thumbnail"
-    assert "New Send Alert!" in all_text
-    assert "@Domme just received **Flowers** via Throne!" in all_text
-    assert "Throne's Test User" not in all_text
+    assert "New Send to @Domme" in all_text
+    assert "**Sub:** Throne's Test User" in all_text
     assert "**Amount:** $10.99" in all_text
-    assert "Random Fact:" in all_text
+    assert "**Item:** Flowers" in all_text
+    assert "New Send Alert!" not in all_text
+    assert "Random Fact:" not in all_text
     assert "Rob Send ID" not in all_text
-    assert "rank after this send" not in all_text
     assert "<t:" not in all_text
     assert msg.view.children[0].accent_color == COLOR_SEND
     payload = msg.view.to_components()
     assert payload[0]["components"][2]["type"] == 9
     assert payload[0]["components"][2]["accessory"]["type"] == 11
     assert payload[0]["components"][2]["accessory"]["media"]["url"] == "https://example.com/item.png"
-    assert payload[0]["components"][4]["components"][0]["label"] == "Flowers on Throne!"
-    assert payload[0]["components"][4]["components"][0]["url"] == "https://throne.com/missadore"
 
 
 def test_send_card_without_image_uses_text_display_and_no_footer():
@@ -217,7 +211,7 @@ def test_send_card_shows_real_usd_conversion_with_original_currency_metadata():
     assert "$11.98 (converted from EUR 10.99 (Euro))" in contents
 
 
-def test_send_card_identifies_registered_sub_in_throne_alert():
+def test_send_card_shows_registered_sub_mention_for_throne_send():
     now = datetime.now(timezone.utc)
     send = SendRecord(
         4,
@@ -253,7 +247,8 @@ def test_send_card_identifies_registered_sub_in_throne_alert():
         sub_display="<@42>",
     )
     contents = "\n".join(str(getattr(ch, "content", "")) for ch in msg.view.children[0].children)
-    assert "@Domme just received **Flowers** from <@42> via Throne!" in contents
+    assert "**Sub:** <@42>" in contents
+    assert "**Item:** Flowers" in contents
 
 
 def test_send_request_send_card_shows_sub_mention_when_sub_user_is_known():

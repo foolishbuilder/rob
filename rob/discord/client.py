@@ -17,7 +17,6 @@ from rob.database.repositories import (
     SendChangeRequestsRepository,
     SendsRepository,
     SubsRepository,
-    TermsRepository,
     VibSettingsRepository,
 )
 from rob.database.repositories.domme_onboarding import DommeOnboardingRepository
@@ -31,7 +30,6 @@ from rob.discord.cogs.registration import RegistrationCog
 from rob.discord.cogs.reports import ReportsCog
 from rob.discord.cogs.sends import SendsCog
 from rob.discord.cogs.settings import SettingsCog
-from rob.discord.cogs.terms import TermsCog
 from rob.discord.cogs.warn_relay import WarnRelayCog
 from rob.services.counting_service import CountingService
 from rob.services.bot_ops_server import BotOpsServer
@@ -44,7 +42,6 @@ from rob.services.send_change_request_service import SendChangeRequestService
 from rob.services.send_queue_service import SendQueueService
 from rob.services.send_service import SendService
 from rob.services.throne_service import ThroneService
-from rob.services.terms_service import TermsService
 from rob.ui.cards.maintenance import rob_offline_embed
 
 log = logging.getLogger(__name__)
@@ -85,7 +82,6 @@ class RobBot(commands.Bot):
         self.counting_repo = CountingRepository(self.database)
         self.send_change_requests_repo = SendChangeRequestsRepository(self.database)
         self.domme_onboarding_repo = DommeOnboardingRepository(self.database)
-        self.terms_repo = TermsRepository(self.database)
 
         self.throne_service = ThroneService()
         self.maintenance_service = MaintenanceService(self.bot_settings_repo)
@@ -136,13 +132,6 @@ class RobBot(commands.Bot):
             throne=self.throne_service,
             registration=self.registration_service,
         )
-        self.terms_service = TermsService(
-            terms=self.terms_repo,
-            terms_version=self.settings.rob_terms_version,
-            terms_url=self.settings.rob_terms_url,
-            privacy_url=self.settings.rob_privacy_url,
-            owner_user_id=self.settings.rob_terms_owner_user_id,
-        )
         self.send_service = SendService(
             sends=self.sends_repo,
             subs=self.subs_repo,
@@ -186,7 +175,6 @@ class RobBot(commands.Bot):
 
         await self.add_cog(RegistrationCog(self))
         await self.add_cog(DMOnboardingCog(self))
-        await self.add_cog(TermsCog(self))
         await self.add_cog(SendsCog(self))
         await self.add_cog(LeaderboardsCog(self))
         await self.add_cog(ActivityTrackerCog(self))
@@ -203,9 +191,6 @@ class RobBot(commands.Bot):
         dm_onboarding_cog = self.get_cog("DMOnboardingCog")
         if dm_onboarding_cog is not None:
             dm_onboarding_cog.register_persistent_views()
-        terms_cog = self.get_cog("TermsCog")
-        if terms_cog is not None:
-            terms_cog.register_persistent_views()
 
         guild_ids = await self.vib_settings_repo.list_guild_ids()
         await self._sync_application_commands(guild_ids)
@@ -238,17 +223,7 @@ class RobBot(commands.Bot):
                 )
                 return False
 
-        terms_cog = self.get_cog("TermsCog")
-        if terms_cog is None:
-            return True
-
-        if interaction.guild is None:
-            return True
-
-        if terms_cog.is_terms_interaction(interaction):
-            return True
-
-        return await terms_cog.ensure_terms_acceptance(interaction)
+        return True
 
     async def _global_blacklist_interaction_check(
         self,
