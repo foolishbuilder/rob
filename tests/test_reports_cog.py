@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import discord
 
+from rob.config.guilds import OWNER_USER_ID
 from rob.discord.cogs.reports import ReportsCog
 
 
@@ -39,12 +40,18 @@ class _FakeBot:
     def __init__(self):
         self.guild_settings_repo = SimpleNamespace(get=self._get_settings)
         self.destination = _FakeDestination()
+        self.requested_user_ids: list[int] = []
 
     async def _get_settings(self, _guild_id: int):
         return SimpleNamespace(report_channel_id=123)
 
-    async def application_info(self):
-        return SimpleNamespace(owner=self.destination)
+    def get_user(self, user_id: int):
+        self.requested_user_ids.append(user_id)
+        return self.destination
+
+    async def fetch_user(self, user_id: int):
+        self.requested_user_ids.append(user_id)
+        return self.destination
 
 
 def test_report_command_opens_modal():
@@ -107,9 +114,9 @@ def test_report_posts_to_configured_destination_and_confirms_user():
     assert interaction.response.messages[0]["ephemeral"] is True
 
 
-def test_report_destination_is_always_the_bot_owner():
-    # Reports must reach only the bot owner (DM), never a server report channel,
-    # even when a guild has report_channel_id configured.
+def test_report_destination_is_the_configured_operator():
+    # Reports must be DM'd to the configured operator user id, never a server
+    # report channel or the Discord application owner.
     bot = _FakeBot()
     cog = ReportsCog(bot)
     interaction = _FakeInteraction()
@@ -117,6 +124,7 @@ def test_report_destination_is_always_the_bot_owner():
     destination = asyncio.run(cog._resolve_destination(interaction))
 
     assert destination is bot.destination
+    assert bot.requested_user_ids == [OWNER_USER_ID]
 
 
 def test_report_modal_upload_is_forwarded_when_present():
