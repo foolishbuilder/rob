@@ -65,6 +65,7 @@ class ReportsCog(commands.Cog):
         self.bot = bot
 
     @discord.app_commands.command(name="report", description="Report an issue with Rob.")
+    @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def report(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(_ReportModal(cog=self))
 

@@ -6,6 +6,7 @@ import os
 import discord
 from discord.ext import commands
 
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID
 from rob.config.settings import BotSettings
 from rob.database.connection import Database
 from rob.database.repositories import (
@@ -192,8 +193,7 @@ class RobBot(commands.Bot):
         if dm_onboarding_cog is not None:
             dm_onboarding_cog.register_persistent_views()
 
-        guild_ids = await self.vib_settings_repo.list_guild_ids()
-        await self._sync_application_commands(guild_ids)
+        await self._sync_application_commands()
 
         await self.counting_service.start()
         await self.send_queue_service.start()
@@ -231,15 +231,14 @@ class RobBot(commands.Bot):
     ) -> bool:
         return await self._global_interaction_check(interaction)
 
-    async def _sync_application_commands(self, guild_ids: list[int]) -> None:
-        if len(guild_ids) == 1:
-            guild = discord.Object(id=guild_ids[0])
-            self.tree.clear_commands(guild=guild)
-            cleared = await self.tree.sync(guild=guild)
-            log.info(
-                "Cleared %s stale guild command(s) before syncing global commands.",
-                len(cleared),
-            )
+    async def _sync_application_commands(self) -> None:
+        """Push guild-scoped commands to the main + test guilds and the
+        remaining (DM-capable) commands globally."""
+
+        for guild_id in (MAIN_GUILD_ID, TEST_GUILD_ID):
+            guild = discord.Object(id=guild_id)
+            synced_guild = await self.tree.sync(guild=guild)
+            log.info("Synced %s command(s) to guild %s.", len(synced_guild), guild_id)
 
         synced = await self.tree.sync()
         log.info("Synced %s global command(s).", len(synced))

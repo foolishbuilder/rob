@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_test_guild
 from rob.discord.permissions import is_staff_member
 from rob.ui.cards.errors import error_card, error_permission
 from rob.ui.cards.stats import (
@@ -25,6 +25,7 @@ class LeaderboardsCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="leaderboard", description="Show send stats for yourself or another member.")
+    @app_commands.guilds(MAIN_GUILD_ID, TEST_GUILD_ID)
     @app_commands.describe(user="Optional member to view instead of yourself.")
     async def leaderboard(
         self,

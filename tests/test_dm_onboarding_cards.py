@@ -9,8 +9,6 @@ from rob.ui.cards.dm_onboarding import (
     ID_PREFS_LEADERBOARD_ACCESS,
     LEADERBOARD_ACCESS_OFF_VALUE,
     LEADERBOARD_ACCESS_ON_VALUE,
-    LEADERBOARD_HIDE_VALUE,
-    LEADERBOARD_SHOW_VALUE,
     PreferencesView,
     build_intro_modal,
     identity_confirm_card,
@@ -74,26 +72,14 @@ def test_webhook_waiting_card_renders():
 
 
 def test_preferences_view_defaults_and_save_button():
-    view = PreferencesView(default_leaderboard_visible=False)
-    # Defaults are reflected in select options.
-    lb_defaults = [o for o in view.leaderboard_select.options if o.default]
-    assert lb_defaults and lb_defaults[0].value == LEADERBOARD_HIDE_VALUE
+    view = PreferencesView(default_leaderboard_access=True)
+    # The chosen default is reflected in the access select options.
+    access_defaults = [o for o in view.leaderboard_access_select.options if o.default]
+    assert access_defaults and access_defaults[0].value == LEADERBOARD_ACCESS_ON_VALUE
 
     # Save button is exposed via attribute and present in the view tree.
     assert view.save_button.custom_id == "rob:dm_onboarding:prefs:save"
     assert _has_button_with_id(view, "rob:dm_onboarding:prefs:save")
-
-
-def test_preferences_view_chosen_values_default_to_true():
-    view = PreferencesView()
-    # No values set yet, properties fall back to True.
-    assert view.chosen_leaderboard_visible is True
-
-
-def test_preferences_view_chosen_values_reflect_selection():
-    view = PreferencesView()
-    view.leaderboard_select._values = [LEADERBOARD_SHOW_VALUE]  # type: ignore[attr-defined]
-    assert view.chosen_leaderboard_visible is True
 
 
 def test_preferences_card_returns_view():
@@ -118,32 +104,30 @@ def test_preferences_view_chosen_access_defaults_false_and_reflects_selection():
     assert view.chosen_leaderboard_access is False
 
 
-def test_preferences_view_access_only_hides_domme_controls():
-    # /preferences for a non-Dom/me: only the access select is rendered.
-    view = PreferencesView(show_domme_controls=False, show_leaderboard_access=True)
+def test_preferences_view_renders_only_the_access_select():
+    # Leaderboard access is the only control on the card now.
+    view = PreferencesView(show_leaderboard_access=True)
     rendered_select_ids = {
         item.custom_id
         for item in view.walk_children()
         if isinstance(item, discord.ui.Select)
     }
-    assert ID_PREFS_LEADERBOARD_ACCESS in rendered_select_ids
-    assert "rob:dm_onboarding:prefs:notifications" not in rendered_select_ids
-    assert "rob:dm_onboarding:prefs:leaderboard" not in rendered_select_ids
+    assert rendered_select_ids == {ID_PREFS_LEADERBOARD_ACCESS}
     # Save button is still present.
     assert _has_button_with_id(view, "rob:dm_onboarding:prefs:save")
 
 
 def test_success_card_messages_reflect_choices():
-    rendered_on = success_card(leaderboard_visible=True)
-    rendered_off = success_card(leaderboard_visible=False)
+    rendered_on = success_card(leaderboard_access=True)
+    rendered_off = success_card(leaderboard_access=False)
     on_text = " ".join(
         i.content for i in rendered_on.view.walk_children() if isinstance(i, discord.ui.TextDisplay)
     )
     off_text = " ".join(
         i.content for i in rendered_off.view.walk_children() if isinstance(i, discord.ui.TextDisplay)
     )
-    assert "Shown on the leaderboard" in on_text
-    assert "Hidden from the leaderboard" in off_text
+    assert "Leaderboard access on" in on_text
+    assert "Leaderboard access off" in off_text
 
 
 def test_migration_card_has_save_and_defer_buttons_inside_container():
@@ -318,5 +302,5 @@ def test_preferences_view_selects_ack_interactions():
     # Discord doesn't show "This interaction failed" mid-preference-selection.
     view = preferences_card().view
     interaction = _fake_interaction()
-    asyncio.run(view.leaderboard_select.callback(interaction))
+    asyncio.run(view.leaderboard_access_select.callback(interaction))
     interaction.response.defer.assert_awaited_once()

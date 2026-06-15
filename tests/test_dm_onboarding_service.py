@@ -194,7 +194,6 @@ def test_save_preferences_persists_and_completes():
         service.save_preferences(
             guild_id=TEST_GUILD_ID,
             discord_user_id=42,
-            leaderboard_visible=False,
         )
     )
 
@@ -202,7 +201,6 @@ def test_save_preferences_persists_and_completes():
         {
             "guild_id": TEST_GUILD_ID,
             "discord_user_id": 42,
-            "leaderboard_visible": False,
             "confirm": True,
         }
     ]
@@ -219,7 +217,6 @@ def test_save_preferences_requires_registered_domme():
             service.save_preferences(
                 guild_id=TEST_GUILD_ID,
                 discord_user_id=42,
-                leaderboard_visible=True,
             )
         )
 
