@@ -53,55 +53,44 @@ def _fake_interaction(*, guild_id=123, command_name="leaderboard"):
     )
 
 
-def test_global_interaction_check_allows_terms_reset_without_gate():
-    terms_cog = SimpleNamespace(
-        is_terms_interaction=lambda interaction: interaction.command.qualified_name == "termsreset",
-        ensure_terms_acceptance=AsyncMock(return_value=False),
-    )
+def test_global_interaction_check_allows_normal_interaction():
     fake_bot = SimpleNamespace(
         blacklist_repo=SimpleNamespace(contains=AsyncMock(return_value=False)),
         maintenance_service=SimpleNamespace(is_rob_offline_for_guild=AsyncMock(return_value=False)),
-        get_cog=lambda name: terms_cog if name == "TermsCog" else None,
     )
-    interaction = _fake_interaction(command_name="termsreset")
+    interaction = _fake_interaction(command_name="leaderboard")
 
     allowed = asyncio.run(RobBot._global_interaction_check(fake_bot, interaction))
 
     assert allowed is True
-    terms_cog.ensure_terms_acceptance.assert_not_awaited()
+    interaction.response.send_message.assert_not_awaited()
 
 
-def test_global_interaction_check_delegates_non_terms_test_guild_commands():
-    terms_cog = SimpleNamespace(
-        is_terms_interaction=lambda _interaction: False,
-        ensure_terms_acceptance=AsyncMock(return_value=False),
-    )
+def test_global_interaction_check_blocks_blacklisted_user():
     fake_bot = SimpleNamespace(
-        blacklist_repo=SimpleNamespace(contains=AsyncMock(return_value=False)),
+        blacklist_repo=SimpleNamespace(contains=AsyncMock(return_value=True)),
         maintenance_service=SimpleNamespace(is_rob_offline_for_guild=AsyncMock(return_value=False)),
-        get_cog=lambda name: terms_cog if name == "TermsCog" else None,
     )
     interaction = _fake_interaction(command_name="leaderboard")
 
     allowed = asyncio.run(RobBot._global_interaction_check(fake_bot, interaction))
 
     assert allowed is False
-    terms_cog.ensure_terms_acceptance.assert_awaited_once_with(interaction)
+    interaction.response.send_message.assert_awaited_once()
 
 
-def test_global_interaction_check_ignores_dm_terms_gate():
-    terms_cog = SimpleNamespace(
-        is_terms_interaction=lambda _interaction: False,
-        ensure_terms_acceptance=AsyncMock(return_value=False),
-    )
+def test_global_interaction_check_blocks_commands_while_rob_offline_except_add():
     fake_bot = SimpleNamespace(
         blacklist_repo=SimpleNamespace(contains=AsyncMock(return_value=False)),
-        maintenance_service=SimpleNamespace(is_rob_offline_for_guild=AsyncMock(return_value=False)),
-        get_cog=lambda name: terms_cog if name == "TermsCog" else None,
+        maintenance_service=SimpleNamespace(is_rob_offline_for_guild=AsyncMock(return_value=True)),
     )
-    interaction = _fake_interaction(guild_id=None, command_name="leaderboard")
 
-    allowed = asyncio.run(RobBot._global_interaction_check(fake_bot, interaction))
+    blocked = asyncio.run(
+        RobBot._global_interaction_check(fake_bot, _fake_interaction(command_name="leaderboard"))
+    )
+    assert blocked is False
 
+    allowed = asyncio.run(
+        RobBot._global_interaction_check(fake_bot, _fake_interaction(command_name="add"))
+    )
     assert allowed is True
-    terms_cog.ensure_terms_acceptance.assert_not_awaited()

@@ -16,7 +16,6 @@ REQUIRED_BUILD_VERSIONS = [
     "006_send_change_requests",
     "007_send_update_requests",
     "008_dm_preferences",
-    "009_terms_acceptance",
     "010_leaderboard_access_role",
 ]
 
@@ -39,7 +38,6 @@ def _write_required_build_scripts(tmp_path, *, include_grants_template: bool = F
         "006_send_change_requests.sql",
         "007_send_update_requests.sql",
         "008_dm_preferences.sql",
-        "009_terms_acceptance.sql",
         "010_leaderboard_access_role.sql",
     ):
         (tmp_path / name).write_text("SELECT 1;\n", encoding="utf-8")

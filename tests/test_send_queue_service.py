@@ -6,15 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
+from rob.config.guilds import TEST_GUILD_ID
 from rob.database.repositories.models import SendRecord
 from rob.services.send_queue_service import SendQueueService
 
 
-def _send() -> SendRecord:
+def _send(guild_id: int = 1) -> SendRecord:
     now = datetime.now(timezone.utc)
     return SendRecord(
         1,
-        1,
+        guild_id,
         None,
         10,
         None,
@@ -449,3 +450,28 @@ def test_send_queue_processes_notified_send_by_id(monkeypatch: pytest.MonkeyPatc
     assert sends.mark_posted_calls == [1]
     assert leaderboard.refresh_calls == [1]
     assert counting.send_ids == [1]
+
+
+def test_test_guild_send_posts_to_channel_like_main(monkeypatch: pytest.MonkeyPatch):
+    # The test guild uses the same public send-tracking channel + new-leader
+    # alert path as the main server; there is no DM-only routing.
+    monkeypatch.setattr("rob.services.send_queue_service.discord.TextChannel", _FakeChannel)
+    sends = _FakeSends()
+    sends.pending = [_send(guild_id=TEST_GUILD_ID)]
+    leaderboard = _FakeLeaderboard()
+    counting = _FakeCounting()
+    service = SendQueueService(
+        bot=_FakeBot(),
+        sends=sends,
+        guild_settings=_FakeSettingsRepo(),
+        maintenance=_FakeMaintenance(),
+        leaderboard_service=leaderboard,
+        counting_service=counting,
+    )
+
+    asyncio.run(service.process_cycle())
+
+    assert sends.mark_posted_calls == [1]
+    assert leaderboard.refresh_calls == [TEST_GUILD_ID]
+    assert leaderboard.alert_calls == 1
+    assert service.bot.guild.channel.sent
