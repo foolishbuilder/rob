@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
 
+from rob.config.guilds import OWNER_USER_ID
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.report import report_staff_card, report_submitted_card
 
@@ -73,13 +74,16 @@ class ReportsCog(commands.Cog):
         self,
         interaction: discord.Interaction,
     ) -> discord.abc.Messageable | None:
-        # Reports always go straight to the bot owner via DM — never to a server
-        # channel — so they stay private to the person running Rob.
+        # Reports are DM'd to the bot operator (OWNER_USER_ID) — never to a
+        # server channel, and never to the Discord application owner (which can
+        # be a team account or one with DMs closed, causing a 403).
+        user = self.bot.get_user(OWNER_USER_ID)
+        if user is not None:
+            return user
         try:
-            app_info = await self.bot.application_info()
+            return await self.bot.fetch_user(OWNER_USER_ID)
         except discord.HTTPException:
             return None
-        return app_info.owner
 
     async def _materialize_attachment(
         self,
