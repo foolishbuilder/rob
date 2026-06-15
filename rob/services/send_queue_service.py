@@ -336,7 +336,6 @@ class SendQueueService:
             await self.sends.mark_failed(send.id, error="Configured send tracking channel is not a text channel.")
             return False
 
-        previous_leader = await self.leaderboard_service.get_current_leader(send.guild_id)
         try:
             throne_url = await self._resolve_throne_url(send)
             msg = send_card(
@@ -355,15 +354,4 @@ class SendQueueService:
 
         await self.sends.mark_posted(send.id, message_id=message.id)
         log.info("Marked send posted id=%s message_id=%s", send.id, message.id)
-        try:
-            await self.leaderboard_service.maybe_post_leader_alert(
-                send.guild_id,
-                previous_leader_user_id=previous_leader.user_id if previous_leader is not None else None,
-            )
-        except Exception:
-            log.exception(
-                "Leader alert failed for send_id=%s guild_id=%s after successful send post.",
-                send.id,
-                send.guild_id,
-            )
         return True

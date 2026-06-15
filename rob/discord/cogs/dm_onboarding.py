@@ -601,7 +601,9 @@ class DMOnboardingCog(commands.Cog):
             rendered=rendered,
         )
 
-    async def handle_save_preferences(self, interaction: discord.Interaction) -> None:
+    async def handle_save_preferences(
+        self, interaction: discord.Interaction, view: Any = None
+    ) -> None:
         log.info("handle_save_preferences user_id=%s", interaction.user.id)
         guild_id = await self._resolve_guild_id_for_user(interaction.user.id)
         service = self.service
@@ -611,7 +613,7 @@ class DMOnboardingCog(commands.Cog):
             )
             return
 
-        leaderboard_access = _read_prefs_from_interaction(interaction)
+        leaderboard_access = _read_prefs_from_interaction(interaction, view=view)
 
         await interaction.response.defer()
         try:
@@ -645,7 +647,9 @@ class DMOnboardingCog(commands.Cog):
 
     # -- migration handlers ------------------------------------------------
 
-    async def handle_migration_save(self, interaction: discord.Interaction) -> None:
+    async def handle_migration_save(
+        self, interaction: discord.Interaction, view: Any = None
+    ) -> None:
         log.info("handle_migration_save user_id=%s", interaction.user.id)
         guild_id = await self._resolve_guild_id_for_user(interaction.user.id)
         if guild_id is None:
@@ -665,7 +669,7 @@ class DMOnboardingCog(commands.Cog):
             )
             return
 
-        leaderboard_access = _read_prefs_from_interaction(interaction)
+        leaderboard_access = _read_prefs_from_interaction(interaction, view=view)
         await interaction.response.defer()
         try:
             await dommes.set_preferences(
@@ -920,18 +924,22 @@ class DMOnboardingCog(commands.Cog):
 
 def _read_prefs_from_interaction(
     interaction: discord.Interaction,
-) -> tuple[bool, bool]:
-    """Pull current preference selections off the interaction.
+    view: Any = None,
+) -> bool:
+    """Pull the current leaderboard-access selection off the interaction.
 
-    Reads from the live :class:`PreferencesView` / :class:`MigrationPromptView`
-    if the button belongs to one, falling back to scanning the message's
-    component data for select state. Returns ``leaderboard_access``,
-    defaulting to ``False``.
+    Prefers the live :class:`PreferencesView` / :class:`MigrationPromptView`
+    handed over by the Save button — the message components only ever carry the
+    original ``default`` flags, never the user's live selection, so reading them
+    would always report the default ("access off"). Falls back to the
+    interaction's own view and finally to scanning the message components.
+    Returns ``leaderboard_access``, defaulting to ``False``.
     """
 
     leaderboard_access = False
 
-    view = getattr(interaction, "view", None)
+    if view is None:
+        view = getattr(interaction, "view", None)
     if isinstance(view, (PreferencesView, MigrationPromptView)):
         return view.chosen_leaderboard_access
 

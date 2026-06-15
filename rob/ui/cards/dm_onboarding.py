@@ -131,6 +131,9 @@ class _BoundButton(discord.ui.Button):
     """
 
     _HANDLER_NAME: str = ""
+    # When True the bound view is passed to the cog handler as ``view=`` so it
+    # can read live select state (the message components only carry defaults).
+    _PASS_VIEW: bool = False
 
     def __init__(
         self,
@@ -164,7 +167,10 @@ class _BoundButton(discord.ui.Button):
             getattr(interaction, "channel_id", None),
             getattr(interaction, "guild_id", None),
         )
-        await handler(interaction)
+        if self._PASS_VIEW:
+            await handler(interaction, view=self.view)
+        else:
+            await handler(interaction)
 
 
 class OpenModalButton(_BoundButton):
@@ -217,6 +223,7 @@ class WebhookRetryButton(_BoundButton):
 
 class SavePrefsButton(_BoundButton):
     _HANDLER_NAME = "handle_save_preferences"
+    _PASS_VIEW = True
 
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
@@ -229,6 +236,7 @@ class SavePrefsButton(_BoundButton):
 
 class MigrationSaveButton(_BoundButton):
     _HANDLER_NAME = "handle_migration_save"
+    _PASS_VIEW = True
 
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(

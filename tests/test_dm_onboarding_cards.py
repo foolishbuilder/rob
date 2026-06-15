@@ -285,7 +285,13 @@ def test_button_callback_routes_to_cog(button_cls, handler_name):
     btn = button_cls(cog)
     interaction = _fake_interaction()
     asyncio.run(btn.callback(interaction))
-    getattr(cog, handler_name).assert_awaited_once_with(interaction)
+    handler = getattr(cog, handler_name)
+    if getattr(btn, "_PASS_VIEW", False):
+        # Save buttons hand the live view to the cog so it can read the
+        # user's current selection (the message components only carry defaults).
+        handler.assert_awaited_once_with(interaction, view=btn.view)
+    else:
+        handler.assert_awaited_once_with(interaction)
 
 
 def test_button_callback_without_cog_responds_gracefully():

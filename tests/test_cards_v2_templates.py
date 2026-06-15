@@ -11,12 +11,11 @@ from rob.database.repositories.models import (
 )
 from rob.services.leaderboard_status import LeaderboardStatus
 from rob.services.send_display import build_sub_display
-from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 from rob.ui.cards.send_change_requests import send_change_request_card
 from rob.ui.cards.send import send_card
 from rob.ui.copy import throne_setup_steps
-from rob.ui.theme import COLOR_LEADER_ALERT, COLOR_SEND
+from rob.ui.theme import COLOR_SEND
 
 
 def _send(
@@ -433,18 +432,3 @@ def test_leaderboard_empty_state_uses_same_separator_structure():
         "TextDisplay",
     ]
     assert "No sends have made it onto the board yet." in children[4].content
-
-
-def test_leader_alert_card_shape_and_color():
-    msg = leader_alert_card("<@123>")
-    children = msg.view.children[0].children
-    all_text = "\n".join(str(getattr(ch, "content", "")) for ch in children)
-    assert [type(child).__name__ for child in children] == [
-        "TextDisplay",
-        "Separator",
-        "TextDisplay",
-        "Separator",
-        "TextDisplay",
-    ]
-    assert "👑 NEW LEADER ALERT!" in all_text
-    assert msg.view.children[0].accent_color == COLOR_LEADER_ALERT

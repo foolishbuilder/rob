@@ -13,7 +13,6 @@ from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
 from rob.database.repositories.models import LeaderboardEntry, LeaderboardSummary
-from rob.ui.cards.leader_alert import leader_alert_card
 from rob.ui.cards.leaderboard import leaderboard_card, leaderboard_stats_card
 from rob.ui.cards.maintenance import rob_offline_embed
 from rob.services.leaderboard_status import LeaderboardStatus
@@ -231,64 +230,6 @@ class LeaderboardService:
                 return None
             leader = filtered[0]
         return leader
-
-    async def maybe_post_leader_alert(self, guild_id: int, *, previous_leader_user_id: int | None) -> bool:
-        # NEW LEADER ALERT is disabled in the test guild as part of the
-        # DM-first preference system.
-        if is_test_guild(guild_id):
-            return False
-        if await self._rob_offline_for_guild(guild_id):
-            return False
-        if await self.maintenance.is_enabled():
-            return False
-        current_leader = await self.get_current_leader(guild_id)
-        if previous_leader_user_id is None or current_leader is None:
-            return False
-        if current_leader.user_id == previous_leader_user_id:
-            return False
-
-        state_key = f"leader_alert:last_announced:{guild_id}"
-        last_announced = await self.bot_state.get_text(state_key)
-        if last_announced is not None and int(last_announced) == current_leader.user_id:
-            return False
-
-        settings = await self.guild_settings.get(guild_id)
-        if settings is None:
-            return False
-
-        guild = self.bot.get_guild(guild_id)
-        if guild is None:
-            return False
-
-        channel_id = self._leader_alert_channel_id(settings)
-        if channel_id is None:
-            log.warning(
-                "No registration, leaderboard, or send tracking channel configured for leader alert in guild %s.",
-                guild_id,
-            )
-            return False
-
-        channel = guild.get_channel(channel_id)
-        if channel is None:
-            try:
-                channel = await guild.fetch_channel(channel_id)
-            except (discord.NotFound, discord.HTTPException):
-                log.warning("Leader alert channel %s is unavailable in guild %s.", channel_id, guild_id)
-                return False
-        if not isinstance(channel, discord.TextChannel):
-            return False
-
-        await channel.send(**leader_alert_card(f"<@{current_leader.user_id}>").send_kwargs())
-        await self.bot_state.set_value(state_key, str(current_leader.user_id))
-        return True
-
-    @staticmethod
-    def _leader_alert_channel_id(settings) -> int | None:
-        return (
-            settings.registration_channel_id
-            or settings.leaderboard_channel_id
-            or settings.send_track_channel_id
-        )
 
     async def _create_and_save_message(
         self,
