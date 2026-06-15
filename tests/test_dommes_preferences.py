@@ -16,9 +16,7 @@ from rob.database.repositories.models import Domme
 def test_domme_dataclass_exposes_new_preference_fields():
     fields = {f for f in Domme.__dataclass_fields__}
     assert {
-        "send_notifications_enabled",
         "leaderboard_visible",
-        "notifications_snoozed_until",
         "preferences_deferred_until",
         "preferences_confirmed_at",
     }.issubset(fields)
@@ -30,10 +28,7 @@ def test_set_preferences_signature_supports_all_flow_kwargs():
     for name in (
         "guild_id",
         "discord_user_id",
-        "send_notifications_enabled",
         "leaderboard_visible",
-        "notifications_snoozed_until",
-        "clear_snooze",
         "preferences_deferred_until",
         "clear_defer",
         "confirm",
@@ -41,10 +36,7 @@ def test_set_preferences_signature_supports_all_flow_kwargs():
         assert name in params, f"missing kwarg {name!r}"
 
 
-def test_snooze_and_defer_helpers_exist():
-    snooze = inspect.signature(DommesRepository.snooze_notifications)
+def test_defer_helper_exists():
     defer = inspect.signature(DommesRepository.defer_preferences)
-    assert "until" in snooze.parameters
     assert "until" in defer.parameters
-    assert "guild_id" in snooze.parameters and "discord_user_id" in snooze.parameters
     assert "guild_id" in defer.parameters and "discord_user_id" in defer.parameters
