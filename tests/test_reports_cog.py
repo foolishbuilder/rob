@@ -107,6 +107,18 @@ def test_report_posts_to_configured_destination_and_confirms_user():
     assert interaction.response.messages[0]["ephemeral"] is True
 
 
+def test_report_destination_is_always_the_bot_owner():
+    # Reports must reach only the bot owner (DM), never a server report channel,
+    # even when a guild has report_channel_id configured.
+    bot = _FakeBot()
+    cog = ReportsCog(bot)
+    interaction = _FakeInteraction()
+
+    destination = asyncio.run(cog._resolve_destination(interaction))
+
+    assert destination is bot.destination
+
+
 def test_report_modal_upload_is_forwarded_when_present():
     bot = _FakeBot()
     cog = ReportsCog(bot)
@@ -132,7 +144,9 @@ def test_report_modal_upload_is_forwarded_when_present():
         )
     )
 
-    assert "files" in bot.destination.messages[0]
+    # Components V2 cards suppress attachment previews, so the file is delivered
+    # as its own follow-up message rather than attached to the card.
+    assert any("file" in message for message in bot.destination.messages)
 
 
 def test_report_modal_upload_falls_back_to_attachment_read():
@@ -165,5 +179,6 @@ def test_report_modal_upload_falls_back_to_attachment_read():
         )
     )
 
-    assert "files" in bot.destination.messages[0]
-    assert bot.destination.messages[0]["files"][0].filename == "screenshot.png"
+    file_messages = [message for message in bot.destination.messages if "file" in message]
+    assert file_messages
+    assert file_messages[0]["file"].filename == "screenshot.png"
