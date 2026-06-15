@@ -23,6 +23,7 @@ from rob.ui.cards.dm_onboarding import (
     ID_MIGRATION_LEADERBOARD_ACCESS,
     ID_PREFS_LEADERBOARD_ACCESS,
     LEADERBOARD_ACCESS_ON_VALUE,
+    PreferencesView,
 )
 
 
@@ -421,6 +422,48 @@ def test_handle_save_preferences_persists_and_renders_success_card():
         discord_user_id=42,
     )
     assert dm_message.edits, "success card should be edited into stored DM"
+
+
+def test_handle_save_preferences_grants_access_from_live_view(monkeypatch):
+    # Regression: the Save button hands the live view to the handler so the
+    # user's leaderboard-access choice is honored. Previously the handler read
+    # the message components, which only carry the default ("off"), so the
+    # access role was never granted during /register domme onboarding.
+    user = _FakeUser(user_id=42)
+    bot = _FakeBot(
+        onboarding_state=SimpleNamespace(
+            guild_id=TEST_GUILD_ID,
+            stage="awaiting_preferences",
+            dm_channel_id=222,
+            dm_message_id=111,
+        ),
+        user=user,
+    )
+    user._last_message = _FakeMessage()
+
+    applied: dict = {}
+
+    async def _fake_apply(_bot, *, guild_id, user_id, enabled):
+        applied["enabled"] = enabled
+        return True
+
+    monkeypatch.setattr(
+        "rob.discord.cogs.dm_onboarding.apply_leaderboard_access", _fake_apply
+    )
+
+    # User picked "give me access" on the live view; the message components
+    # still carry only the default ("off"), proving we read the view.
+    view = PreferencesView(default_leaderboard_access=False)
+    view.leaderboard_access_select._values = [LEADERBOARD_ACCESS_ON_VALUE]
+
+    cog = DMOnboardingCog(bot)
+    interaction = _make_interaction(
+        user_id=42, message=SimpleNamespace(components=[])
+    )
+
+    asyncio.run(cog.handle_save_preferences(interaction, view=view))
+
+    assert applied.get("enabled") is True
 
 
 # ---------------------------------------------------------------------------

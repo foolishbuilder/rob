@@ -23,14 +23,6 @@ class BaseSettings:
     leaderboard_limit: int
     send_queue_loop_seconds: int
     public_leaderboard_cache_seconds: int
-    inactivity_enabled_default: bool
-    inactivity_loop_minutes: int
-    inactivity_new_member_grace_days: int
-    inactivity_assignment_grace_days: int
-    inactivity_bootstrap_grace_days: int
-    inactivity_final_notice_days: int
-    inactivity_owner_user_id: int | None
-    inactivity_notice_channel_id: int | None
     rob_public_base_url: str
 
 
@@ -142,14 +134,6 @@ def load_base_settings(env_file: str | Path | None = None) -> BaseSettings:
         leaderboard_limit=_env_int("LEADERBOARD_LIMIT", 10, minimum=1),
         send_queue_loop_seconds=_env_int("SEND_QUEUE_LOOP_SECONDS", 10, minimum=1),
         public_leaderboard_cache_seconds=_env_int("PUBLIC_LEADERBOARD_CACHE_SECONDS", 60, minimum=1),
-        inactivity_enabled_default=_env_bool("INACTIVITY_ENABLED_DEFAULT", False),
-        inactivity_loop_minutes=_env_int("INACTIVITY_LOOP_MINUTES", 60, minimum=1),
-        inactivity_new_member_grace_days=_env_int("INACTIVITY_NEW_MEMBER_GRACE_DAYS", 7, minimum=1),
-        inactivity_assignment_grace_days=_env_int("INACTIVITY_ASSIGNMENT_GRACE_DAYS", 14, minimum=1),
-        inactivity_bootstrap_grace_days=_env_int("INACTIVITY_BOOTSTRAP_GRACE_DAYS", 21, minimum=1),
-        inactivity_final_notice_days=_env_int("INACTIVITY_FINAL_NOTICE_DAYS", 7, minimum=1),
-        inactivity_owner_user_id=_env_optional_int("INACTIVITY_OWNER_USER_ID"),
-        inactivity_notice_channel_id=_env_optional_int("INACTIVITY_NOTICE_CHANNEL_ID"),
         rob_public_base_url=_env_str("ROB_PUBLIC_BASE_URL", "https://leaderboard.robthebot.com"),
     )
 
@@ -170,14 +154,6 @@ def load_webhook_settings(env_file: str | Path | None = None) -> WebhookSettings
         leaderboard_limit=base.leaderboard_limit,
         send_queue_loop_seconds=base.send_queue_loop_seconds,
         public_leaderboard_cache_seconds=base.public_leaderboard_cache_seconds,
-        inactivity_enabled_default=base.inactivity_enabled_default,
-        inactivity_loop_minutes=base.inactivity_loop_minutes,
-        inactivity_new_member_grace_days=base.inactivity_new_member_grace_days,
-        inactivity_assignment_grace_days=base.inactivity_assignment_grace_days,
-        inactivity_bootstrap_grace_days=base.inactivity_bootstrap_grace_days,
-        inactivity_final_notice_days=base.inactivity_final_notice_days,
-        inactivity_owner_user_id=base.inactivity_owner_user_id,
-        inactivity_notice_channel_id=base.inactivity_notice_channel_id,
         throne_webhook_host=_env_str("THRONE_WEBHOOK_HOST", "127.0.0.1"),
         throne_webhook_port=_env_int("THRONE_WEBHOOK_PORT", 8080, minimum=1),
         throne_webhook_base_url=_env_str(
@@ -231,14 +207,6 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         leaderboard_limit=base.leaderboard_limit,
         send_queue_loop_seconds=base.send_queue_loop_seconds,
         public_leaderboard_cache_seconds=base.public_leaderboard_cache_seconds,
-        inactivity_enabled_default=base.inactivity_enabled_default,
-        inactivity_loop_minutes=base.inactivity_loop_minutes,
-        inactivity_new_member_grace_days=base.inactivity_new_member_grace_days,
-        inactivity_assignment_grace_days=base.inactivity_assignment_grace_days,
-        inactivity_bootstrap_grace_days=base.inactivity_bootstrap_grace_days,
-        inactivity_final_notice_days=base.inactivity_final_notice_days,
-        inactivity_owner_user_id=base.inactivity_owner_user_id,
-        inactivity_notice_channel_id=base.inactivity_notice_channel_id,
         rob_public_base_url=base.rob_public_base_url,
         discord_token=_env_str("DISCORD_TOKEN", required=True),
         bot_name=_env_str("BOT_NAME", "Rob"),

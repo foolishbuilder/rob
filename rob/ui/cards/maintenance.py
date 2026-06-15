@@ -15,6 +15,7 @@ def maintenance_embed(reason: str | None) -> RenderedMessage:
             footer=MAINTENANCE_FOOTER,
             sections=[CardSection(title="Reason", text=reason or "No reason provided.")],
             variant="warning",
+            eyebrow="Maintenance",
         )
     )
 
@@ -33,5 +34,6 @@ def rob_offline_embed() -> RenderedMessage:
             ),
             color=COLOR_WARNING,
             variant="warning",
+            eyebrow="Maintenance",
         )
     )

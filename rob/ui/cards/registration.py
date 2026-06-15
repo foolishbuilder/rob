@@ -5,7 +5,7 @@ import discord
 from rob.ui.components import make_card, render
 from rob.ui.copy import DOMME_REGISTERED_BODY, DOMME_REGISTERED_TITLE, THRONE_SETUP_TITLE
 from rob.ui.render import CardSection, RenderedMessage
-from rob.ui.theme import COLOR_PRIMARY, COLOR_SUCCESS
+from rob.ui.theme import COLOR_INFO, COLOR_SUCCESS
 
 
 def registration_card(
@@ -58,9 +58,10 @@ def throne_setup_card(
         make_card(
             title=title,
             body=description,
-            color=COLOR_PRIMARY,
+            color=COLOR_INFO,
             image_url=image_url,
             variant="setup",
+            eyebrow="Setup",
         ),
         view=view,
     )

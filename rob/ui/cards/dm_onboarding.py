@@ -131,6 +131,9 @@ class _BoundButton(discord.ui.Button):
     """
 
     _HANDLER_NAME: str = ""
+    # When True the bound view is passed to the cog handler as ``view=`` so it
+    # can read live select state (the message components only carry defaults).
+    _PASS_VIEW: bool = False
 
     def __init__(
         self,
@@ -164,7 +167,10 @@ class _BoundButton(discord.ui.Button):
             getattr(interaction, "channel_id", None),
             getattr(interaction, "guild_id", None),
         )
-        await handler(interaction)
+        if self._PASS_VIEW:
+            await handler(interaction, view=self.view)
+        else:
+            await handler(interaction)
 
 
 class OpenModalButton(_BoundButton):
@@ -217,6 +223,7 @@ class WebhookRetryButton(_BoundButton):
 
 class SavePrefsButton(_BoundButton):
     _HANDLER_NAME = "handle_save_preferences"
+    _PASS_VIEW = True
 
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
@@ -229,6 +236,7 @@ class SavePrefsButton(_BoundButton):
 
 class MigrationSaveButton(_BoundButton):
     _HANDLER_NAME = "handle_migration_save"
+    _PASS_VIEW = True
 
     def __init__(self, cog: Any | None = None) -> None:
         super().__init__(
@@ -370,7 +378,7 @@ class _IdentityConfirmLayout(discord.ui.LayoutView):
 
         container = discord.ui.Container(accent_color=COLOR_INFO)
         container.add_item(discord.ui.TextDisplay(_progress(2)))
-        container.add_item(discord.ui.TextDisplay("## 🔎 Quick check"))
+        container.add_item(discord.ui.TextDisplay("## Quick check"))
         container.add_item(
             discord.ui.TextDisplay(
                 "Nice one! I found a Throne profile — does this look right to you?"
@@ -410,9 +418,9 @@ def identity_confirm_card(
 class _WebhookSetupLayout(discord.ui.LayoutView):
     def __init__(self, *, webhook_url: str, cog: Any | None) -> None:
         super().__init__(timeout=None)
-        container = discord.ui.Container(accent_color=COLOR_WARNING)
+        container = discord.ui.Container(accent_color=COLOR_INFO)
         container.add_item(discord.ui.TextDisplay(_progress(3)))
-        container.add_item(discord.ui.TextDisplay("## 🔗 Connect Throne to Rob"))
+        container.add_item(discord.ui.TextDisplay("## Connect Throne to Rob"))
         container.add_item(
             discord.ui.TextDisplay(
                 "This is the one fiddly bit — it lets Rob hear about your sends "
@@ -431,14 +439,14 @@ class _WebhookSetupLayout(discord.ui.LayoutView):
         )
         container.add_item(discord.ui.Separator())
         container.add_item(
-            discord.ui.TextDisplay("**📋 Rob’s webhook URL** (tap to copy):")
+            discord.ui.TextDisplay("**Rob’s webhook URL** (tap to copy):")
         )
         container.add_item(discord.ui.TextDisplay(f"```\n{webhook_url}\n```"))
         container.add_item(discord.ui.Separator())
         container.add_item(
             discord.ui.TextDisplay(
                 "Once you’ve hit **Test Webhook**, hang tight here — I’ll update "
-                "this message automatically the second your test send lands. 🎉"
+                "this message automatically the second your test send lands."
             )
         )
         container.add_item(discord.ui.Separator())

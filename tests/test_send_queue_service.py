@@ -233,28 +233,6 @@ def test_send_queue_refreshes_after_successful_send_post(monkeypatch: pytest.Mon
     assert counting.send_ids == [1]
 
 
-def test_send_queue_still_refreshes_if_leader_alert_fails(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("rob.services.send_queue_service.discord.TextChannel", _FakeChannel)
-    sends = _FakeSends()
-    leaderboard = _FakeLeaderboard()
-    leaderboard.raise_alert = True
-    counting = _FakeCounting()
-    service = SendQueueService(
-        bot=_FakeBot(),
-        sends=sends,
-        guild_settings=_FakeSettingsRepo(),
-        maintenance=_FakeMaintenance(),
-        leaderboard_service=leaderboard,
-        counting_service=counting,
-    )
-
-    asyncio.run(service.process_cycle())
-
-    assert sends.mark_posted_calls == [1]
-    assert leaderboard.refresh_calls == [1]
-    assert counting.send_ids == [1]
-
-
 def test_send_queue_does_not_refresh_for_failed_send_post():
     sends = _FakeSends()
     leaderboard = _FakeLeaderboard()
@@ -453,8 +431,8 @@ def test_send_queue_processes_notified_send_by_id(monkeypatch: pytest.MonkeyPatc
 
 
 def test_test_guild_send_posts_to_channel_like_main(monkeypatch: pytest.MonkeyPatch):
-    # The test guild uses the same public send-tracking channel + new-leader
-    # alert path as the main server; there is no DM-only routing.
+    # The test guild uses the same public send-tracking channel as the main
+    # server; there is no DM-only routing.
     monkeypatch.setattr("rob.services.send_queue_service.discord.TextChannel", _FakeChannel)
     sends = _FakeSends()
     sends.pending = [_send(guild_id=TEST_GUILD_ID)]
@@ -473,5 +451,4 @@ def test_test_guild_send_posts_to_channel_like_main(monkeypatch: pytest.MonkeyPa
 
     assert sends.mark_posted_calls == [1]
     assert leaderboard.refresh_calls == [TEST_GUILD_ID]
-    assert leaderboard.alert_calls == 1
     assert service.bot.guild.channel.sent

@@ -229,15 +229,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Mark known Throne test-user sends so leaderboards can exclude them.",
     )
 
-    inactivity = subparsers.add_parser("inactivity", help="Inactivity system operations.")
-    inactivity_subparsers = inactivity.add_subparsers(dest="inactivity_command", required=True)
-    inactivity_status = inactivity_subparsers.add_parser("status", help="Show inactivity status.")
-    inactivity_status.add_argument("--guild-id", type=int, default=None)
-    inactivity_on = inactivity_subparsers.add_parser("on", help="Enable inactivity processing.")
-    inactivity_on.add_argument("--guild-id", type=int, default=None)
-    inactivity_off = inactivity_subparsers.add_parser("off", help="Disable inactivity processing.")
-    inactivity_off.add_argument("--guild-id", type=int, default=None)
-
     blacklist = subparsers.add_parser("blacklist", help="Manage Rob global blacklist.")
     blacklist_subparsers = blacklist.add_subparsers(dest="blacklist_command", required=True)
     blacklist_add = blacklist_subparsers.add_parser("add", help="Add a user to blacklist.")
@@ -1200,39 +1191,6 @@ async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> Non
     raise RuntimeError(f"Unsupported throne command: {args.throne_command}")
 
 
-async def handle_inactivity(ctx: OperationsContext, args: argparse.Namespace) -> None:
-    guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
-    key = f"inactivity:{guild_id}:enabled"
-    if args.inactivity_command == "status":
-        enabled = await ctx.bot_state.get_bool(
-            key,
-            default=ctx.settings.inactivity_enabled_default,
-        )
-        print_header("Inactivity Status")
-        print_field("Guild ID", guild_id)
-        print_field("Enabled", "true" if enabled else "false")
-        print_kv("guild_id", guild_id)
-        print_kv("enabled", "true" if enabled else "false")
-        return
-    if args.inactivity_command == "on":
-        await ctx.bot_state.set_value(key, "true")
-        print_header("Inactivity")
-        print_field("Guild ID", guild_id)
-        print_field("Enabled", "true")
-        print_kv("guild_id", guild_id)
-        print_kv("enabled", "true")
-        return
-    if args.inactivity_command == "off":
-        await ctx.bot_state.set_value(key, "false")
-        print_header("Inactivity")
-        print_field("Guild ID", guild_id)
-        print_field("Enabled", "false")
-        print_kv("guild_id", guild_id)
-        print_kv("enabled", "false")
-        return
-    raise RuntimeError(f"Unsupported inactivity command: {args.inactivity_command}")
-
-
 async def handle_blacklist(ctx: OperationsContext, args: argparse.Namespace) -> None:
     if args.blacklist_command == "add":
         await ctx.blacklist.add(
@@ -1478,8 +1436,6 @@ async def main_async() -> None:
             await handle_count(ctx, args)
         elif args.command == "throne":
             await handle_throne(ctx, args)
-        elif args.command == "inactivity":
-            await handle_inactivity(ctx, args)
         elif args.command == "blacklist":
             await handle_blacklist(ctx, args)
         elif args.command == "sends":

@@ -68,12 +68,3 @@ def test_filter_noop_when_dommes_repo_missing():
     entries = [_entry(1)]
     result = asyncio.run(service._filter_entries_for_guild(TEST_GUILD_ID, entries))
     assert result is entries
-
-
-def test_maybe_post_leader_alert_disabled_in_test_guild():
-    service = _make_service(None)
-    # Should short-circuit without touching maintenance/bot_state.
-    result = asyncio.run(
-        service.maybe_post_leader_alert(TEST_GUILD_ID, previous_leader_user_id=None)
-    )
-    assert result is False
