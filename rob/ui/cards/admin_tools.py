@@ -15,4 +15,4 @@ def admin_usage_card(usage: str) -> RenderedMessage:
 
 
 def admin_success_card(message: str) -> RenderedMessage:
-    return render(make_card(title="Admin tools", body=message, color=COLOR_SUCCESS, variant="success"))
+    return render(make_card(title="Admin tools", body=message, color=COLOR_SUCCESS, variant="success", eyebrow="Admin"))

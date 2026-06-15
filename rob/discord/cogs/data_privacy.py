@@ -71,6 +71,7 @@ class _ForgetMeView(discord.ui.LayoutView):
         self._guild_id = guild_id
 
         container = discord.ui.Container(accent_color=COLOR_DANGER)
+        container.add_item(discord.ui.TextDisplay("-# Privacy"))
         container.add_item(discord.ui.TextDisplay("## Delete all of your data?"))
         container.add_item(
             discord.ui.TextDisplay(
@@ -145,6 +146,7 @@ class _ForgetMeView(discord.ui.LayoutView):
 
     async def _on_cancel(self, interaction: discord.Interaction) -> None:
         card = discord.ui.Container(accent_color=COLOR_NEUTRAL)
+        card.add_item(discord.ui.TextDisplay("-# Privacy"))
         card.add_item(discord.ui.TextDisplay("## Cancelled"))
         card.add_item(
             discord.ui.TextDisplay("No data was deleted. Nothing has changed.")
@@ -231,6 +233,7 @@ class DataPrivacyCog(commands.Cog):
         *, title: str, body: str, color: discord.Colour
     ) -> discord.ui.LayoutView:
         container = discord.ui.Container(accent_color=color)
+        container.add_item(discord.ui.TextDisplay("-# Privacy"))
         container.add_item(discord.ui.TextDisplay(f"## {title}"))
         container.add_item(discord.ui.TextDisplay(body))
         view: discord.ui.LayoutView = discord.ui.LayoutView(timeout=1)

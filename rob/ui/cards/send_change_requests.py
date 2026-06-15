@@ -5,7 +5,7 @@ import discord
 from rob.database.repositories.models import SendChangeRequest, SendRecord
 from rob.ui.components import make_card, render
 from rob.ui.render import CardSection, RenderedMessage
-from rob.ui.theme import COLOR_DANGER, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_WARNING
+from rob.ui.theme import COLOR_DANGER, COLOR_NEUTRAL, COLOR_SUCCESS, COLOR_WARNING
 from rob.utils.money import format_money_from_cents, format_money_with_currency_name
 
 
@@ -97,6 +97,7 @@ def send_change_request_card(
             sections=[CardSection(title=label, text=value) for label, value in details],
             footer="Approve only if this backend change matches what you actually received.",
             variant="warning",
+            eyebrow="Approval",
         ),
         view=view,
     )
@@ -114,10 +115,11 @@ def send_change_result_card(
         make_card(
             title=title,
             body=summary,
-            color=COLOR_SUCCESS if approved else COLOR_PRIMARY,
+            color=COLOR_SUCCESS if approved else COLOR_NEUTRAL,
             sections=[CardSection(title=label, text=value) for label, value in details],
             footer="Rob logged the decision for backend traceability.",
             variant="success" if approved else "default",
+            eyebrow="Approval",
         ),
         view=view,
     )
