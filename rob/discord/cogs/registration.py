@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_test_guild
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_new_system_guild
 from rob.discord.permissions import member_has_role
 from rob.ui.cards.errors import error_card, error_permission
 from rob.ui.cards.registration import registration_card, throne_setup_card
@@ -184,11 +184,11 @@ class RegistrationCog(commands.Cog):
             return
 
         # ------------------------------------------------------------------
-        # TEST GUILD ONLY: route to the new DM-first onboarding flow.
-        # Outside the test guild we keep using the existing "Continue Setup"
-        # + webhook yes/not-yet flow below, unchanged.
+        # NEW-SYSTEM GUILDS (main + test): route to the new DM-first
+        # onboarding flow. Anywhere else we keep using the existing
+        # "Continue Setup" + webhook yes/not-yet flow below, unchanged.
         # ------------------------------------------------------------------
-        if is_test_guild(interaction.guild.id):
+        if is_new_system_guild(interaction.guild.id):
             dm_cog = self.bot.get_cog("DMOnboardingCog")
             if dm_cog is not None:
                 ok, _message, error_text = await dm_cog.start_onboarding_dm(

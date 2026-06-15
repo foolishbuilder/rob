@@ -18,7 +18,7 @@ import logging
 
 import discord
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import is_new_system_guild
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ async def apply_leaderboard_access(
     (no role configured, role/guild/member missing, or missing permissions).
     """
 
-    if not is_test_guild(guild_id):
+    if not is_new_system_guild(guild_id):
         return False
 
     settings_repo = getattr(bot, "guild_settings_repo", None) or getattr(

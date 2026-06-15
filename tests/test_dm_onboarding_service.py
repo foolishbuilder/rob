@@ -22,6 +22,10 @@ from rob.services.dm_onboarding_service import (
     OnboardingError,
 )
 
+# A guild id that is neither the main nor the test guild: the new system must
+# stay disabled there.
+OTHER_GUILD_ID = 424242424242424242
+
 
 class _FakeOnboardingRepo:
     def __init__(self):
@@ -76,16 +80,26 @@ def _service(*, onboarding=None, dommes=None, throne=None, registration=None):
     )
 
 
-def test_onboarding_enabled_only_for_test_guild():
+def test_onboarding_enabled_for_main_and_test_guild():
+    # The new system is now live on both main and test.
     assert DMOnboardingService.is_enabled_for(TEST_GUILD_ID) is True
-    assert DMOnboardingService.is_enabled_for(MAIN_GUILD_ID) is False
+    assert DMOnboardingService.is_enabled_for(MAIN_GUILD_ID) is True
+    # ...but stays disabled for unrelated guilds and missing ids.
+    assert DMOnboardingService.is_enabled_for(OTHER_GUILD_ID) is False
     assert DMOnboardingService.is_enabled_for(None) is False
 
 
-def test_start_outside_test_guild_raises():
+def test_start_in_main_guild_creates_onboarding_state():
+    onboarding = _FakeOnboardingRepo()
+    service = _service(onboarding=onboarding)
+    asyncio.run(service.start(guild_id=MAIN_GUILD_ID, discord_user_id=1))
+    assert onboarding.started == [(MAIN_GUILD_ID, 1)]
+
+
+def test_start_outside_new_system_guild_raises():
     service = _service()
     with pytest.raises(OnboardingError):
-        asyncio.run(service.start(guild_id=MAIN_GUILD_ID, discord_user_id=1))
+        asyncio.run(service.start(guild_id=OTHER_GUILD_ID, discord_user_id=1))
 
 
 def test_start_creates_onboarding_state():
@@ -234,9 +248,9 @@ def test_defer_migration_sets_future_timestamp():
     assert call["until"] > datetime.now(timezone.utc)
 
 
-def test_defer_migration_outside_test_guild_raises():
+def test_defer_migration_outside_new_system_guild_raises():
     service = _service()
     with pytest.raises(OnboardingError):
         asyncio.run(
-            service.defer_migration(guild_id=MAIN_GUILD_ID, discord_user_id=42)
+            service.defer_migration(guild_id=OTHER_GUILD_ID, discord_user_id=42)
         )

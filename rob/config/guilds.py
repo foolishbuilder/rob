@@ -37,10 +37,19 @@ def is_main_guild(guild_id: int | None) -> bool:
     return int(guild_id) == MAIN_GUILD_ID
 
 
+def is_new_system_guild(guild_id: int | None) -> bool:
+    """Guilds where the new Dom/me onboarding + preferences + leaderboard-access
+    system is live (main + test). It was test-guild-only during development."""
+    if guild_id is None:
+        return False
+    return is_main_guild(guild_id) or is_test_guild(guild_id)
+
+
 __all__ = [
     "MAIN_GUILD_ID",
     "TEST_GUILD_ID",
     "OWNER_USER_ID",
     "is_test_guild",
     "is_main_guild",
+    "is_new_system_guild",
 ]
