@@ -16,8 +16,6 @@ def test_load_base_settings_only_requires_database(monkeypatch):
     assert settings.rob_ops_host == "127.0.0.1"
     assert settings.rob_ops_port == 8811
     assert settings.rob_bot_notify_url is None
-    assert settings.inactivity_enabled_default is False
-    assert settings.inactivity_loop_minutes == 60
     assert settings.rob_public_base_url == "https://leaderboard.robthebot.com"
 
 

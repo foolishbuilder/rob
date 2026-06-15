@@ -4,21 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from scripts.ops import build_parser, handle_inactivity, handle_throne
-
-
-class _FakeBotState:
-    def __init__(self):
-        self.values: dict[str, str] = {}
-
-    async def get_bool(self, key: str, *, default: bool = False):
-        raw = self.values.get(key)
-        if raw is None:
-            return default
-        return raw == "true"
-
-    async def set_value(self, key: str, value: str):
-        self.values[key] = value
+from scripts.ops import handle_throne
 
 
 class _FakeThroneCreators:
@@ -53,22 +39,6 @@ class _FakeSubs:
     async def list_for_guild(self, _guild_id: int):
         now = datetime.now(timezone.utc)
         return [SimpleNamespace(discord_user_id=20, send_name="subby", registered_at=now)]
-
-
-def test_inactivity_parser_and_toggle(capsys):
-    parser = build_parser()
-    args = parser.parse_args(["inactivity", "on", "--guild-id", "1"])
-
-    ctx = SimpleNamespace(
-        bot_state=_FakeBotState(),
-        settings=SimpleNamespace(inactivity_enabled_default=False),
-        guild_settings=SimpleNamespace(list_guild_ids=lambda: [1]),
-    )
-    asyncio.run(handle_inactivity(ctx, args))
-
-    out = capsys.readouterr().out
-    assert "Inactivity" in out
-    assert "Enabled: true" in out
 
 
 def test_throne_status_and_dommes_render(capsys):
