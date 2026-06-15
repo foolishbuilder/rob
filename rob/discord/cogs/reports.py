@@ -73,25 +73,13 @@ class ReportsCog(commands.Cog):
         self,
         interaction: discord.Interaction,
     ) -> discord.abc.Messageable | None:
-        if interaction.guild is not None:
-            settings = await self.bot.guild_settings_repo.get(interaction.guild.id)
-            channel_id = settings.report_channel_id if settings is not None else None
-            if channel_id:
-                channel = interaction.guild.get_channel(channel_id)
-                if channel is None:
-                    try:
-                        channel = await interaction.guild.fetch_channel(channel_id)
-                    except (discord.NotFound, discord.HTTPException):
-                        channel = None
-                if isinstance(channel, discord.TextChannel):
-                    return channel
-
+        # Reports always go straight to the bot owner via DM — never to a server
+        # channel — so they stay private to the person running Rob.
         try:
             app_info = await self.bot.application_info()
         except discord.HTTPException:
             return None
-        owner = app_info.owner
-        return owner
+        return app_info.owner
 
     async def _materialize_attachment(
         self,
@@ -179,12 +167,16 @@ class ReportsCog(commands.Cog):
         file_obj = await self._materialize_attachment(attachment)
 
         try:
-            send_kwargs = report_card.send_kwargs()
+            await destination.send(**report_card.send_kwargs())
+            # The report card is a Components V2 view, which suppresses the
+            # default attachment preview — so any uploaded file is delivered as
+            # its own follow-up message, where it renders normally.
             if file_obj is not None:
-                send_kwargs["files"] = [file_obj]
+                await destination.send(file=file_obj)
             elif attachment is not None:
-                send_kwargs["content"] = f"Screenshot: {attachment.url}"
-            await destination.send(**send_kwargs)
+                await destination.send(
+                    f"Attached file (couldn't be re-uploaded): {attachment.url}"
+                )
         except discord.HTTPException:
             log.warning("Failed to deliver /report submission.", exc_info=True)
             await interaction.response.send_message(
