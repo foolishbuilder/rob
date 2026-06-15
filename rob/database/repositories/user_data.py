@@ -134,6 +134,16 @@ class UserDataRepository:
         "everywhere" case); otherwise each statement is additionally constrained
         to ``guild_id``. ``user_terms_acceptance`` is *not* handled here — it has
         no guild column and is only purged in the everywhere case by the caller.
+
+        Order matters. ``sends`` and ``count_recovery_windows`` hold restrict
+        foreign keys into ``dommes``/``subs`` (``sends.domme_id``,
+        ``sends.sub_id``, ``count_recovery_windows.required_domme_id``), so the
+        referencing rows must be deleted *before* the ``dommes``/``subs``
+        parents or Postgres raises a ``ForeignKeyViolationError``. Those deletes
+        also match on the FK id columns (not just the denormalised ``*_user_id``
+        columns) so no child row can survive to block the parent delete.
+        ``sub_send_names`` (cascade) and ``send_change_requests`` (set-null on
+        ``sends``) impose no ordering, but the parents still go last.
         """
 
         # ``$2`` is only referenced when guild_filter is non-empty, so the
@@ -143,15 +153,66 @@ class UserDataRepository:
 
         deleted: dict[str, int] = {}
 
-        # sub_send_names cascades from subs via FK ON DELETE CASCADE, but the
-        # rows are deleted explicitly first so the returned count is accurate
-        # and the wipe does not rely on cascade being enabled in every env.
+        # --- children that reference dommes/subs: delete before the parents ---
+
+        # sends.domme_id -> dommes(id) and sends.sub_id -> subs(id) (restrict).
+        # Match the user's denormalised ids *and* the FK ids of their dommes/subs
+        # rows so nothing referencing a soon-to-be-deleted parent survives.
+        deleted["sends"] = _rows_affected(
+            await connection.execute(
+                "DELETE FROM sends WHERE ("
+                "domme_user_id = $1 OR sub_user_id = $1"
+                f" OR domme_id IN (SELECT id FROM dommes WHERE discord_user_id = $1{guild_filter})"
+                f" OR sub_id IN (SELECT id FROM subs WHERE discord_user_id = $1{guild_filter})"
+                f"){guild_filter}",
+                *scope,
+            )
+        )
+        # count_recovery_windows.required_domme_id -> dommes(id) (restrict).
+        deleted["count_recovery_windows"] = _rows_affected(
+            await connection.execute(
+                "DELETE FROM count_recovery_windows WHERE ("
+                "failed_user_id = $1 OR required_domme_user_id = $1"
+                f" OR required_domme_id IN (SELECT id FROM dommes WHERE discord_user_id = $1{guild_filter})"
+                f"){guild_filter}",
+                *scope,
+            )
+        )
+        # sub_send_names.sub_id -> subs(id) ON DELETE CASCADE, but deleted
+        # explicitly first so the returned count is accurate and the wipe does
+        # not rely on cascade being enabled in every environment.
         deleted["sub_send_names"] = _rows_affected(
             await connection.execute(
                 f"DELETE FROM sub_send_names WHERE discord_user_id = $1{guild_filter}",
                 *scope,
             )
         )
+
+        # --- tables with no restrict FK into the parents ---
+
+        # send_change_requests.{target,approved}_send_id -> sends(id) is
+        # ON DELETE SET NULL, so its order relative to sends does not matter.
+        deleted["send_change_requests"] = _rows_affected(
+            await connection.execute(
+                "DELETE FROM send_change_requests "
+                f"WHERE (domme_user_id = $1 OR approved_by_user_id = $1){guild_filter}",
+                *scope,
+            )
+        )
+        deleted["count_blocks"] = _rows_affected(
+            await connection.execute(
+                f"DELETE FROM count_blocks WHERE discord_user_id = $1{guild_filter}",
+                *scope,
+            )
+        )
+        deleted["domme_onboarding_state"] = _rows_affected(
+            await connection.execute(
+                f"DELETE FROM domme_onboarding_state WHERE discord_user_id = $1{guild_filter}",
+                *scope,
+            )
+        )
+
+        # --- parents: deleted only after every referencing row above is gone ---
         deleted["subs"] = _rows_affected(
             await connection.execute(
                 f"DELETE FROM subs WHERE discord_user_id = $1{guild_filter}",
@@ -164,39 +225,7 @@ class UserDataRepository:
                 *scope,
             )
         )
-        deleted["sends"] = _rows_affected(
-            await connection.execute(
-                "DELETE FROM sends "
-                f"WHERE (domme_user_id = $1 OR sub_user_id = $1){guild_filter}",
-                *scope,
-            )
-        )
-        deleted["count_blocks"] = _rows_affected(
-            await connection.execute(
-                f"DELETE FROM count_blocks WHERE discord_user_id = $1{guild_filter}",
-                *scope,
-            )
-        )
-        deleted["count_recovery_windows"] = _rows_affected(
-            await connection.execute(
-                "DELETE FROM count_recovery_windows "
-                f"WHERE (failed_user_id = $1 OR required_domme_user_id = $1){guild_filter}",
-                *scope,
-            )
-        )
-        deleted["send_change_requests"] = _rows_affected(
-            await connection.execute(
-                "DELETE FROM send_change_requests "
-                f"WHERE (domme_user_id = $1 OR approved_by_user_id = $1){guild_filter}",
-                *scope,
-            )
-        )
-        deleted["domme_onboarding_state"] = _rows_affected(
-            await connection.execute(
-                f"DELETE FROM domme_onboarding_state WHERE discord_user_id = $1{guild_filter}",
-                *scope,
-            )
-        )
+
         deleted["bot_settings"] = await self._delete_bot_settings(
             connection,
             discord_user_id=discord_user_id,
@@ -216,8 +245,8 @@ class UserDataRepository:
         Keys follow ``activity:{guild}:user:{uid}:%`` and
         ``inactivity:{guild}:user:{uid}:%``. When ``guild_id`` is ``None`` the
         ``{guild}`` segment is wildcarded so every guild's per-user keys go.
-        ``\\`` is escaped to ``\\\\`` so a literal ``\`` in an id (there never is
-        one, but defensively) can't act as a LIKE escape.
+        The guild and user ids are integers, so the LIKE patterns carry no
+        wildcard or escape characters of their own.
         """
 
         guild_segment = "%" if guild_id is None else str(int(guild_id))

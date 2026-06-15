@@ -99,15 +99,46 @@ def test_delete_everywhere_uses_or_clauses_for_dual_role_tables():
     asyncio.run(repo.delete_user_everywhere(555))
     queries = _queries(connection)
 
-    assert "DELETE FROM sends WHERE (domme_user_id = $1 OR sub_user_id = $1)" in queries
+    # sends / count_recovery also match the FK id columns (via a subquery on the
+    # user's dommes/subs rows) so no child referencing a parent can survive.
+    assert "DELETE FROM sends WHERE (domme_user_id = $1 OR sub_user_id = $1" in queries
+    assert "OR domme_id IN (SELECT id FROM dommes WHERE discord_user_id = $1" in queries
+    assert "OR sub_id IN (SELECT id FROM subs WHERE discord_user_id = $1" in queries
     assert (
         "DELETE FROM count_recovery_windows "
-        "WHERE (failed_user_id = $1 OR required_domme_user_id = $1)" in queries
+        "WHERE (failed_user_id = $1 OR required_domme_user_id = $1" in queries
+    )
+    assert (
+        "OR required_domme_id IN (SELECT id FROM dommes WHERE discord_user_id = $1"
+        in queries
     )
     assert (
         "DELETE FROM send_change_requests "
         "WHERE (domme_user_id = $1 OR approved_by_user_id = $1)" in queries
     )
+
+
+def test_delete_removes_fk_children_before_parents():
+    # sends.domme_id / sends.sub_id and count_recovery_windows.required_domme_id
+    # are RESTRICT foreign keys into dommes/subs. Deleting a parent while a child
+    # still references it raises ForeignKeyViolationError (seen in production), so
+    # every referencing child must be deleted before the dommes/subs parents.
+    connection = _FakeConnection()
+    repo = UserDataRepository(_FakeDatabase(connection))
+
+    asyncio.run(repo.delete_user_in_guild(555, 4242))
+
+    def idx(table: str) -> int:
+        needle = f"DELETE FROM {table} "
+        for i, (query, _params) in enumerate(connection.execute_calls):
+            if needle in query:
+                return i
+        raise AssertionError(f"no DELETE FROM {table}")
+
+    assert idx("sends") < idx("dommes")
+    assert idx("sends") < idx("subs")
+    assert idx("count_recovery_windows") < idx("dommes")
+    assert idx("sub_send_names") < idx("subs")
 
 
 def test_delete_everywhere_has_no_guild_filter_and_wildcards_bot_settings():
@@ -254,6 +285,10 @@ def test_targeted_columns_exist_in_build_scripts():
     assert "CREATE TABLE IF NOT EXISTS sends" in core
     assert "domme_user_id BIGINT NOT NULL" in core
     assert "sub_user_id BIGINT" in core
+    # FK id columns the ordering-safe deletes rely on.
+    assert "domme_id BIGINT REFERENCES dommes(id)" in core
+    assert "sub_id BIGINT REFERENCES subs(id)" in core
+    assert "required_domme_id BIGINT REFERENCES dommes(id)" in count_recovery
     assert "discord_user_id BIGINT NOT NULL" in sub_names
     assert "failed_user_id BIGINT NOT NULL" in count_recovery
     assert "required_domme_user_id BIGINT" in count_recovery
