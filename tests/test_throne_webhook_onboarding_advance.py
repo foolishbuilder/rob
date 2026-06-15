@@ -254,16 +254,39 @@ async def test_real_send_in_test_guild_triggers_auto_advance(
 
 
 # ---------------------------------------------------------------------------
-# Main-guild webhook never triggers auto-advance
+# Main-guild webhook now triggers auto-advance (new system is live on main)
 # ---------------------------------------------------------------------------
 
 
-async def test_main_guild_webhook_does_not_trigger_auto_advance(
+async def test_main_guild_webhook_triggers_auto_advance(
     monkeypatch,
 ):
     settings = _fake_settings()
     creator = _fake_creator(guild_id=MAIN_GUILD_ID)
     send = SimpleNamespace(id=99, guild_id=MAIN_GUILD_ID)
+    app, notify_mock = _build_test_app(
+        monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
+    )
+
+    async with TestClient(TestServer(app)) as client:
+        resp = await _post(client, {"type": "test_webhook", "data": {}})
+        assert resp.status == 200
+        notify_mock.assert_awaited_once()
+        assert notify_mock.await_args.kwargs["guild_id"] == MAIN_GUILD_ID
+        assert notify_mock.await_args.kwargs["discord_user_id"] == 42
+
+
+# ---------------------------------------------------------------------------
+# A guild that is neither main nor test never triggers auto-advance
+# ---------------------------------------------------------------------------
+
+
+async def test_non_system_guild_webhook_does_not_trigger_auto_advance(
+    monkeypatch,
+):
+    settings = _fake_settings()
+    creator = _fake_creator(guild_id=424242424242424242)
+    send = SimpleNamespace(id=99, guild_id=424242424242424242)
     app, notify_mock = _build_test_app(
         monkeypatch=monkeypatch, settings=settings, creator=creator, send=send
     )

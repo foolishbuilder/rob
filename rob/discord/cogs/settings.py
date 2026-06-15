@@ -14,7 +14,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from rob.config.guilds import TEST_GUILD_ID, is_test_guild
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_new_system_guild
 from rob.discord.leaderboard_access import apply_leaderboard_access
 from rob.ui.cards.dm_onboarding import PreferencesView
 from rob.ui.cards.errors import error_card
@@ -46,7 +46,7 @@ class SettingsCog(commands.Cog):
         remove it for themselves; on save Rob assigns/removes the role to match.
         """
 
-        if not is_test_guild(interaction.guild_id):
+        if not is_new_system_guild(interaction.guild_id):
             await interaction.response.send_message(**_not_available_response(), ephemeral=True)
             return
 
@@ -111,6 +111,6 @@ class SettingsCog(commands.Cog):
         name="preferences",
         description="Change your leaderboard access.",
     )
-    @app_commands.guilds(TEST_GUILD_ID)
+    @app_commands.guilds(MAIN_GUILD_ID, TEST_GUILD_ID)
     async def preferences_command(self, interaction: discord.Interaction) -> None:
         await self._send_preferences_panel(interaction)

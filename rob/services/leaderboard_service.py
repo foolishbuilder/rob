@@ -8,7 +8,7 @@ import logging
 
 import discord
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import is_new_system_guild
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.leaderboards import LeaderboardsRepository
@@ -224,7 +224,7 @@ class LeaderboardService:
             return None
         if leader.total_cents <= 0 and leader.send_count <= 0:
             return None
-        if is_test_guild(guild_id):
+        if is_new_system_guild(guild_id):
             filtered = await self._filter_entries_for_guild(guild_id, [leader])
             if not filtered:
                 return None

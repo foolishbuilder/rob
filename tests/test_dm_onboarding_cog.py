@@ -26,6 +26,9 @@ from rob.ui.cards.dm_onboarding import (
     PreferencesView,
 )
 
+# A guild that is neither main nor test: the new onboarding flow must stay off.
+OTHER_GUILD_ID = 424242424242424242
+
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -167,17 +170,33 @@ def _make_interaction(
 # ---------------------------------------------------------------------------
 
 
-def test_start_onboarding_dm_outside_test_guild_returns_error():
+def test_start_onboarding_dm_outside_new_system_guild_returns_error():
     bot = _FakeBot()
     cog = DMOnboardingCog(bot)
     user = _FakeUser()
     ok, message, err = asyncio.run(
-        cog.start_onboarding_dm(user=user, guild_id=MAIN_GUILD_ID)
+        cog.start_onboarding_dm(user=user, guild_id=OTHER_GUILD_ID)
     )
     assert ok is False
     assert message is None
     assert err is not None
     bot.dm_onboarding_service.start.assert_not_awaited()
+
+
+def test_start_onboarding_dm_main_guild_sends_intro():
+    # The new onboarding flow is now live on the main guild too.
+    bot = _FakeBot()
+    cog = DMOnboardingCog(bot)
+    user = _FakeUser(user_id=7, name="Aria")
+    ok, _message, err = asyncio.run(
+        cog.start_onboarding_dm(user=user, guild_id=MAIN_GUILD_ID)
+    )
+    assert ok is True
+    assert err is None
+    bot.dm_onboarding_service.start.assert_awaited_once_with(
+        guild_id=MAIN_GUILD_ID, discord_user_id=7
+    )
+    assert len(user.sent_messages) == 1
 
 
 def test_start_onboarding_dm_test_guild_sends_intro_and_stores_message():
@@ -242,10 +261,19 @@ def test_handle_open_modal_uses_stored_guild_id_in_dm_context():
     interaction.response.send_modal.assert_awaited_once()
 
 
-def test_handle_open_modal_outside_test_guild_short_circuits():
+def test_handle_open_modal_in_main_guild_sends_modal():
+    # The new onboarding flow is now live on the main guild too.
     bot = _FakeBot()
     cog = DMOnboardingCog(bot)
     interaction = _make_interaction(guild_id=MAIN_GUILD_ID)
+    asyncio.run(cog.handle_open_modal(interaction))
+    interaction.response.send_modal.assert_awaited_once()
+
+
+def test_handle_open_modal_outside_new_system_guild_short_circuits():
+    bot = _FakeBot()
+    cog = DMOnboardingCog(bot)
+    interaction = _make_interaction(guild_id=OTHER_GUILD_ID)
     asyncio.run(cog.handle_open_modal(interaction))
     interaction.response.send_modal.assert_not_awaited()
     interaction.response.send_message.assert_awaited_once()
@@ -497,16 +525,51 @@ def test_on_throne_test_webhook_received_advances_dm_to_preferences():
     assert dm_message.edits, "preferences card should be edited into stored DM"
 
 
-def test_on_throne_test_webhook_received_outside_test_guild_is_noop():
-    bot = _FakeBot()
+def test_on_throne_test_webhook_received_outside_new_system_guild_is_noop():
+    # A live onboarding row exists, but the guild is neither main nor test, so
+    # the gate (not the missing-state path) must short-circuit the auto-advance.
+    bot = _FakeBot(
+        onboarding_state=SimpleNamespace(
+            guild_id=OTHER_GUILD_ID,
+            stage="awaiting_webhook",
+            dm_channel_id=222,
+            dm_message_id=111,
+        )
+    )
+    cog = DMOnboardingCog(bot)
+    advanced = asyncio.run(
+        cog.on_throne_test_webhook_received(
+            guild_id=OTHER_GUILD_ID, discord_user_id=42
+        )
+    )
+    assert advanced is False
+    bot.dm_onboarding_service.mark_webhook_received.assert_not_awaited()
+
+
+def test_on_throne_test_webhook_received_advances_dm_in_main_guild():
+    # The new onboarding flow auto-advances on the main guild now too.
+    dm_message = _FakeMessage()
+    user = _FakeUser(user_id=42)
+    bot = _FakeBot(
+        onboarding_state=SimpleNamespace(
+            guild_id=MAIN_GUILD_ID,
+            stage="awaiting_webhook",
+            dm_channel_id=222,
+            dm_message_id=111,
+        ),
+        user=user,
+    )
+    user._last_message = dm_message
     cog = DMOnboardingCog(bot)
     advanced = asyncio.run(
         cog.on_throne_test_webhook_received(
             guild_id=MAIN_GUILD_ID, discord_user_id=42
         )
     )
-    assert advanced is False
-    bot.dm_onboarding_service.mark_webhook_received.assert_not_awaited()
+    assert advanced is True
+    bot.dm_onboarding_service.mark_webhook_received.assert_awaited_once_with(
+        guild_id=MAIN_GUILD_ID, discord_user_id=42
+    )
 
 
 def test_on_throne_test_webhook_received_handles_completed_state():
@@ -663,7 +726,47 @@ def test_register_domme_routes_to_dm_cog_in_test_guild():
     interaction.response.send_message.assert_awaited_once()
 
 
-def test_register_domme_uses_legacy_flow_outside_test_guild():
+def test_register_domme_routes_to_dm_cog_in_main_guild():
+    # The new DM-first onboarding flow is now live on the main guild too.
+    from unittest.mock import patch
+
+    from rob.discord.cogs.registration import RegistrationCog
+
+    bot = MagicMock()
+    bot.maintenance_service = MagicMock()
+    bot.maintenance_service.registrations_blocked = AsyncMock(return_value=False)
+    bot.guild_settings_repo = MagicMock()
+    bot.guild_settings_repo.get = AsyncMock(
+        return_value=SimpleNamespace(
+            domme_role_id=10, send_track_channel_id=99
+        )
+    )
+    dm_cog = MagicMock()
+    dm_cog.start_onboarding_dm = AsyncMock(return_value=(True, _FakeMessage(), None))
+    bot.get_cog = MagicMock(return_value=dm_cog)
+
+    cog = RegistrationCog(bot)
+    member = MagicMock()
+    member.id = 42
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(id=MAIN_GUILD_ID),
+        user=member,
+        response=MagicMock(),
+    )
+    interaction.response.send_message = AsyncMock()
+
+    with patch(
+        "rob.discord.cogs.registration.member_has_role", return_value=True
+    ):
+        asyncio.run(cog.register_domme.callback(cog, interaction))
+
+    dm_cog.start_onboarding_dm.assert_awaited_once_with(
+        user=member, guild_id=MAIN_GUILD_ID
+    )
+    interaction.response.send_message.assert_awaited_once()
+
+
+def test_register_domme_uses_legacy_flow_outside_new_system_guild():
     from unittest.mock import patch
 
     from rob.discord.cogs.registration import RegistrationCog
@@ -686,7 +789,7 @@ def test_register_domme_uses_legacy_flow_outside_test_guild():
     member.id = 42
     member.send = AsyncMock()
     interaction = SimpleNamespace(
-        guild=SimpleNamespace(id=MAIN_GUILD_ID),
+        guild=SimpleNamespace(id=OTHER_GUILD_ID),
         user=member,
         response=MagicMock(),
     )
