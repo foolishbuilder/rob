@@ -17,7 +17,50 @@ remote/separate.**
                  ▲ public Throne webhook URL via cloudflared → 127.0.0.1:8080
 ```
 
-## One-time setup
+## Lean co-location (recommended for a single host)
+
+If the bot is already installed at `/opt/rob-bot/app`, the quickest way to add
+the webhook is to **reuse the bot's existing checkout and virtualenv** instead
+of cloning the repo and building a second venv:
+
+```bash
+sudo bash deploy/scripts/install-webhook-on-bot.sh
+```
+
+One codebase, one set of dependencies, two systemd services. The webhook runs
+the same code the bot already deployed, so a normal `deploy-bot.sh` keeps both
+in version lock-step (just `rob restart webhook` afterwards).
+
+The script writes a webhook `.env` **outside** the bot tree (default
+`/opt/rob-webhook/.env`, so a bot redeploy's `git clean` can't delete it) and
+**derives its values from the bot's `.env`**: it reuses the shared
+`ROB_OPS_SECRET` (generating + syncing one if absent), copies `LOG_LEVEL` /
+`THRONE_WEBHOOK_BASE_URL`, derives `DATABASE_URL` from the bot's (swapping the
+`*_bot` DB user for `*_webhook` and blanking the password), and forces the
+loopback wiring (`THRONE_WEBHOOK_HOST=127.0.0.1`,
+`ROB_BOT_NOTIFY_URL=http://127.0.0.1:8811/ops/sends/process`). It never copies a
+`DISCORD_TOKEN` onto the webhook side.
+
+The webhook DB **password** is the one value it can't derive — set it in
+`/opt/rob-webhook/.env`, or supply it up front:
+
+```bash
+# Provide the webhook DB URL directly:
+sudo bash deploy/scripts/install-webhook-on-bot.sh \
+  --webhook-db-url 'postgresql://prod_rob_webhook:REALPASS@HOST:25060/rob_prod?sslmode=require'
+
+# Or import an existing webhook .env (e.g. scp'd from the old webhook host):
+sudo bash deploy/scripts/install-webhook-on-bot.sh --from-env /root/old-webhook.env
+```
+
+Useful flags: `--dry-run` (show the plan, redacting secrets, write nothing),
+`--port N`, `--rotate-secret`, `--no-start`, `--yes`. See `--help` for all of
+them. After it runs, finish with steps 4–5 below (public Throne URL + checks).
+
+## Two-app setup (separate clones)
+
+The original model installs the webhook as its own app dir with its own venv —
+use this if you want the two fully isolated, or are spreading them across hosts.
 
 1. Install both apps on the host (Debian/Ubuntu):
 
