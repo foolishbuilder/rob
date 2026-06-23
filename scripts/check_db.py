@@ -17,6 +17,7 @@ REQUIRED_DB_BUILD_VERSIONS = (
     "007_send_update_requests",
     "008_dm_preferences",
     "010_leaderboard_access_role",
+    "011_send_fallback_hash_unique",
 )
 
 REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
@@ -469,6 +470,13 @@ async def main() -> None:
                     raise RuntimeError(
                         "Leaderboard access role column is missing.\n"
                         "Run scripts/db/build/010_leaderboard_access_role.sql manually "
+                        "as doadmin (no new grants required)."
+                    )
+                if "011_send_fallback_hash_unique" in missing_versions:
+                    raise RuntimeError(
+                        "Send de-duplication index is missing (webhook retries could "
+                        "double-count sends).\n"
+                        "Run scripts/db/build/011_send_fallback_hash_unique.sql manually "
                         "as doadmin (no new grants required)."
                     )
                 if len(missing_versions) == 1:

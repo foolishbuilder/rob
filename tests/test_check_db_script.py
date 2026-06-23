@@ -17,6 +17,7 @@ REQUIRED_BUILD_VERSIONS = [
     "007_send_update_requests",
     "008_dm_preferences",
     "010_leaderboard_access_role",
+    "011_send_fallback_hash_unique",
 ]
 
 
@@ -39,6 +40,7 @@ def _write_required_build_scripts(tmp_path, *, include_grants_template: bool = F
         "007_send_update_requests.sql",
         "008_dm_preferences.sql",
         "010_leaderboard_access_role.sql",
+        "011_send_fallback_hash_unique.sql",
     ):
         (tmp_path / name).write_text("SELECT 1;\n", encoding="utf-8")
     if include_grants_template:
@@ -340,6 +342,7 @@ def test_repo_db_build_scripts_include_core_versions():
     assert "008_dm_preferences" in expected
     assert "009_terms_acceptance" in expected
     assert "010_leaderboard_access_role" in expected
+    assert "011_send_fallback_hash_unique" in expected
     assert "003_runtime_grants_template" in expected
     assert "003_achievements" not in expected
     assert set(check_db.REQUIRED_DB_BUILD_VERSIONS) == set(REQUIRED_BUILD_VERSIONS)

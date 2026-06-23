@@ -61,13 +61,20 @@ def is_supported_event_type(event_type: str | None) -> bool:
     return event_type in ACCEPTED_EVENT_TYPES
 
 
-def parse_timestamp(value: Any) -> datetime:
+def parse_timestamp_opt(value: Any) -> datetime | None:
+    """Parse a timestamp, returning ``None`` when it is missing or unparseable.
+
+    Used by the fallback dedup hash, which must stay stable across Throne's
+    at-least-once retries — folding in a ``now()`` default would make every
+    retry hash differently and defeat de-duplication.
+    """
+
     if value is None:
-        return datetime.now(timezone.utc)
+        return None
 
     text = str(value).strip()
     if not text:
-        return datetime.now(timezone.utc)
+        return None
 
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
@@ -75,11 +82,15 @@ def parse_timestamp(value: Any) -> datetime:
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
-        return datetime.now(timezone.utc)
+        return None
 
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def parse_timestamp(value: Any) -> datetime:
+    return parse_timestamp_opt(value) or datetime.now(timezone.utc)
 
 
 def _money_to_cents(value: Any, *, event_type: str | None) -> int:
@@ -97,17 +108,20 @@ def build_fallback_hash(
     *,
     creator_id: str,
     order_id: str | None,
-    purchased_at: datetime,
+    purchased_at: datetime | None,
     gifter_username: str | None,
     item_name: str | None,
     amount_cents: int,
     currency: str,
 ) -> str:
+    # ``purchased_at`` is ``None`` when Throne didn't send a parseable
+    # timestamp; we omit it from the hash rather than substitute ``now()`` so
+    # retries of the same event produce the same hash (and de-duplicate).
     raw = "|".join(
         [
             creator_id,
             order_id or "",
-            purchased_at.isoformat(),
+            purchased_at.isoformat() if purchased_at is not None else "",
             gifter_username or "",
             item_name or "",
             str(amount_cents),
@@ -198,7 +212,7 @@ def parse_throne_send_payload(
         payload.get("order_id"),
     )
 
-    purchased_at = parse_timestamp(
+    parsed_purchased_at = parse_timestamp_opt(
         _first(
             data.get("purchasedAt"),
             data.get("purchased_at"),
@@ -212,6 +226,7 @@ def parse_throne_send_payload(
             payload.get("timestamp"),
         )
     )
+    purchased_at = parsed_purchased_at or datetime.now(timezone.utc)
 
     gifter = {}
     for container in (data, payload):
@@ -309,7 +324,12 @@ def parse_throne_send_payload(
         item.get("amount_cents"),
     )
     if amount_source is not None:
-        amount_cents = int(amount_source)
+        # Throne usually sends integer cents, but tolerate decimal/float-like
+        # values ("1099", "1099.0") without raising out of the webhook handler.
+        try:
+            amount_cents = int(round(float(amount_source)))
+        except (TypeError, ValueError):
+            amount_cents = 0
     else:
         amount_cents = _money_to_cents(
             _first(
@@ -346,7 +366,7 @@ def parse_throne_send_payload(
     fallback_event_hash = build_fallback_hash(
         creator_id=creator_id,
         order_id=order_id,
-        purchased_at=purchased_at,
+        purchased_at=parsed_purchased_at,
         gifter_username=gifter_username,
         item_name=item_name,
         amount_cents=amount_cents,
