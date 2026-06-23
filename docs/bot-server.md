@@ -48,21 +48,25 @@ local bot-ops health endpoint, and the bot's webhook-notify bridge settings.
 
 ## Webhook-to-bot send notifications
 
-The bot ops bridge listens on `ROB_OPS_HOST:ROB_OPS_PORT`, usually `127.0.0.1:8811`.
-Because that address is local to the bot server, the webhook server cannot reach it unless the bot server exposes a small, protected reverse proxy route.
+The bot ops bridge listens on `ROB_OPS_HOST:ROB_OPS_PORT` (default
+`127.0.0.1:8811`). The webhook server notifies it as soon as a send is recorded
+so the Discord card posts immediately. Keep this bridge on a **private** network
+— never expose port `8811` to the public internet, and do **not** put a
+public reverse-proxy route in front of `/ops/...`. The ops API can block users,
+edit sends, and reissue webhooks, so it must never be reachable from the edge.
 
-Recommended Nginx route on `bot-01.robthebot.com`:
+Pick whichever matches your topology:
 
-```nginx
-location = /ops/sends/process {
-    proxy_pass http://127.0.0.1:8811/ops/sends/process;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
+- **Single host** (bot + webhook on one machine): leave the bridge on
+  `127.0.0.1:8811` and point the webhook at
+  `ROB_BOT_NOTIFY_URL=http://127.0.0.1:8811/ops/sends/process`.
+- **Separate hosts**: bind the bridge to a private interface the webhook host
+  can reach (e.g. a VPC/WireGuard address such as `ROB_OPS_HOST=10.100.0.2`) and
+  set `ROB_BOT_NOTIFY_URL=http://10.100.0.2:8811/ops/sends/process`. Restrict the
+  port to the webhook host with a firewall/security group.
 
-Keep the bot ops bridge itself bound to `127.0.0.1`. Do not open port `8811` publicly.
-The webhook must send the matching `ROB_OPS_SECRET` header through `ROB_BOT_NOTIFY_URL`.
+In all cases set a strong shared `ROB_OPS_SECRET` on both services: the webhook
+sends it as the `X-Rob-Ops-Secret` header. As a safety net the bot **rejects
+every ops request** when the bridge is bound off-loopback without a secret (and
+logs an error at startup), so a missing secret fails closed rather than serving
+the ops API unauthenticated.

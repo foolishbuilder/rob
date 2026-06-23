@@ -17,6 +17,19 @@ env/
 .env.*
 !.env.example
 
+# Keys / credentials (never commit private key material or tunnel creds)
+*.pem
+*.key
+*.p12
+*.pfx
+cert.pem
+id_rsa*
+id_ed25519*
+*_ed25519
+*.tunnel.json
+*tunnel*.json
+cloudflared/
+
 # Local Discord/server config
 bot/channels.py
 

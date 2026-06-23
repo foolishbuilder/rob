@@ -36,7 +36,7 @@ The webhook server is the HTTP-only side of Rob.
 - `THRONE_WEBHOOK_SIGNATURE_HEADER`
 - `THRONE_WEBHOOK_SIGNED_MESSAGE_FORMAT`
 - `THRONE_WEBHOOK_MAX_TIMESTAMP_SKEW_SECONDS`
-- `ROB_BOT_NOTIFY_URL` (recommended, for example `https://bot-01.robthebot.com/ops/sends/process`)
+- `ROB_BOT_NOTIFY_URL` (recommended; a private-network address, e.g. `http://127.0.0.1:8811/ops/sends/process` on a single host or `http://10.100.0.2:8811/ops/sends/process` across hosts)
 - `ROB_OPS_SECRET` (must match the bot server when `ROB_BOT_NOTIFY_URL` is set)
 
 `DISCORD_TOKEN` is not required here.
@@ -54,22 +54,29 @@ local `/health`, the public webhook host, and the bot-notify bridge route when c
 
 ## Bot notification checklist
 
-For sends to appear in Discord without bot-side polling, the webhook server needs:
+For sends to appear in Discord without bot-side polling, the webhook server must
+reach the bot ops bridge over a **private** network (loopback on a single host,
+or a private/VPC address between hosts — never the public internet):
 
 ```env
-ROB_BOT_NOTIFY_URL=https://bot-01.robthebot.com/ops/sends/process
+# Single host (bot + webhook together):
+ROB_BOT_NOTIFY_URL=http://127.0.0.1:8811/ops/sends/process
+# Separate hosts (private address reachable only by the webhook host):
+# ROB_BOT_NOTIFY_URL=http://10.100.0.2:8811/ops/sends/process
 ROB_OPS_SECRET=<same value as the bot server>
 ```
 
-That URL must be reachable from the webhook server and must proxy to the bot server's local ops bridge.
-If `curl -fsS https://bot-01.robthebot.com/ops/sends/process` returns a route/proxy error, Nginx or Cloudflare is not wired yet.
-The endpoint is `POST` only, so a plain `GET` may return `405`; that still proves the route exists.
+That URL must be reachable from the webhook host and resolve to the bot's ops
+bridge on the private network. The endpoint is `POST` only, so a plain `GET` may
+return `405`; that still proves the route exists. Do not expose `/ops/...`
+through a public reverse proxy — see `docs/bot-server.md`.
 
 ## `THRONE_WEBHOOK_REQUIRE_SIGNATURE`
 
 - When `THRONE_WEBHOOK_REQUIRE_SIGNATURE=true`, the webhook rejects requests with `401` if the timestamp is invalid, the public key is missing, or the Ed25519 signature check fails.
 - When `THRONE_WEBHOOK_REQUIRE_SIGNATURE=false`, the webhook skips Ed25519 signature validation entirely, but it still requires valid JSON plus a matching `{creator_id}/{secret}` URL pair.
 - For early local or tunnel-based dev, `false` is acceptable while the real Throne public key and signed-message format are still being verified.
+- **Production recommendation:** set `THRONE_WEBHOOK_REQUIRE_SIGNATURE=true` and provide `THRONE_PUBLIC_KEY_PEM` so inbound events are cryptographically verified, not merely gated by the URL secret. The webhook is the one service intentionally exposed to the internet, so the URL secret alone is a weaker guarantee. (The shipped install templates default this to `false`; flip it to `true` once the Throne public key is in place — leaving it `true` without a key makes the webhook reject every event.)
 - For stricter shared-dev testing, switch it back to `true` and provide `THRONE_PUBLIC_KEY_PEM` plus the correct header and message-format settings.
 
 
