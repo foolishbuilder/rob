@@ -8,14 +8,18 @@
 -- Dom/me is credited twice and the send card is posted twice. The application
 -- already de-duplicates by catching unique violations
 -- (rob/database/repositories/sends.py); this index supplies the missing
--- constraint for the no-event_id path. (event_id already has its own unique
--- index from 002; NULLs are distinct in Postgres, so both indexes only bind
--- non-NULL keys.)
+-- constraint for the no-event_id path.
+--
+-- The index is scoped to ``event_id IS NULL``: rows that DO carry an event_id are
+-- de-duplicated by idx_sends_event_id_unique (from 002), and parse_throne_send
+-- populates fallback_event_hash on every row, so a broader predicate would make
+-- two genuinely distinct events (different event_id, same order/item/amount/
+-- gifter/timestamp) collide and drop the second as a false duplicate.
 
--- Neutralise any pre-existing duplicate hashes first so the unique index can be
--- built without deleting historical (already-posted) rows. Only the LATER
--- duplicate row(s) per hash have their dedup key cleared; the earliest row per
--- hash keeps it. No financial rows are removed.
+-- Neutralise any pre-existing duplicate hashes among event-less rows first so the
+-- unique index can be built without deleting historical (already-posted) rows.
+-- Only the LATER duplicate row(s) per hash have their dedup key cleared; the
+-- earliest row per hash keeps it. No financial rows are removed.
 WITH ranked AS (
     SELECT
         id,
@@ -25,6 +29,7 @@ WITH ranked AS (
         ) AS rn
     FROM sends
     WHERE fallback_event_hash IS NOT NULL
+      AND event_id IS NULL
 )
 UPDATE sends
 SET fallback_event_hash = NULL
@@ -34,7 +39,7 @@ WHERE sends.id = ranked.id
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sends_fallback_hash_unique
 ON sends (fallback_event_hash)
-WHERE fallback_event_hash IS NOT NULL;
+WHERE event_id IS NULL AND fallback_event_hash IS NOT NULL;
 
 INSERT INTO db_build_version (version, notes)
 VALUES (
