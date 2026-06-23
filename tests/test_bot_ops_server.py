@@ -299,6 +299,40 @@ def test_bot_ops_process_send_endpoint_requires_secret():
     assert send_queue.notified == []
 
 
+def test_bot_ops_rejects_wrong_secret():
+    bot = SimpleNamespace(user=SimpleNamespace(id=123))
+    server = BotOpsServer(bot=bot, host="127.0.0.1", port=8811, secret="shared")
+    request = _FakeRequest(headers={"X-Rob-Ops-Secret": "nope"})
+
+    response = asyncio.run(server._handle_health(request))
+
+    assert response.status == 403
+
+
+def test_bot_ops_without_secret_allows_loopback():
+    bot = SimpleNamespace(user=SimpleNamespace(id=123))
+    server = BotOpsServer(bot=bot, host="127.0.0.1", port=8811, secret=None)
+    request = _FakeRequest(headers={})
+
+    response = asyncio.run(server._handle_health(request))
+
+    assert response.status == 200
+
+
+def test_bot_ops_without_secret_denies_non_loopback_bind():
+    # Fail closed: with no secret AND a non-loopback bind, the ops API must be
+    # rejected rather than served unauthenticated.
+    send_queue = _FakeSendQueue()
+    bot = SimpleNamespace(send_queue_service=send_queue, user=SimpleNamespace(id=123))
+    server = BotOpsServer(bot=bot, host="0.0.0.0", port=8811, secret=None)
+    request = _FakeRequest(payload={"send_id": 42}, headers={})
+
+    response = asyncio.run(server._handle_process_send(request))
+
+    assert response.status == 403
+    assert send_queue.notified == []
+
+
 def test_bot_ops_add_sub_accepts_form_payload_send_names_string():
     registration_service = _FakeRegistrationService()
     bot = SimpleNamespace(

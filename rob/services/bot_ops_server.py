@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 from typing import Any
@@ -8,7 +9,7 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 import discord
-from rob.utils.money import format_money_from_cents
+from rob.utils.money import dollars_to_cents, format_money_from_cents
 
 log = logging.getLogger(__name__)
 
@@ -206,6 +207,18 @@ class BotOpsServer:
         self._site = web.TCPSite(self._runner, host=self.host, port=self.port)
         await self._site.start()
         log.info("Bot ops server listening on http://%s:%s.", self.host, self.port)
+        if not self.secret:
+            if self._host_is_loopback(self.host):
+                log.warning(
+                    "Bot ops server is running without ROB_OPS_SECRET (loopback only). "
+                    "Set ROB_OPS_SECRET for defense in depth."
+                )
+            else:
+                log.error(
+                    "Bot ops server is bound to %s without ROB_OPS_SECRET; all ops "
+                    "requests will be REJECTED. Set ROB_OPS_SECRET.",
+                    self.host,
+                )
 
     async def stop(self) -> None:
         if self._runner is None:
@@ -214,10 +227,19 @@ class BotOpsServer:
         self._runner = None
         self._site = None
 
+    @staticmethod
+    def _host_is_loopback(host: str | None) -> bool:
+        return (host or "").strip().lower() in {"127.0.0.1", "::1", "localhost"}
+
     def _is_authorized(self, request: web.Request) -> bool:
-        if not self.secret:
-            return True
-        return request.headers.get("X-Rob-Ops-Secret") == self.secret
+        if self.secret:
+            provided = request.headers.get("X-Rob-Ops-Secret", "")
+            return hmac.compare_digest(provided, self.secret)
+        # Fail closed: with no secret configured, the ops API (which can block
+        # users, edit sends, reissue webhooks, etc.) is only allowed when bound
+        # to loopback. A non-loopback bind without a secret is rejected rather
+        # than served unauthenticated.
+        return self._host_is_loopback(self.host)
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         if not self._is_authorized(request):
@@ -1010,7 +1032,7 @@ class BotOpsServer:
             change_request = await self.bot.send_change_request_service.create_send_add_request(
                 guild_id=guild_id,
                 domme_lookup=domme_lookup,
-                amount_cents=int(round(amount * 100)),
+                amount_cents=dollars_to_cents(amount),
                 sub_name=sub_name,
                 requested_by=requested_by,
                 currency=currency,
@@ -1120,7 +1142,7 @@ class BotOpsServer:
                 guild_id=guild_id,
                 domme_lookup=domme_lookup,
                 send_id=send_id,
-                amount_cents=int(round(amount * 100)),
+                amount_cents=dollars_to_cents(amount),
                 message_id=message_id,
                 reason=reason,
                 requested_by=requested_by,
