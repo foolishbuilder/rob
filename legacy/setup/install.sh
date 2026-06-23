@@ -188,7 +188,6 @@ success "Service installed and started"
 # ── Done — show GitHub Actions secrets ────────────────────────────────────────
 SERVER_IP="$(hostname -I | awk '{print $1}')"
 KNOWN_HOSTS_LINE="$(ssh-keyscan -H "${SERVER_IP}" 2>/dev/null || true)"
-PRIVATE_KEY="$(cat "${DEPLOY_KEY_FILE}")"
 
 section "Install complete"
 echo
@@ -207,8 +206,10 @@ section "GitHub Actions secrets"
 printf '%sGo to:%s  https://github.com/notpatdev/rob-the-bot/settings/secrets/actions\n' "${CYAN}" "${RESET}"
 echo
 printf '%s%s%s\n' "${BOLD}" "DEPLOY_SSH_KEY" "${RESET}"
-echo "  (copy everything between and including the BEGIN/END lines)"
-printf '%s\n' "${PRIVATE_KEY}"
+echo "  The deploy private key is at: ${DEPLOY_KEY_FILE}"
+echo "  Upload it WITHOUT printing it to this terminal (it must stay secret):"
+echo "    gh secret set DEPLOY_SSH_KEY < ${DEPLOY_KEY_FILE}"
+echo "  Avoid 'cat'-ing the private key into shared terminals, logs, or screen shares."
 echo
 printf '%s%s%s\n' "${BOLD}" "DEPLOY_KNOWN_HOSTS" "${RESET}"
 printf '%s\n' "${KNOWN_HOSTS_LINE}"

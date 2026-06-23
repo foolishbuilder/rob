@@ -98,6 +98,12 @@ class SendQueueService:
     async def _run(self) -> None:
         await self.bot.wait_until_ready()
         await self._refresh_leaderboards_on_startup()
+        try:
+            # Drain any sends left in 'pending' by a crash/restart or a missed
+            # ops notify before entering the notify-driven loop.
+            await self.process_cycle()
+        except Exception:
+            log.exception("Startup pending-send drain failed.")
         while not self._stopping:
             try:
                 try:
@@ -130,9 +136,9 @@ class SendQueueService:
             if released:
                 log.info("Released %s queued maintenance send(s).", released)
 
-        log.info("Send queue cycle started.")
         pending = await self.sends.fetch_for_status("pending", limit=50)
-        log.info("Pending sends found: %s", len(pending))
+        if pending:
+            log.info("Send queue cycle: %s pending send(s).", len(pending))
         if self.counting_service is not None:
             queued_maintenance = await self.sends.fetch_for_status("queued_maintenance", limit=50)
             recovery_candidates = list(pending) + list(queued_maintenance)
@@ -170,16 +176,13 @@ class SendQueueService:
                 await self.leaderboard_service.refresh_all_guilds()
 
     async def process_idle_tasks(self) -> None:
-        """Run slow maintenance work without sweeping pending sends every tick."""
-        if not await self.maintenance.is_enabled():
-            released = await self.sends.release_queued_maintenance()
-            if released:
-                log.info("Released %s queued maintenance send(s).", released)
-                await self.process_cycle()
+        """Sweep pending sends and run periodic maintenance each idle tick.
 
-        if not await self.maintenance.is_enabled():
-            if await self.maintenance.consume_leaderboard_refresh_request():
-                await self.leaderboard_service.refresh_all_guilds()
+        Delivery is normally driven by the ops notify queue; this idle sweep is
+        the durable backstop so a dropped notify or a restart can never strand a
+        ``pending`` send — it stays in the DB queue until it posts.
+        """
+        await self.process_cycle()
 
     async def notify_send(self, send_id: int) -> None:
         self._notification_queue().put_nowait(int(send_id))

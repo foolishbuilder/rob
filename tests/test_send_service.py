@@ -227,6 +227,43 @@ def test_non_usd_throne_send_is_converted_to_usd_with_original_metadata():
     assert sends.inserted.original_currency == "EUR"
 
 
+def test_unsupported_currency_throne_send_is_recorded_as_ignored_not_dropped():
+    # An unknown currency must not crash the webhook handler (which would 500
+    # and make Throne retry forever) nor silently drop the send. It is recorded
+    # as ``ignored`` with the original amount/currency preserved.
+    sends = _FakeSendsRepo()
+    subs = _FakeSubsRepo()
+    service = SendService(
+        sends=sends,
+        subs=subs,
+        maintenance=_FakeMaintenance(),
+        throne_test_gifter_usernames=("marie_123",),
+    )
+    payload = ThroneSendPayload(
+        event_id="evt_x",
+        event_type="gift_purchased",
+        order_id="order_x",
+        gifter_username="real_sender",
+        item_name="Flowers",
+        item_image_url=None,
+        amount_cents=5000,
+        currency="ZZZ",
+        is_private=False,
+        purchased_at=datetime.now(timezone.utc),
+        fallback_event_hash="hash_x",
+    )
+
+    record = asyncio.run(service.record_throne_send(creator=_creator(), payload=payload))
+
+    assert record is not None  # not dropped, no exception
+    assert sends.inserted is not None
+    assert sends.inserted.discord_post_status == "ignored"
+    assert sends.inserted.amount_cents == 0
+    assert sends.inserted.currency == "USD"
+    assert sends.inserted.original_amount_cents == 5000
+    assert sends.inserted.original_currency == "ZZZ"
+
+
 def test_main_guild_offline_throne_send_is_saved_without_discord_queue():
     from rob.config.guilds import MAIN_GUILD_ID
 

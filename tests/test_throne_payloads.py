@@ -36,3 +36,62 @@ def test_known_test_sender_detection_is_case_insensitive():
 
 def test_real_sender_not_known_test_sender():
     assert is_known_test_sender('real_sender', test_gifter_usernames={'marie_123'}) is False
+
+
+def test_fallback_hash_is_stable_when_timestamp_missing():
+    # Throne delivers at-least-once. A retried event with no timestamp must
+    # hash identically both times so the duplicate de-duplicates; previously the
+    # now() default made each retry hash differently.
+    base = {
+        "type": "gift_purchased",
+        "data": {"price": 1099, "currency": "USD", "gifter_username": "sub", "orderId": "o1"},
+    }
+    first = parse_throne_send_payload(creator_id="c", payload=base)
+    second = parse_throne_send_payload(creator_id="c", payload=base)
+    assert first.fallback_event_hash == second.fallback_event_hash
+
+
+def test_fallback_hash_differs_when_timestamp_present():
+    with_ts = {
+        "type": "gift_purchased",
+        "data": {
+            "price": 1099,
+            "currency": "USD",
+            "gifter_username": "sub",
+            "orderId": "o1",
+            "purchasedAt": "2026-06-01T00:00:00Z",
+        },
+    }
+    without_ts = {
+        "type": "gift_purchased",
+        "data": {"price": 1099, "currency": "USD", "gifter_username": "sub", "orderId": "o1"},
+    }
+    a = parse_throne_send_payload(creator_id="c", payload=with_ts)
+    b = parse_throne_send_payload(creator_id="c", payload=without_ts)
+    assert a.fallback_event_hash != b.fallback_event_hash
+
+
+def test_amount_cents_accepts_decimal_string_without_crashing():
+    parsed = parse_throne_send_payload(
+        creator_id="c",
+        payload={"type": "gift_purchased", "data": {"amountCents": "1099.0", "currency": "USD"}},
+    )
+    assert parsed.amount_cents == 1099
+
+
+def test_amount_cents_rounds_decimal_string():
+    parsed = parse_throne_send_payload(
+        creator_id="c",
+        payload={"type": "gift_purchased", "data": {"amountCents": "1099.6", "currency": "USD"}},
+    )
+    assert parsed.amount_cents == 1100
+
+
+def test_amount_cents_half_cent_tie_rounds_half_up_not_bankers():
+    # 1098.5 -> 1099 with ROUND_HALF_UP; float + builtin round() would give 1098
+    # (banker's rounding to the even value).
+    parsed = parse_throne_send_payload(
+        creator_id="c",
+        payload={"type": "gift_purchased", "data": {"amountCents": "1098.5", "currency": "USD"}},
+    )
+    assert parsed.amount_cents == 1099
