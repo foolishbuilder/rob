@@ -1,13 +1,15 @@
 """Privacy / right-to-erasure repository.
 
 :class:`UserDataRepository` removes *all* of a Discord user's Rob data, either
-everywhere (all guilds) or scoped to a single guild. It deliberately leaves two
-things untouched:
+everywhere (all guilds) or scoped to a single guild.
 
-* ``bot_users`` — this holds the allow/block status. A blocked user must stay
-  blocked even after erasing the rest of their footprint.
-* ``the_count`` — only stores a single ``last_user_id`` integer for a guild's
-  counting channel; there is no per-user row to remove.
+``bot_users`` is the one row that is not deleted: it carries the allow/block
+status, and a blocked user must stay blocked even after erasing the rest of
+their footprint. We do, however, null the PII it holds (``discord_username`` /
+``discord_display_name``) so only the ``(guild_id, discord_user_id, status)``
+tuple needed for block enforcement remains. ``the_count.last_user_id`` is nulled
+when it points at the erased user (it would otherwise retain their id until the
+next count), and ``inactive_users`` rows are deleted outright.
 
 Every erasure runs inside a single transaction so a partial wipe can never be
 left behind. Each method returns a ``{table: rows_deleted}`` mapping for the
@@ -111,6 +113,8 @@ class UserDataRepository:
                     UNION ALL
                     SELECT guild_id FROM domme_onboarding_state
                         WHERE discord_user_id = $1
+                    UNION ALL
+                    SELECT guild_id FROM inactive_users WHERE discord_user_id = $1
                 ) AS guilds
                 WHERE guild_id IS NOT NULL
                 ORDER BY guild_id
@@ -230,6 +234,32 @@ class UserDataRepository:
             connection,
             discord_user_id=discord_user_id,
             guild_id=guild_id,
+        )
+
+        # inactive_users carries the user's discord id; purge it outright.
+        deleted["inactive_users"] = _rows_affected(
+            await connection.execute(
+                f"DELETE FROM inactive_users WHERE discord_user_id = $1{guild_filter}",
+                *scope,
+            )
+        )
+
+        # bot_users is kept for block enforcement, but its PII is cleared.
+        deleted["bot_users_pii_cleared"] = _rows_affected(
+            await connection.execute(
+                "UPDATE bot_users SET discord_username = NULL, "
+                f"discord_display_name = NULL WHERE discord_user_id = $1{guild_filter}",
+                *scope,
+            )
+        )
+
+        # the_count only stores the last counter's id; null it if it's the user.
+        the_count_filter = "" if guild_id is None else " AND guild_id = $2"
+        deleted["the_count"] = _rows_affected(
+            await connection.execute(
+                f"UPDATE the_count SET last_user_id = NULL WHERE last_user_id = $1{the_count_filter}",
+                *scope,
+            )
         )
         return deleted
 

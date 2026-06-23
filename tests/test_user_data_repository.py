@@ -3,8 +3,9 @@
 There is no Postgres in this test process, so we drive the repo with a fake
 connection that records every ``execute`` (the DELETEs) and ``fetch`` (the
 guild-scan) it runs and returns ``DELETE <n>`` command tags. This lets us
-assert exactly which tables/columns each erasure touches, that ``bot_users``
-and ``the_count`` are never referenced, and that guild scoping is applied.
+assert exactly which tables/columns each erasure touches, that ``bot_users`` is
+kept (PII nulled) for block enforcement while ``the_count``/``inactive_users``
+are cleared, and that guild scoping is applied.
 """
 
 from __future__ import annotations
@@ -78,16 +79,22 @@ def test_delete_everywhere_touches_all_user_tables_and_returns_counts():
         "domme_onboarding_state",
         "bot_settings",
         "user_terms_acceptance",
+        "inactive_users",
+        "bot_users_pii_cleared",
+        "the_count",
     }
-    # Every statement reported a single deleted row in this fake.
+    # Every statement reported a single affected row in this fake.
     assert all(count == 1 for count in deleted.values())
 
     queries = _queries(connection)
-    # Hard deletes (no UPDATE / anonymization).
-    assert "UPDATE" not in queries.upper()
-    # Block list + counting state must never be referenced.
-    assert "bot_users" not in queries
-    assert "the_count" not in queries
+    # bot_users row is retained for block enforcement, but its PII is nulled
+    # (never hard-deleted).
+    assert "DELETE FROM bot_users" not in queries
+    assert "UPDATE bot_users SET discord_username = NULL" in queries
+    # the_count keeps its row but clears the erased user's id.
+    assert "UPDATE the_count SET last_user_id = NULL" in queries
+    # inactive_users carries the user's id and is purged outright.
+    assert "DELETE FROM inactive_users WHERE discord_user_id = $1" in queries
     # Terms purged in the everywhere case.
     assert "DELETE FROM user_terms_acceptance WHERE discord_user_id = $1" in queries
 
@@ -165,7 +172,7 @@ def test_delete_everywhere_runs_in_single_transaction():
     repo = UserDataRepository(_FakeDatabase(connection))
 
     asyncio.run(repo.delete_user_everywhere(555))
-    assert len(connection.execute_calls) == 10
+    assert len(connection.execute_calls) == 13
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +198,9 @@ def test_delete_in_guild_constrains_every_statement_and_skips_terms():
         "send_change_requests",
         "domme_onboarding_state",
         "bot_settings",
+        "inactive_users",
+        "bot_users_pii_cleared",
+        "the_count",
     }
 
     queries = _queries(connection)
