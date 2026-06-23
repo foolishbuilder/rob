@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 
 from rob.database.repositories.leaderboards import LeaderboardsRepository
 from rob.database.repositories.models import Domme, NewSend, SendRecord
@@ -9,10 +10,27 @@ from rob.database.repositories.subs import SubsRepository
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import ThroneSendPayload, is_known_test_sender
-from rob.utils.fx import convert_cents_to_usd
+from rob.utils.fx import UnsupportedCurrencyError, convert_cents_to_usd
 from rob.utils.time import utc_now
 
+log = logging.getLogger(__name__)
+
 _UNMATCHABLE_SUB_NAMES = {"anonymous", "anon", "private", "hidden"}
+
+
+def _safe_convert_cents_to_usd(amount_cents: int, currency: str | None) -> int | None:
+    """Convert to USD cents, or ``None`` if the currency is unknown/invalid.
+
+    Throne can send any currency string and, on refunds, negative amounts.
+    Returning ``None`` instead of raising lets the webhook handler record the
+    event (so Throne stops retrying) without crashing or crediting a wrong
+    amount.
+    """
+
+    try:
+        return convert_cents_to_usd(amount_cents, currency)
+    except (UnsupportedCurrencyError, ValueError):
+        return None
 
 
 def _can_match_sub_name(name: str | None, *, is_private: bool = False) -> bool:
@@ -66,7 +84,9 @@ class SendService:
     ) -> SendRecord | None:
         source_amount_cents = payload.amount_cents
         source_currency = (payload.currency or "USD").upper()
-        amount_cents = convert_cents_to_usd(source_amount_cents, source_currency)
+        converted = _safe_convert_cents_to_usd(source_amount_cents, source_currency)
+        conversion_failed = converted is None
+        amount_cents = converted or 0
         currency = "USD"
         original_amount_cents = source_amount_cents if source_currency != "USD" else None
         original_currency = source_currency if source_currency != "USD" else None
@@ -76,8 +96,19 @@ class SendService:
             test_gifter_usernames=set(self.throne_test_gifter_usernames),
         )
 
+        if conversion_failed:
+            log.warning(
+                "Throne send currency could not be converted to USD; recording as "
+                "ignored. guild_id=%s creator_id=%s currency=%s amount_cents=%s",
+                creator.guild_id,
+                creator.throne_creator_id,
+                source_currency,
+                source_amount_cents,
+            )
+
         if (
-            amount_cents == 0
+            not conversion_failed
+            and amount_cents == 0
             and payload.event_type == "gift_purchased"
             and self.throne is not None
         ):
@@ -88,15 +119,21 @@ class SendService:
             )
             if match is not None and match.amount_cents > 0:
                 matched_currency = (match.currency or "USD").upper()
-                amount_cents = convert_cents_to_usd(match.amount_cents, matched_currency)
-                currency = "USD"
-                original_amount_cents = (
-                    match.amount_cents if matched_currency != "USD" else None
-                )
-                original_currency = matched_currency if matched_currency != "USD" else None
-                is_private = False
+                matched_usd = _safe_convert_cents_to_usd(match.amount_cents, matched_currency)
+                if matched_usd is not None:
+                    amount_cents = matched_usd
+                    currency = "USD"
+                    original_amount_cents = (
+                        match.amount_cents if matched_currency != "USD" else None
+                    )
+                    original_currency = matched_currency if matched_currency != "USD" else None
+                    is_private = False
 
-        if await self._send_tracking_disabled_for_guild(creator.guild_id):
+        if conversion_failed:
+            # Stored truthfully (original_amount/currency preserved) but never
+            # posted or counted, so an unknown currency can't corrupt USD totals.
+            status = "ignored"
+        elif await self._send_tracking_disabled_for_guild(creator.guild_id):
             status = "posted"
         else:
             status = "queued_maintenance" if await self.maintenance.is_enabled() else "pending"

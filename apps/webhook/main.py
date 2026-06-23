@@ -8,6 +8,7 @@ from aiohttp import web
 from rob.config.settings import configure_logging, load_webhook_settings
 from rob.database.connection import Database
 from rob.throne.webhooks import create_webhook_app
+from rob.utils.fx import run_rate_refresher
 
 log = logging.getLogger(__name__)
 
@@ -36,10 +37,19 @@ async def main_async() -> None:
         settings.throne_webhook_port,
     )
 
+    # Keep currency conversions current: fetch live ECB rates on startup and
+    # every 12h. Failures fall back to the bundled snapshot (see rob.utils.fx).
+    fx_refresher = asyncio.create_task(run_rate_refresher(), name="rob-fx-refresher")
+
     try:
         while True:
             await asyncio.sleep(3600)
     finally:
+        fx_refresher.cancel()
+        try:
+            await fx_refresher
+        except asyncio.CancelledError:
+            pass
         await runner.cleanup()
         await database.close()
 
