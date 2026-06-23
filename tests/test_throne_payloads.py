@@ -85,3 +85,13 @@ def test_amount_cents_rounds_decimal_string():
         payload={"type": "gift_purchased", "data": {"amountCents": "1099.6", "currency": "USD"}},
     )
     assert parsed.amount_cents == 1100
+
+
+def test_amount_cents_half_cent_tie_rounds_half_up_not_bankers():
+    # 1098.5 -> 1099 with ROUND_HALF_UP; float + builtin round() would give 1098
+    # (banker's rounding to the even value).
+    parsed = parse_throne_send_payload(
+        creator_id="c",
+        payload={"type": "gift_purchased", "data": {"amountCents": "1098.5", "currency": "USD"}},
+    )
+    assert parsed.amount_cents == 1099

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any
 
 
@@ -93,15 +94,26 @@ def parse_timestamp(value: Any) -> datetime:
     return parse_timestamp_opt(value) or datetime.now(timezone.utc)
 
 
-def _money_to_cents(value: Any, *, event_type: str | None) -> int:
+def _to_int_cents(value: Any) -> int:
+    """Round a minor-unit (cents) money value to an int.
+
+    Uses Decimal + ROUND_HALF_UP (no float) so fractional-cent inputs round the
+    same way as the FX path and dollars_to_cents, instead of float imprecision +
+    banker's rounding (e.g. round(1098.5) -> 1098).
+    """
     if value is None:
         return 0
-    if isinstance(value, str):
-        cleaned = value.strip().replace("$", "").replace(",", "")
-        if not cleaned:
-            return 0
-        return int(round(float(cleaned)))
-    return int(round(float(value)))
+    text = str(value).strip().replace("$", "").replace(",", "")
+    if not text:
+        return 0
+    try:
+        return int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError):
+        return 0
+
+
+def _money_to_cents(value: Any, *, event_type: str | None) -> int:
+    return _to_int_cents(value)
 
 
 def build_fallback_hash(
@@ -325,11 +337,9 @@ def parse_throne_send_payload(
     )
     if amount_source is not None:
         # Throne usually sends integer cents, but tolerate decimal/float-like
-        # values ("1099", "1099.0") without raising out of the webhook handler.
-        try:
-            amount_cents = int(round(float(amount_source)))
-        except (TypeError, ValueError):
-            amount_cents = 0
+        # values ("1099", "1099.5") without raising out of the webhook handler,
+        # using Decimal half-up rounding (no float) for money correctness.
+        amount_cents = _to_int_cents(amount_source)
     else:
         amount_cents = _money_to_cents(
             _first(
