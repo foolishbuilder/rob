@@ -107,10 +107,10 @@ def _build_test_app(
     )
 
     app = web.Application()
-    app["settings"] = settings
-    app["database"] = SimpleNamespace()
-    app["throne_service"] = SimpleNamespace()
-    app["subs_repository"] = SimpleNamespace()
+    app[webhooks_mod.APP_SETTINGS] = settings
+    app[webhooks_mod.APP_DATABASE] = SimpleNamespace()
+    app[webhooks_mod.APP_THRONE_SERVICE] = SimpleNamespace()
+    app[webhooks_mod.APP_SUBS_REPOSITORY] = SimpleNamespace()
     app.router.add_post(
         "/throne/webhook/{creator_id}/{secret}",
         webhooks_mod.handle_throne_webhook,

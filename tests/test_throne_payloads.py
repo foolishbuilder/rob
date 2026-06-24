@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from rob.throne.payloads import is_explicit_test_webhook_payload, is_known_test_sender, parse_throne_send_payload
 
 
@@ -95,3 +97,22 @@ def test_amount_cents_half_cent_tie_rounds_half_up_not_bankers():
         payload={"type": "gift_purchased", "data": {"amountCents": "1098.5", "currency": "USD"}},
     )
     assert parsed.amount_cents == 1099
+
+
+# v2 contract: every accepted event type reads money as DIRECT MINOR UNITS
+# (cents), via both the amountCents field and the price/amount fallback. This
+# guards against re-introducing the legacy per-event major-unit (x100) branch
+# that v2 deliberately dropped (docs/v2-porting-plan.md, "direct minor-unit
+# pricing"). A regression there would silently mis-scale gifts by 100x.
+@pytest.mark.parametrize(
+    "event_type",
+    ["gift_purchased", "contribution_purchased", "gift_crowdfunded", "item_purchased"],
+)
+@pytest.mark.parametrize("amount_field", ["amountCents", "price", "amount"])
+def test_money_is_direct_minor_units_for_all_event_types(event_type, amount_field):
+    parsed = parse_throne_send_payload(
+        creator_id="c",
+        payload={"type": event_type, "data": {amount_field: 2500, "currency": "USD"}},
+    )
+    # 2500 minor units stays 2500 cents ($25.00) — never multiplied to 250000.
+    assert parsed.amount_cents == 2500

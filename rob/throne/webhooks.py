@@ -12,6 +12,7 @@ from rob.database.connection import Database
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.dommes import DommesRepository
 from rob.database.repositories.sends import SendsRepository
+from rob.database.repositories.subs import SubsRepository
 from rob.services.maintenance_service import MaintenanceService
 from rob.services.bot_notify_client import (
     notify_bot_onboarding_webhook_verified,
@@ -25,14 +26,23 @@ from rob.throne.security import build_signed_message, secret_matches, validate_t
 log = logging.getLogger(__name__)
 
 
+# Typed aiohttp application keys. aiohttp deprecates plain string keys (it emits
+# NotAppKeyWarning) and may drop them in 4.x; web.AppKey is the supported way to
+# stash shared state and gives the handler real types when reading it back.
+APP_SETTINGS: web.AppKey[WebhookSettings] = web.AppKey("settings", WebhookSettings)
+APP_DATABASE: web.AppKey[Database] = web.AppKey("database", Database)
+APP_THRONE_SERVICE: web.AppKey[ThroneService] = web.AppKey("throne_service", ThroneService)
+APP_SUBS_REPOSITORY: web.AppKey[SubsRepository] = web.AppKey("subs_repository", SubsRepository)
+
+
 async def handle_health(request: web.Request) -> web.Response:
     return web.Response(text="OK")
 
 
 async def handle_throne_webhook(request: web.Request) -> web.Response:
-    database: Database = request.app["database"]
-    settings: WebhookSettings = request.app["settings"]
-    throne: ThroneService = request.app["throne_service"]
+    database = request.app[APP_DATABASE]
+    settings = request.app[APP_SETTINGS]
+    throne = request.app[APP_THRONE_SERVICE]
 
     creator_id = request.match_info["creator_id"]
     provided_secret = request.match_info["secret"]
@@ -219,7 +229,7 @@ async def handle_throne_webhook(request: web.Request) -> web.Response:
     maintenance = MaintenanceService(BotStateRepository(database))
     send_service = SendService(
         sends=SendsRepository(database),
-        subs=request.app["subs_repository"],
+        subs=request.app[APP_SUBS_REPOSITORY],
         maintenance=maintenance,
         throne=throne,
         throne_test_gifter_usernames=settings.throne_test_gifter_usernames,
@@ -264,19 +274,17 @@ def create_webhook_app(
     settings: WebhookSettings,
     database: Database,
 ) -> web.Application:
-    from rob.database.repositories.subs import SubsRepository
-
     app = web.Application()
-    app["settings"] = settings
-    app["database"] = database
-    app["throne_service"] = ThroneService()
-    app["subs_repository"] = SubsRepository(database)
+    app[APP_SETTINGS] = settings
+    app[APP_DATABASE] = database
+    app[APP_THRONE_SERVICE] = ThroneService()
+    app[APP_SUBS_REPOSITORY] = SubsRepository(database)
     app.router.add_get("/health", handle_health)
     app.router.add_post("/throne/webhook/{creator_id}/{secret}", handle_throne_webhook)
     app.router.add_post("/webhook/{creator_id}/{secret}", handle_throne_webhook)
 
     async def close_throne_service(_app: web.Application) -> None:
-        await _app["throne_service"].close()
+        await _app[APP_THRONE_SERVICE].close()
 
     app.on_cleanup.append(close_throne_service)
     return app

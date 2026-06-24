@@ -112,10 +112,6 @@ def _to_int_cents(value: Any) -> int:
         return 0
 
 
-def _money_to_cents(value: Any, *, event_type: str | None) -> int:
-    return _to_int_cents(value)
-
-
 def build_fallback_hash(
     *,
     creator_id: str,
@@ -335,13 +331,18 @@ def parse_throne_send_payload(
         item.get("amountCents"),
         item.get("amount_cents"),
     )
+    # v2 treats every Throne money field as DIRECT MINOR UNITS (cents) of the
+    # payload currency, for all accepted event types — see docs/v2-porting-plan.md
+    # ("direct minor-unit pricing"). The FX step in send_service then converts to
+    # USD cents. Do NOT reintroduce the legacy per-event major-unit (x100) branch:
+    # under this contract `price`/`amount`/`amountUsd` are already cents, so x100
+    # would inflate gifts 100x. Throne usually sends integer cents; we still
+    # tolerate decimal/float-like values ("1099", "1099.5") via Decimal half-up
+    # rounding (no float) rather than raising out of the webhook handler.
     if amount_source is not None:
-        # Throne usually sends integer cents, but tolerate decimal/float-like
-        # values ("1099", "1099.5") without raising out of the webhook handler,
-        # using Decimal half-up rounding (no float) for money correctness.
         amount_cents = _to_int_cents(amount_source)
     else:
-        amount_cents = _money_to_cents(
+        amount_cents = _to_int_cents(
             _first(
                 data.get("price"),
                 payload.get("price"),
@@ -356,8 +357,7 @@ def parse_throne_send_payload(
                 payload.get("amount_usd"),
                 payload.get("priceUsd"),
                 payload.get("price_usd"),
-            ),
-            event_type=event_type,
+            )
         )
 
     is_private = _truthy(
