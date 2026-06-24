@@ -57,9 +57,11 @@ class _FakeSendsRepo:
 
 
 class _FakeSubsRepo:
-    def __init__(self, *, returned_sub=None):
+    def __init__(self, *, returned_sub=None, sub_by_user_id=None):
         self.returned_sub = returned_sub
+        self.sub_by_user_id = sub_by_user_id
         self.lookup_calls: list[tuple[int, str]] = []
+        self.user_id_calls: list[tuple[int, int]] = []
 
     async def get_by_send_name(self, guild_id: int, send_name: str):
         self.lookup_calls.append((guild_id, send_name))
@@ -67,6 +69,10 @@ class _FakeSubsRepo:
 
     async def get_by_name(self, guild_id: int, send_name: str):
         return await self.get_by_send_name(guild_id, send_name)
+
+    async def get_by_user_id(self, guild_id: int, discord_user_id: int):
+        self.user_id_calls.append((guild_id, discord_user_id))
+        return self.sub_by_user_id
 
 
 class _FakeThroneService:
@@ -308,6 +314,108 @@ def test_dev_guild_offline_mode_does_not_change_throne_queue_status():
 
     assert sends.inserted is not None
     assert sends.inserted.discord_post_status == "pending"
+
+
+def _record_manual_send(service: SendService, **overrides):
+    kwargs = dict(
+        guild_id=1,
+        domme_id=2,
+        domme_user_id=10,
+        amount_cents=1000,
+        currency="USD",
+        method="cashapp",
+        note=None,
+    )
+    kwargs.update(overrides)
+    return asyncio.run(service.record_manual_send(**kwargs))
+
+
+def test_manual_send_with_user_mention_links_to_user():
+    # A Dom/me picked a real member from the @-autocomplete, so the free-text
+    # sub arrives as "<@555>". It must be attributed to that user instead of
+    # being stored verbatim and rendered as "@User with no nickname claimed".
+    sends = _FakeSendsRepo()
+    subs = _FakeSubsRepo(sub_by_user_id=None)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="<@555>")
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_user_id == 555
+    assert sends.inserted.sub_name is None
+    assert subs.user_id_calls == [(1, 555)]
+    # The raw mention must never reach the send-name lookup.
+    assert subs.lookup_calls == []
+
+
+def test_manual_send_with_legacy_nickname_mention_links_to_user():
+    sends = _FakeSendsRepo()
+    subs = _FakeSubsRepo(sub_by_user_id=None)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="<@!777>")
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_user_id == 777
+
+
+def test_manual_send_mention_to_registered_sub_uses_registered_send_name():
+    sends = _FakeSendsRepo()
+    sub = type("Sub", (), {"id": 7, "discord_user_id": 555, "send_name": "kitten"})
+    subs = _FakeSubsRepo(sub_by_user_id=sub)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="<@555>")
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_id == 7
+    assert sends.inserted.sub_user_id == 555
+    assert sends.inserted.sub_name == "kitten"
+
+
+def test_manual_send_explicit_sub_user_id_keeps_provided_display_name():
+    # The slash command resolves the mentioned member's display name and passes
+    # it alongside an explicit sub_user_id; the provided name is preserved.
+    sends = _FakeSendsRepo()
+    sub = type("Sub", (), {"id": 9, "discord_user_id": 555, "send_name": "kitten"})
+    subs = _FakeSubsRepo(sub_by_user_id=sub)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="DisplayName", sub_user_id=555)
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_id == 9
+    assert sends.inserted.sub_user_id == 555
+    assert sends.inserted.sub_name == "DisplayName"
+    assert subs.lookup_calls == []
+
+
+def test_manual_send_plain_name_still_matches_by_send_name():
+    sends = _FakeSendsRepo()
+    sub = type("Sub", (), {"id": 3, "discord_user_id": 42, "send_name": "kitten"})
+    subs = _FakeSubsRepo(returned_sub=sub)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="kitten")
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_id == 3
+    assert sends.inserted.sub_user_id == 42
+    assert sends.inserted.sub_name == "kitten"
+    assert subs.lookup_calls == [(1, "kitten")]
+    assert subs.user_id_calls == []
+
+
+def test_manual_send_plain_unmatched_name_is_left_unclaimed():
+    sends = _FakeSendsRepo()
+    subs = _FakeSubsRepo(returned_sub=None)
+    service = SendService(sends=sends, subs=subs, maintenance=_FakeMaintenance())
+
+    _record_manual_send(service, sub_name="stranger")
+
+    assert sends.inserted is not None
+    assert sends.inserted.sub_user_id is None
+    assert sends.inserted.sub_name == "stranger"
 
 
 def test_gift_purchased_without_visible_amount_uses_wishlist_match_and_converts_to_usd():

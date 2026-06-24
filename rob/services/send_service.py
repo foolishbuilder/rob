@@ -11,6 +11,7 @@ from rob.services.maintenance_service import MaintenanceService
 from rob.services.throne_service import ThroneService
 from rob.throne.payloads import ThroneSendPayload, is_known_test_sender
 from rob.utils.fx import UnsupportedCurrencyError, convert_cents_to_usd
+from rob.utils.text import parse_user_mention
 from rob.utils.time import utc_now
 
 log = logging.getLogger(__name__)
@@ -195,6 +196,16 @@ class SendService:
         resolved_sub_id = sub_id
         resolved_sub_user_id = sub_user_id
         resolved_sub_name = sub_name
+
+        # A free-text sub that is actually a Discord mention ("<@123>", e.g.
+        # typed via the @-autocomplete) is a link to that user, not a claimable
+        # nickname. Pull the id out so the send is attributed to them instead of
+        # being stored verbatim and rendered as "@User with no nickname claimed".
+        if resolved_sub_user_id is None:
+            mentioned_user_id = parse_user_mention(resolved_sub_name)
+            if mentioned_user_id is not None:
+                resolved_sub_user_id = mentioned_user_id
+                resolved_sub_name = None
 
         if resolved_sub_user_id is not None:
             sub = await self.subs.get_by_user_id(guild_id, resolved_sub_user_id)
