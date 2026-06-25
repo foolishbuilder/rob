@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import is_new_system_guild
 
 if TYPE_CHECKING:
     from rob.discord.client import RobBot
@@ -19,8 +19,7 @@ class ActivityTrackerCog(commands.Cog):
     inactivity system can tell active members from inactive ones, and reactivates
     a member the instant they interact again.
 
-    Scoped to the test guild while the activity / inactive-role system is rolled
-    out there first."""
+    Runs on the main + test guilds (the "new system" guilds)."""
 
     def __init__(self, bot: "RobBot") -> None:
         self.bot = bot
@@ -29,7 +28,7 @@ class ActivityTrackerCog(commands.Cog):
         return getattr(self.bot, "inactivity_service", None)
 
     async def _register(self, guild: discord.Guild | None, member: discord.abc.User | None) -> None:
-        if guild is None or not is_test_guild(guild.id):
+        if guild is None or not is_new_system_guild(guild.id):
             return
         if member is None or getattr(member, "bot", False):
             return
@@ -58,7 +57,7 @@ class ActivityTrackerCog(commands.Cog):
         if payload.member is not None:
             guild = self.bot.get_guild(payload.guild_id) or payload.member.guild
             await self._register(guild, payload.member)
-        elif payload.user_id and is_test_guild(payload.guild_id):
+        elif payload.user_id and is_new_system_guild(payload.guild_id):
             # Uncached reactor: record the activity signal even though we can't
             # resolve a Member to reactivate here (the next sweep will catch it).
             service = self._service()

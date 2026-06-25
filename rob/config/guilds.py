@@ -38,8 +38,10 @@ def is_main_guild(guild_id: int | None) -> bool:
 
 
 def is_new_system_guild(guild_id: int | None) -> bool:
-    """Guilds where the new Dom/me onboarding + preferences + leaderboard-access
-    system is live (main + test). It was test-guild-only during development."""
+    """Guilds where Rob's newer systems are live (main + test): the Dom/me
+    onboarding + preferences + leaderboard-access system, and the activity /
+    inactive-role + hourly server-backup systems. Each was test-guild-only during
+    development and promoted to the main guild here."""
     if guild_id is None:
         return False
     return is_main_guild(guild_id) or is_test_guild(guild_id)
