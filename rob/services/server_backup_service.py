@@ -374,20 +374,33 @@ class ServerBackupService:
         updated = await self.backups.add_approver(approval_id=approval_id, user_id=approver_user_id)
         if updated is None:
             return ApprovalDecision(status="gone", approval=None)
+        # The approval may have been finalized between our read and this write;
+        # add_approver returns the existing (non-pending) row in that race. Bail
+        # out so we never promote a baseline for an already-decided approval.
+        if updated.status != "pending":
+            return ApprovalDecision(status="gone", approval=updated)
 
         if len(updated.approved_by) >= updated.required_approvals:
-            backup = await self.backups.create_backup(
-                guild_id=updated.guild_id,
-                snapshot=updated.pending_snapshot,
-            )
-            finalized = await self.backups.finalize(
+            # Claim the approval atomically *before* creating a baseline backup so
+            # a concurrent decision can't produce a spurious extra backup row:
+            # only the call whose finalize transition succeeds writes the backup.
+            claimed = await self.backups.finalize(
                 approval_id=approval_id,
                 status="approved",
                 decided_by_user_id=approver_user_id,
                 decision_reason="Approved by required moderators.",
+            )
+            if claimed is None:
+                return ApprovalDecision(status="gone", approval=updated)
+            backup = await self.backups.create_backup(
+                guild_id=claimed.guild_id,
+                snapshot=claimed.pending_snapshot,
+            )
+            finalized = await self.backups.set_baseline(
+                approval_id=approval_id,
                 baseline_backup_id=backup.id,
             )
-            return ApprovalDecision(status="approved", approval=finalized or updated, remaining=0)
+            return ApprovalDecision(status="approved", approval=finalized or claimed, remaining=0)
 
         remaining = max(0, updated.required_approvals - len(updated.approved_by))
         return ApprovalDecision(status="recorded", approval=updated, remaining=remaining)

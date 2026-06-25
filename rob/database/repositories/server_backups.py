@@ -217,6 +217,31 @@ class ServerBackupsRepository:
             )
         return _build_approval(row) if row is not None else None
 
+    async def set_baseline(
+        self,
+        *,
+        approval_id: int,
+        baseline_backup_id: int,
+    ) -> ServerBackupApproval | None:
+        """Record the baseline backup produced for an already-decided approval.
+
+        Used after an approval is atomically finalized: the winner of the
+        finalize transition creates the baseline backup and links it here.
+        """
+
+        async with self.database.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                UPDATE server_backup_approvals
+                SET baseline_backup_id = $2, updated_at = now()
+                WHERE id = $1
+                RETURNING *
+                """,
+                approval_id,
+                baseline_backup_id,
+            )
+        return _build_approval(row) if row is not None else None
+
     async def add_approver(
         self,
         *,

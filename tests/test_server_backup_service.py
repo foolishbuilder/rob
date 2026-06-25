@@ -90,6 +90,12 @@ class _FakeBackupsRepo:
             record.message_id = message_id
         return record
 
+    async def set_baseline(self, *, approval_id, baseline_backup_id):
+        record = self.approvals.get(approval_id)
+        if record is not None:
+            record.baseline_backup_id = baseline_backup_id
+        return record
+
     async def add_approver(self, *, approval_id, user_id):
         record = self.approvals.get(approval_id)
         if record is None or record.status != "pending":
@@ -309,6 +315,32 @@ def test_two_distinct_moderators_approve_and_promote_baseline():
     latest = _run(repo.get_latest_backup(1))
     assert latest.snapshot["roles"].get("2") is not None
     assert _run(repo.get_pending_approval(1)) is None
+
+
+def test_register_approval_no_spurious_backup_when_finalized_during_race():
+    repo = _FakeBackupsRepo()
+    service = _service(repo)
+    guild = _make_guild()
+    baseline = service.snapshot_guild(guild)
+    del baseline["roles"]["2"]
+    _run(repo.create_backup(guild_id=1, snapshot=baseline))
+    approval = _run(service.run_cycle(guild)).approval
+    assert _run(repo.count_backups(1)) == 1
+
+    # Simulate the approval being finalized between get_approval and add_approver:
+    # add_approver returns the existing (now non-pending) row.
+    async def _racing_add_approver(*, approval_id, user_id):
+        record = repo.approvals[approval_id]
+        record.status = "approved"
+        record.approved_by = [999, user_id]
+        return record
+
+    repo.add_approver = _racing_add_approver
+
+    decision = _run(service.register_approval(approval_id=approval.id, approver_user_id=111))
+
+    assert decision.status == "gone"
+    assert _run(repo.count_backups(1)) == 1  # no extra backup row created
 
 
 def test_reject_keeps_baseline():

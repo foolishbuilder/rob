@@ -83,8 +83,9 @@ def backup_decision_card(
         title = "Server Backup — Change Rejected"
         summary = (
             "A moderator rejected this change. Rob kept the previous backup "
-            "baseline and did not bless these settings. Revert the change (or "
-            "make further edits) to be prompted again."
+            "baseline and did not bless these settings. Rob won't re-prompt for "
+            "this same change; if the configuration changes again, the next "
+            "hourly check raises a fresh approval."
         )
         color = COLOR_NEUTRAL
         variant = "default"
