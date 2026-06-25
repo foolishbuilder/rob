@@ -46,12 +46,23 @@ rob guild scan --guild-id <guild_id>
 rob guild set-channel --guild-id <guild_id> --field leaderboard_channel_id --channel-id <channel_id>
 rob guild set-role --guild-id <guild_id> --field domme_role_id --role-id <role_id>
 
+# `rob guild scan` (friendly: `rob scan` / `rob auto-apply`) also discovers and
+# can set the activity + backup fields:
+#   roles:    active_role_id, inactive_role_id, unverified_role_id,
+#             mod_role_id, trial_mod_role_id
+#   channels: backup_approval_channel_id
+
 rob count status
 rob count set <number>
 
 rob inactivity status --guild-id <guild_id>
 rob inactivity on --guild-id <guild_id>
 rob inactivity off --guild-id <guild_id>
+
+rob backup status --guild-id <guild_id>
+rob backup on --guild-id <guild_id>
+rob backup off --guild-id <guild_id>
+rob backup run --guild-id <guild_id>
 
 rob migration audit --guild <guild_id>
 rob webhook preview --guild <guild_id>

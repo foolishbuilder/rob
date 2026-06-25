@@ -18,6 +18,8 @@ REQUIRED_DB_BUILD_VERSIONS = (
     "008_dm_preferences",
     "010_leaderboard_access_role",
     "011_send_fallback_hash_unique",
+    "012_inactivity_backup_settings",
+    "013_server_backups",
 )
 
 REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
@@ -125,6 +127,10 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "mod_role_id",
         "inactive_role_id",
         "leaderboard_view_role_id",
+        "active_role_id",
+        "unverified_role_id",
+        "trial_mod_role_id",
+        "backup_approval_channel_id",
         "carlbot_user_id",
         "created_at",
         "updated_at",
@@ -227,6 +233,31 @@ REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "created_at",
         "updated_at",
     },
+    "server_backups": {
+        "id",
+        "guild_id",
+        "snapshot",
+        "is_baseline",
+        "created_at",
+    },
+    "server_backup_approvals": {
+        "id",
+        "guild_id",
+        "status",
+        "changes",
+        "change_signature",
+        "pending_snapshot",
+        "baseline_backup_id",
+        "required_approvals",
+        "approved_by",
+        "channel_id",
+        "message_id",
+        "decided_by_user_id",
+        "decision_reason",
+        "created_at",
+        "updated_at",
+        "decided_at",
+    },
 }
 
 WEBHOOK_REQUIRED_TABLES = {
@@ -257,6 +288,8 @@ BOT_TABLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "count_blocks": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "send_change_requests": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "domme_onboarding_state": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "server_backups": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "server_backup_approvals": ("SELECT", "INSERT", "UPDATE", "DELETE"),
 }
 
 WEBHOOK_TABLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -283,6 +316,8 @@ BOT_RUNTIME_SEQUENCES = (
     "public.count_blocks_id_seq",
     "public.send_change_requests_id_seq",
     "public.domme_onboarding_state_id_seq",
+    "public.server_backups_id_seq",
+    "public.server_backup_approvals_id_seq",
 )
 
 WEBHOOK_RUNTIME_SEQUENCES = (

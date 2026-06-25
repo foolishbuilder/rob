@@ -19,8 +19,10 @@ from rob.database.repositories import (
     CountingRepository,
     DommesRepository,
     GuildSettingsRepository,
+    InactiveUsersRepository,
     LeaderboardsRepository,
     SendsRepository,
+    ServerBackupsRepository,
     SubsRepository,
     ThroneCreatorsRepository,
 )
@@ -42,6 +44,7 @@ GUILD_CHANNEL_FIELDS = (
     "counting_channel_id",
     "report_channel_id",
     "warn_log_channel_id",
+    "backup_approval_channel_id",
 )
 
 GUILD_CHANNEL_LABELS = {
@@ -51,6 +54,7 @@ GUILD_CHANNEL_LABELS = {
     "counting_channel_id": "Counting Channel",
     "report_channel_id": "Report Channel",
     "warn_log_channel_id": "Warn Log Channel",
+    "backup_approval_channel_id": "Backup Approval Channel",
 }
 
 GUILD_CHANNEL_MATCH_TOKENS = {
@@ -60,6 +64,15 @@ GUILD_CHANNEL_MATCH_TOKENS = {
     "counting_channel_id": ("counting", "count"),
     "report_channel_id": ("report", "support", "help"),
     "warn_log_channel_id": ("warn", "warning", "mod-log", "logs", "log"),
+    "backup_approval_channel_id": (
+        "backup-approval",
+        "backup-approvals",
+        "server-backup",
+        "backup",
+        "backups",
+        "mod-approval",
+        "approvals",
+    ),
 }
 
 GUILD_ROLE_FIELDS = (
@@ -68,6 +81,9 @@ GUILD_ROLE_FIELDS = (
     "mod_role_id",
     "inactive_role_id",
     "leaderboard_view_role_id",
+    "active_role_id",
+    "unverified_role_id",
+    "trial_mod_role_id",
 )
 
 GUILD_ROLE_LABELS = {
@@ -76,6 +92,9 @@ GUILD_ROLE_LABELS = {
     "mod_role_id": "Moderator Role",
     "inactive_role_id": "Inactive Role",
     "leaderboard_view_role_id": "Leaderboard Access Role",
+    "active_role_id": "Active Role",
+    "unverified_role_id": "Unverified Role",
+    "trial_mod_role_id": "Trial Moderator Role",
 }
 
 GUILD_ROLE_MATCH_TOKENS = {
@@ -90,6 +109,9 @@ GUILD_ROLE_MATCH_TOKENS = {
         "board access",
         "vip",
     ),
+    "active_role_id": ("active", "active member", "verified member"),
+    "unverified_role_id": ("unverified", "unverify", "not-verified", "pending", "newcomer"),
+    "trial_mod_role_id": ("trial mod", "trialmod", "trial-mod", "trial moderator", "trial"),
 }
 
 
@@ -312,6 +334,26 @@ def build_parser() -> argparse.ArgumentParser:
     count_set.add_argument("number", type=int)
     count_set.add_argument("--guild-id", type=int, default=None)
 
+    inactivity = subparsers.add_parser("inactivity", help="Activity / inactive-role system.")
+    inactivity_subparsers = inactivity.add_subparsers(dest="inactivity_command", required=True)
+    inactivity_status = inactivity_subparsers.add_parser("status", help="Show inactivity system state.")
+    inactivity_status.add_argument("--guild-id", type=int, default=None)
+    inactivity_on = inactivity_subparsers.add_parser("on", help="Enable the inactivity system for a guild.")
+    inactivity_on.add_argument("--guild-id", type=int, default=None)
+    inactivity_off = inactivity_subparsers.add_parser("off", help="Disable the inactivity system for a guild.")
+    inactivity_off.add_argument("--guild-id", type=int, default=None)
+
+    backup = subparsers.add_parser("backup", help="Hourly server-backup system.")
+    backup_subparsers = backup.add_subparsers(dest="backup_command", required=True)
+    backup_status = backup_subparsers.add_parser("status", help="Show server-backup state.")
+    backup_status.add_argument("--guild-id", type=int, default=None)
+    backup_on = backup_subparsers.add_parser("on", help="Enable hourly server backups for a guild.")
+    backup_on.add_argument("--guild-id", type=int, default=None)
+    backup_off = backup_subparsers.add_parser("off", help="Disable hourly server backups for a guild.")
+    backup_off.add_argument("--guild-id", type=int, default=None)
+    backup_run = backup_subparsers.add_parser("run", help="Run one backup cycle now (via the running bot).")
+    backup_run.add_argument("--guild-id", type=int, default=None)
+
     return parser
 
 
@@ -329,6 +371,8 @@ class OperationsContext:
     leaderboards: LeaderboardsRepository
     guild_settings: GuildSettingsRepository
     counting: CountingRepository
+    server_backups: ServerBackupsRepository
+    inactive_users: InactiveUsersRepository
     throne_service: ThroneService
     registration_service: RegistrationService
     send_service: SendService
@@ -374,6 +418,8 @@ async def create_context() -> OperationsContext:
         leaderboards=LeaderboardsRepository(database),
         guild_settings=guild_settings,
         counting=CountingRepository(database),
+        server_backups=ServerBackupsRepository(database),
+        inactive_users=InactiveUsersRepository(database),
         throne_service=throne_service,
         registration_service=registration_service,
         send_service=send_service,
@@ -884,6 +930,118 @@ async def handle_count(ctx: OperationsContext, args: argparse.Namespace) -> None
         print_kv("current_number", max(0, int(args.number)))
         return
     raise RuntimeError(f"Unsupported count command: {args.count_command}")
+
+
+def _inactivity_enabled_key(guild_id: int) -> str:
+    # Mirrors InactivityService._enabled_key.
+    return f"inactivity:{guild_id}:enabled"
+
+
+def _backup_enabled_key(guild_id: int) -> str:
+    # Mirrors ServerBackupService._enabled_key.
+    return f"server_backup:{guild_id}:enabled"
+
+
+async def _post_bot_ops(path: str, payload: dict | None = None) -> tuple[dict | None, str | None]:
+    """POST to the running bot's ops bridge. Returns (json, error)."""
+
+    host = (os.getenv("ROB_OPS_HOST") or "127.0.0.1").strip()
+    raw_port = (os.getenv("ROB_OPS_PORT") or "8811").strip()
+    secret = (os.getenv("ROB_OPS_SECRET") or "").strip()
+    try:
+        port = int(raw_port)
+    except ValueError:
+        return None, "ROB_OPS_PORT is not a valid integer."
+
+    headers = {"User-Agent": "RobOps/1.0 (+https://github.com/patdadev/rob)"}
+    if secret:
+        headers["X-Rob-Ops-Secret"] = secret
+
+    url = f"http://{host}:{port}{path}"
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.post(url, json=payload or {}) as response:
+                body = await response.json()
+                if response.status >= 400:
+                    return None, str(body.get("error") or f"HTTP {response.status}")
+                return body, None
+    except (aiohttp.ClientError, TimeoutError) as exc:
+        return None, f"Could not reach the running bot ops bridge: {exc}"
+
+
+async def handle_inactivity(ctx: OperationsContext, args: argparse.Namespace) -> None:
+    guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+    if args.inactivity_command in {"on", "off"}:
+        enabled = args.inactivity_command == "on"
+        await ctx.bot_state.set_value(_inactivity_enabled_key(guild_id), "true" if enabled else "false")
+        print_header("Inactivity System")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", enabled)
+        return
+    if args.inactivity_command == "status":
+        raw = await ctx.bot_state.get_text(_inactivity_enabled_key(guild_id))
+        enabled = (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+        bootstrapped = await ctx.bot_state.get_text(f"inactivity:{guild_id}:bootstrapped_at")
+        watchlist = await ctx.inactive_users.list_for_guild(guild_id)
+        settings = await ctx.guild_settings.get(guild_id)
+        print_header("Inactivity System")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", enabled if raw is not None else "(default off)")
+        print_field("Active Role", getattr(settings, "active_role_id", None) or "(not set)")
+        print_field("Inactive Role", getattr(settings, "inactive_role_id", None) or "(not set)")
+        print_field("Unverified Role", getattr(settings, "unverified_role_id", None) or "(not set)")
+        print_field("Bootstrapped", bootstrapped or "(not yet)")
+        print_field("On Watchlist", len(watchlist))
+        return
+    raise RuntimeError(f"Unsupported inactivity command: {args.inactivity_command}")
+
+
+async def handle_backup(ctx: OperationsContext, args: argparse.Namespace) -> None:
+    guild_id = await resolve_guild_id(ctx, getattr(args, "guild_id", None))
+    if args.backup_command in {"on", "off"}:
+        enabled = args.backup_command == "on"
+        await ctx.bot_state.set_value(_backup_enabled_key(guild_id), "true" if enabled else "false")
+        print_header("Server Backup System")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", enabled)
+        return
+    if args.backup_command == "status":
+        raw = await ctx.bot_state.get_text(_backup_enabled_key(guild_id))
+        enabled = (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+        latest = await ctx.server_backups.get_latest_backup(guild_id)
+        pending = await ctx.server_backups.get_pending_approval(guild_id)
+        total = await ctx.server_backups.count_backups(guild_id)
+        settings = await ctx.guild_settings.get(guild_id)
+        print_header("Server Backup System")
+        print_field("Guild ID", guild_id)
+        print_field("Enabled", enabled if raw is not None else "(default off)")
+        print_field("Approval Channel", getattr(settings, "backup_approval_channel_id", None) or "(not set)")
+        print_field("Stored Backups", total)
+        print_field("Last Backup", format_optional_datetime(latest.created_at) if latest is not None else "(none)")
+        if pending is not None:
+            print_field(
+                "Pending Approval",
+                f"id={pending.id}, {len(pending.approved_by)}/{pending.required_approvals} approvals, "
+                f"{len(pending.changes)} major change(s)",
+            )
+        else:
+            print_field("Pending Approval", "(none)")
+        return
+    if args.backup_command == "run":
+        body, error = await _post_bot_ops(f"/guilds/{guild_id}/backup/run")
+        print_header("Server Backup Run")
+        print_field("Guild ID", guild_id)
+        if error is not None:
+            print_field("Status", "failed")
+            print_field("Error", error)
+            return
+        print_field("Action", body.get("action"))
+        print_field("Changes", f"{body.get('change_count', 0)} ({body.get('major_change_count', 0)} major)")
+        for detail in body.get("major_changes", []):
+            print_line(f"  * {detail}")
+        return
+    raise RuntimeError(f"Unsupported backup command: {args.backup_command}")
 
 
 async def handle_throne(ctx: OperationsContext, args: argparse.Namespace) -> None:
@@ -1460,6 +1618,10 @@ async def main_async() -> None:
             await handle_leaderboard(ctx, args)
         elif args.command == "count":
             await handle_count(ctx, args)
+        elif args.command == "inactivity":
+            await handle_inactivity(ctx, args)
+        elif args.command == "backup":
+            await handle_backup(ctx, args)
         elif args.command == "throne":
             await handle_throne(ctx, args)
         elif args.command == "blacklist":

@@ -24,6 +24,18 @@ class VibSettings:
     # the /leaderboard command and (via channel perms set on the role) read
     # access to the #leaderboard channel. Inert outside the test guild.
     leaderboard_view_role_id: int | None = None
+    # Activity / inactive-role system roles. ``active_role_id`` is held by
+    # verified, recently-active members; ``unverified_role_id`` marks members who
+    # have not yet passed server verification (parked as inactive, never kicked).
+    active_role_id: int | None = None
+    unverified_role_id: int | None = None
+    # Trial-moderator role, pinged alongside ``mod_role_id`` on server-backup
+    # major-change approval prompts and accepted as an approver of those prompts.
+    trial_mod_role_id: int | None = None
+    # Channel where the hourly server-backup system posts major-change approval
+    # prompts (the 2-moderator gate). When unset, the backup system still takes
+    # baseline snapshots but cannot gate major changes.
+    backup_approval_channel_id: int | None = None
 
 
 # Backward-compat alias during v2 transition.
@@ -263,6 +275,50 @@ class CountBlock:
     reason: str
     blocked_until: datetime
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class InactiveUser:
+    id: int
+    guild_id: int
+    bot_user_id: int | None
+    discord_user_id: int
+    inactive_role_assigned_at: datetime | None
+    remove_at: datetime | None
+    initial_notice_sent: bool
+    final_notice_sent: bool
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class ServerBackup:
+    id: int
+    guild_id: int
+    snapshot: dict
+    is_baseline: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ServerBackupApproval:
+    id: int
+    guild_id: int
+    status: str
+    changes: list
+    change_signature: str | None
+    pending_snapshot: dict
+    baseline_backup_id: int | None
+    required_approvals: int
+    approved_by: list[int]
+    channel_id: int | None
+    message_id: int | None
+    decided_by_user_id: int | None
+    decision_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+    decided_at: datetime | None
 
 
 @dataclass(frozen=True)

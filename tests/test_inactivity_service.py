@@ -1,0 +1,399 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+from rob.services.inactivity_service import InactivityService
+
+ACTIVE_ROLE_ID = 100
+INACTIVE_ROLE_ID = 99
+UNVERIFIED_ROLE_ID = 98
+
+
+class _FakeBotState:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    async def get_text(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    async def set_value(self, key: str, value: str) -> None:
+        self.values[key] = value
+
+
+class _FakeGuildSettingsRepo:
+    def __init__(self, **role_ids) -> None:
+        self._settings = SimpleNamespace(
+            active_role_id=role_ids.get("active_role_id", ACTIVE_ROLE_ID),
+            inactive_role_id=role_ids.get("inactive_role_id", INACTIVE_ROLE_ID),
+            unverified_role_id=role_ids.get("unverified_role_id"),
+        )
+
+    async def get(self, _guild_id: int):
+        return self._settings
+
+
+class _FakeInactiveUsers:
+    def __init__(self) -> None:
+        self.rows: dict[tuple[int, int], SimpleNamespace] = {}
+
+    async def get(self, guild_id: int, user_id: int):
+        return self.rows.get((guild_id, user_id))
+
+    async def start_watching(self, *, guild_id, discord_user_id, inactive_role_assigned_at, remove_at, bot_user_id=None):
+        record = SimpleNamespace(
+            guild_id=guild_id,
+            discord_user_id=discord_user_id,
+            inactive_role_assigned_at=inactive_role_assigned_at,
+            remove_at=remove_at,
+            initial_notice_sent=False,
+            final_notice_sent=False,
+            status="watching",
+        )
+        self.rows[(guild_id, discord_user_id)] = record
+        return record
+
+    async def mark_initial_notice(self, guild_id: int, user_id: int) -> None:
+        record = self.rows.get((guild_id, user_id))
+        if record is not None:
+            record.initial_notice_sent = True
+
+    async def mark_final_notice(self, guild_id: int, user_id: int) -> None:
+        record = self.rows.get((guild_id, user_id))
+        if record is not None:
+            record.final_notice_sent = True
+
+    async def clear(self, guild_id: int, user_id: int) -> None:
+        self.rows.pop((guild_id, user_id), None)
+
+    async def list_for_guild(self, guild_id: int, *, statuses=None):
+        return [record for (gid, _uid), record in self.rows.items() if gid == guild_id]
+
+
+class _FakeMaintenance:
+    def __init__(self, enabled: bool = False) -> None:
+        self.enabled = enabled
+
+    async def notifications_suppressed(self) -> bool:
+        return self.enabled
+
+
+class _FakeRole:
+    def __init__(self, role_id: int) -> None:
+        self.id = role_id
+
+
+class _FakeMember:
+    def __init__(self, user_id: int, *, joined_at: datetime | None = None, roles=None) -> None:
+        self.id = user_id
+        self.bot = False
+        self.nick = None
+        self.display_name = f"User{user_id}"
+        self.name = f"User{user_id}"
+        self.joined_at = joined_at
+        self.roles = list(roles or [])
+        self.dm_messages: list[dict] = []
+        self.kicked = False
+
+    async def send(self, content=None, view=None, **kwargs):
+        self.dm_messages.append({"content": content, "view": view, **kwargs})
+
+    async def kick(self, *, reason: str):
+        del reason
+        self.kicked = True
+
+    async def add_roles(self, *roles, reason=None):
+        del reason
+        for role in roles:
+            if all(existing.id != role.id for existing in self.roles):
+                self.roles.append(role)
+
+    async def remove_roles(self, *roles, reason=None):
+        del reason
+        remove_ids = {role.id for role in roles}
+        self.roles = [role for role in self.roles if role.id not in remove_ids]
+
+    def has(self, role_id: int) -> bool:
+        return any(role.id == role_id for role in self.roles)
+
+
+class _FakeGuild:
+    def __init__(self, guild_id: int, members, *, name: str = "VIB") -> None:
+        self.id = guild_id
+        self.name = name
+        self.members = list(members)
+        for member in self.members:
+            member.guild = self
+        self._roles = {
+            ACTIVE_ROLE_ID: _FakeRole(ACTIVE_ROLE_ID),
+            INACTIVE_ROLE_ID: _FakeRole(INACTIVE_ROLE_ID),
+            UNVERIFIED_ROLE_ID: _FakeRole(UNVERIFIED_ROLE_ID),
+        }
+
+    def get_role(self, role_id: int):
+        return self._roles.get(role_id)
+
+
+def _service(*, bot_state, inactive_users, unverified_role_id=None, maintenance=None, **overrides):
+    return InactivityService(
+        bot_state=bot_state,
+        guild_settings=_FakeGuildSettingsRepo(unverified_role_id=unverified_role_id),
+        inactive_users=inactive_users,
+        enabled_default=overrides.get("enabled_default", False),
+        inactive_after_days=overrides.get("inactive_after_days", 7),
+        kick_grace_days=overrides.get("kick_grace_days", 14),
+        bootstrap_grace_days=overrides.get("bootstrap_grace_days", 21),
+        final_notice_days=overrides.get("final_notice_days", 7),
+        notice_channel_id=None,
+        maintenance=maintenance,
+    )
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _view_text(payload: dict) -> str:
+    view = payload.get("view")
+    chunks: list[str] = []
+    for top_level in getattr(view, "children", []):
+        for child in getattr(top_level, "children", []):
+            content = getattr(child, "content", None)
+            if content:
+                chunks.append(str(content))
+    return "\n".join(chunks)
+
+
+def _enable(service, guild_id=1):
+    _run(service.set_enabled(guild_id, True))
+
+
+def test_disabled_by_default_does_nothing():
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=_FakeBotState(), inactive_users=_FakeInactiveUsers())
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+    assert snapshots == []
+
+
+def test_active_member_keeps_active_role():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = datetime.now(timezone.utc).isoformat()
+    member = _FakeMember(10, roles=[])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert snapshots == []
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert member.dm_messages == []
+
+
+def test_inactive_member_swaps_roles_and_sends_first_notice():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=8)
+    ).isoformat()
+    # Already bootstrapped: a member going inactive now gets the first notice.
+    bot_state.values["inactivity:1:bootstrapped_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=False))
+
+    assert len(snapshots) == 1
+    assert not member.has(ACTIVE_ROLE_ID)
+    assert member.has(INACTIVE_ROLE_ID)
+    assert (1, 10) in inactive_users.rows
+    assert len(member.dm_messages) == 1
+    rendered = _view_text(member.dm_messages[0])
+    assert "inactive" in rendered.lower()
+    assert "<t:" in rendered
+
+
+def test_bootstrap_grandfathers_without_first_notice_blast():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=8)
+    ).isoformat()
+    # No bootstrapped marker -> this is the first run after enabling.
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    # Flagged inactive + on the watchlist, but no day-one first-notice DM.
+    assert member.has(INACTIVE_ROLE_ID)
+    assert member.dm_messages == []
+    assert member.kicked is False
+    assert inactive_users.rows[(1, 10)].initial_notice_sent is True
+
+
+def test_unverified_member_parked_inactive_without_countdown():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(UNVERIFIED_ROLE_ID), _FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users, unverified_role_id=UNVERIFIED_ROLE_ID)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert snapshots == []
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+    assert (1, 10) not in inactive_users.rows  # never on the kick countdown
+    assert member.dm_messages == []
+    assert member.kicked is False
+
+
+def test_reactivation_restores_active_role_and_clears_watch():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = datetime.now(timezone.utc).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now - timedelta(days=8),
+        remove_at=now + timedelta(days=7), initial_notice_sent=True, final_notice_sent=False, status="watching",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=False, perform_kicks=False))
+
+    assert snapshots == []
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert (1, 10) not in inactive_users.rows
+
+
+def test_final_notice_sent_within_window():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=20)
+    ).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=20)
+    ).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now - timedelta(days=14),
+        remove_at=now + timedelta(days=6), initial_notice_sent=True, final_notice_sent=False, status="notice_sent",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.process_guild(guild, send_notifications=True, perform_kicks=False))
+
+    assert len(member.dm_messages) == 1
+    assert inactive_users.rows[(1, 10)].final_notice_sent is True
+    assert "Last call" in _view_text(member.dm_messages[0])
+
+
+def test_kick_when_expired():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now - timedelta(days=21),
+        remove_at=now - timedelta(minutes=5), initial_notice_sent=True, final_notice_sent=True, status="final_notice_sent",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=False, perform_kicks=True))
+
+    assert snapshots == []
+    assert member.kicked is True
+    assert (1, 10) not in inactive_users.rows
+
+
+def test_maintenance_suppresses_dms_and_kicks_but_still_swaps_roles():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now - timedelta(days=21),
+        remove_at=now - timedelta(minutes=5), initial_notice_sent=False, final_notice_sent=False, status="watching",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users, maintenance=_FakeMaintenance(enabled=True))
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert len(snapshots) == 1
+    assert member.dm_messages == []
+    assert member.kicked is False
+    assert member.has(INACTIVE_ROLE_ID)
+
+
+def test_requires_active_and_inactive_roles_configured():
+    bot_state = _FakeBotState()
+    service = InactivityService(
+        bot_state=bot_state,
+        guild_settings=_FakeGuildSettingsRepo(active_role_id=None),
+        inactive_users=_FakeInactiveUsers(),
+        enabled_default=True,
+        inactive_after_days=7,
+        kick_grace_days=14,
+        bootstrap_grace_days=21,
+        final_notice_days=7,
+        notice_channel_id=None,
+    )
+    member = _FakeMember(10, roles=[])
+    guild = _FakeGuild(1, [member])
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+    assert snapshots == []
+
+
+def test_bootstrap_uses_longer_grace_and_marks_bootstrapped():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=8)
+    ).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.process_guild(guild, send_notifications=False, perform_kicks=True))
+
+    record = inactive_users.rows[(1, 10)]
+    days_until_removal = (record.remove_at - datetime.now(timezone.utc)).days
+    assert days_until_removal >= 20  # bootstrap grace (21d), not the 14d normal grace
+    assert "inactivity:1:bootstrapped_at" in bot_state.values
+    assert member.kicked is False  # nobody is kicked on the bootstrap run
