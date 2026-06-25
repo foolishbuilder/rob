@@ -94,7 +94,7 @@ def inactivity_empty_list_card() -> RenderedMessage:
     return render(
         make_card(
             title="Inactive members",
-            body="No members are on the inactivity watchlist right now.",
+            body="No members currently have the Inactive role.",
             color=COLOR_SUCCESS,
             variant="success",
         )
@@ -105,8 +105,8 @@ def inactivity_list_card(lines: list[str], total: int) -> RenderedMessage:
     return render(
         make_card(
             title="Inactive members",
-            eyebrow="Inactivity watchlist",
-            body=f"Total on the watchlist: **{total}**\n\n" + "\n".join(lines),
+            eyebrow="Inactive role holders",
+            body=f"Members with the Inactive role: **{total}**\n\n" + "\n".join(lines),
             color=COLOR_PRIMARY,
             variant="default",
         )

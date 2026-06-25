@@ -3,9 +3,11 @@
 A verified member who goes ``inactive_after_days`` without sending a message or
 otherwise interacting loses the **Active** role, gains the **Inactive** role, and
 is placed on the removal countdown: a first notice immediately, a final notice
-``final_notice_days`` before removal, and a kick once ``remove_at`` passes. The
-moment they interact again the activity tracker refreshes their timestamp and the
-next sweep restores the Active role and clears the countdown.
+``final_notice_days`` before removal, and a kick once ``remove_at`` passes.
+Detecting that absence of activity is not event-driven, so a periodic sweep
+(``process_guild``) flags newly-inactive members. The reverse — *coming back* —
+is event-driven: ``register_member_activity`` restores the Active role and clears
+the countdown the instant a member interacts again.
 
 Members holding the **Unverified** role are parked as inactive (Inactive role on,
 Active role off) but are never put on the kick countdown — they are new and have
@@ -104,8 +106,111 @@ class InactivityService:
             await self.bot_state.get_text(self.activity_key(guild_id, member_id))
         )
 
+    async def register_member_activity(self, guild: discord.Guild, member: discord.abc.User) -> None:
+        """Record activity for a member and reactivate them immediately if they
+        were marked inactive.
+
+        Called from the activity tracker on every message / reaction /
+        interaction. The "going inactive" direction still needs the periodic
+        sweep (absence of activity is not event-driven), but "coming back" is
+        handled here in real time. The common case — an already-active member —
+        only does the lightweight activity write plus an in-memory role check, so
+        this stays cheap on every message.
+        """
+
+        await self.record_activity(guild.id, member.id)
+        # Skip non-guild authors (e.g. webhook/User objects have no roles).
+        if getattr(member, "roles", None) is None:
+            return
+        if not await self.is_enabled(guild.id):
+            return
+        settings = await self.guild_settings.get(guild.id)
+        if settings is None:
+            return
+        active_role = guild.get_role(settings.active_role_id) if settings.active_role_id else None
+        inactive_role = guild.get_role(settings.inactive_role_id) if settings.inactive_role_id else None
+        if active_role is None or inactive_role is None:
+            return
+        # Unverified members stay parked as inactive regardless of activity.
+        if settings.unverified_role_id is not None and self._has_role(member, settings.unverified_role_id):
+            return
+        # Only act when they are currently marked inactive (cheap in-memory check
+        # — most messages are from already-active members and stop here).
+        if not self._has_role(member, inactive_role.id):
+            return
+        await self._remove_role(member, inactive_role, reason="Member active again")
+        await self._add_role(member, active_role, reason="Member active again")
+        await self.inactive_users.clear(guild.id, member.id)
+        log.info("Reactivated member user_id=%s guild_id=%s on activity", member.id, guild.id)
+
+    async def sync_member_now(self, guild: discord.Guild, member: discord.abc.User) -> None:
+        """Instantly set a member's Active/Inactive role to match their current
+        status. Called on join and on verify/unverify role transitions so the
+        roles always reflect reality immediately rather than at the next sweep:
+
+        - Holds the Unverified role -> parked Inactive (Active off), no countdown.
+        - Otherwise -> Active now (this fires on events that imply presence:
+          joining, or verifying), activity stamped so the next sweep doesn't
+          immediately re-flag them.
+
+        Going *inactive* stays sweep-driven — there is no event for "stayed quiet
+        for a week" — so this never newly flags a member inactive.
+        """
+
+        if getattr(member, "roles", None) is None:
+            return
+        if not await self.is_enabled(guild.id):
+            return
+        settings = await self.guild_settings.get(guild.id)
+        if settings is None:
+            return
+        active_role = guild.get_role(settings.active_role_id) if settings.active_role_id else None
+        inactive_role = guild.get_role(settings.inactive_role_id) if settings.inactive_role_id else None
+        if active_role is None or inactive_role is None:
+            return
+
+        if settings.unverified_role_id is not None and self._has_role(member, settings.unverified_role_id):
+            await self._remove_role(member, active_role, reason="Member is unverified")
+            await self._add_role(member, inactive_role, reason="Member is unverified")
+            await self.inactive_users.clear(guild.id, member.id)
+            log.info("Parked unverified member user_id=%s guild_id=%s", member.id, guild.id)
+            return
+
+        await self.record_activity(guild.id, member.id)
+        await self._remove_role(member, inactive_role, reason="Member verified/active")
+        await self._add_role(member, active_role, reason="Member verified/active")
+        await self.inactive_users.clear(guild.id, member.id)
+        log.info("Activated member user_id=%s guild_id=%s instantly", member.id, guild.id)
+
     async def clear_member_state(self, guild_id: int, member_id: int) -> None:
         await self.inactive_users.clear(guild_id, member_id)
+
+    async def list_inactive_members(
+        self, guild: discord.Guild
+    ) -> list[tuple[discord.Member, datetime | None]]:
+        """Everyone currently holding the Inactive role, paired with their
+        scheduled-removal time (``None`` when they are parked with no countdown —
+        e.g. unverified or a manually-assigned role). Sorted soonest kick first,
+        parked members last. Backs the ``/inactivelist`` command."""
+
+        settings = await self.guild_settings.get(guild.id)
+        inactive_role = (
+            guild.get_role(settings.inactive_role_id)
+            if settings is not None and settings.inactive_role_id is not None
+            else None
+        )
+        if inactive_role is None:
+            return []
+
+        rows: list[tuple[discord.Member, datetime | None]] = []
+        for member in getattr(inactive_role, "members", []):
+            record = await self.inactive_users.get(guild.id, member.id)
+            remove_at = record.remove_at if record is not None else None
+            rows.append((member, remove_at))
+
+        far_future = datetime.max.replace(tzinfo=timezone.utc)
+        rows.sort(key=lambda item: (item[1] is None, item[1] or far_future, item[0].id))
+        return rows
 
     # -- parsing helpers ------------------------------------------------------
 

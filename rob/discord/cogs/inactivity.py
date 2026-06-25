@@ -125,7 +125,7 @@ class InactivityCog(commands.Cog):
             ephemeral=True,
         )
 
-    @app_commands.command(name="inactivelist", description="List members on the inactivity removal watchlist.")
+    @app_commands.command(name="inactivelist", description="List members with the Inactive role and time until removal.")
     @app_commands.guilds(TEST_GUILD_ID)
     async def inactivity_list(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
@@ -141,22 +141,32 @@ class InactivityCog(commands.Cog):
             )
             return
 
-        records = await self.bot.inactive_users_repo.list_for_guild(interaction.guild.id)
-        records = [record for record in records if record.remove_at is not None]
-        if not records:
+        rows = await self.bot.inactivity_service.list_inactive_members(interaction.guild)
+        if not rows:
             await interaction.response.send_message(
                 **inactivity_empty_list_card().send_kwargs(), ephemeral=True
             )
             return
 
         lines: list[str] = []
-        for record in records:
-            ts = int(record.remove_at.timestamp())
-            lines.append(f"- <@{record.discord_user_id}> (`{record.discord_user_id}`) — remove <t:{ts}:R> / <t:{ts}:F>")
+        for member, remove_at in rows:
+            if remove_at is not None:
+                ts = int(remove_at.timestamp())
+                lines.append(f"- {member.mention} (`{member.id}`) — kick <t:{ts}:R> (<t:{ts}:F>)")
+            else:
+                lines.append(f"- {member.mention} (`{member.id}`) — no removal scheduled")
         await interaction.response.send_message(
-            **inactivity_list_card(lines[:200], len(records)).send_kwargs(),
+            **inactivity_list_card(lines[:200], len(rows)).send_kwargs(),
             ephemeral=True,
         )
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        if not is_test_guild(member.guild.id):
+            return
+        # New member: set their role state immediately (unverified -> parked,
+        # otherwise -> Active) rather than waiting for the next sweep.
+        await self.bot.inactivity_service.sync_member_now(member.guild, member)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
@@ -172,14 +182,14 @@ class InactivityCog(commands.Cog):
         def _had(role_id: int | None, member: discord.Member) -> bool:
             return role_id is not None and any(role.id == role_id for role in member.roles)
 
+        # Gaining or losing the Unverified role flips their state instantly:
+        # gained -> parked inactive, lost (verified) -> Active right away.
+        if unverified_role_id is not None and _had(unverified_role_id, before) != _had(unverified_role_id, after):
+            await self.bot.inactivity_service.sync_member_now(after.guild, after)
+            return
+
         # Manual removal of the inactive role clears the countdown.
         if _had(inactive_role_id, before) and not _had(inactive_role_id, after):
-            await self.bot.inactivity_service.clear_member_state(after.guild.id, after.id)
-
-        # Verifying (losing the unverified role) counts as activity, so the next
-        # sweep grants the Active role instead of leaving them parked.
-        if _had(unverified_role_id, before) and not _had(unverified_role_id, after):
-            await self.bot.inactivity_service.record_activity(after.guild.id, after.id)
             await self.bot.inactivity_service.clear_member_state(after.guild.id, after.id)
 
     @commands.Cog.listener()

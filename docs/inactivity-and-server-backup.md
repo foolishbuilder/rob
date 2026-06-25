@@ -33,8 +33,21 @@ rob guild set-channel --guild-id <guild_id> --field backup_approval_channel_id -
 
 ## 2. Activity / inactive-role system
 
-Rob records activity (messages, reactions, slash/button interactions) into
-`activity:{guild}:user:{uid}:last_active`. Each hourly sweep:
+Everything that *can* be event-driven is instant — Rob does not wait for the
+sweep to react to a state change:
+
+- **Talking / interacting** (message, reaction, slash/button use): activity is
+  stamped, and a member who was marked inactive is restored to **Active**
+  immediately.
+- **Going unverified** (gains `unverified_role_id`): parked **Inactive**
+  immediately (Active off, no countdown).
+- **Becoming verified** (loses `unverified_role_id`) and **joining**: set to the
+  correct state immediately — **Active** (or parked Inactive if still unverified).
+
+Only the *absence* of activity ("stayed quiet for a week") has no event, so a
+periodic **sweep** flags newly-inactive members. It runs every
+`INACTIVITY_LOOP_MINUTES` (**default weekly = 10080**) and once on each restart.
+Each sweep:
 
 - **Active** (interacted within `INACTIVITY_INACTIVE_AFTER_DAYS`, default 7):
   keeps the Active role, loses the Inactive role, clears any countdown.
@@ -42,7 +55,8 @@ Rob records activity (messages, reactions, slash/button interactions) into
   Inactive role, goes on the `inactive_users` countdown, and gets a first DM
   notice. A final notice goes out `INACTIVITY_FINAL_NOTICE_DAYS` (default 7)
   before removal, and the member is kicked once the countdown
-  (`INACTIVITY_KICK_GRACE_DAYS`, default 14 → ~3 weeks total) expires.
+  (`INACTIVITY_KICK_GRACE_DAYS`, default 14 → ~3 weeks total) expires. With the
+  weekly cadence these stages land on consecutive weekly sweeps.
 - **Unverified** (holds `unverified_role_id`): parked as inactive (Inactive role
   on, Active off) but **never** on the kick countdown. Verifying counts as
   activity and restores the Active role.
@@ -58,7 +72,10 @@ rob inactivity on  --guild <guild_id>
 rob inactivity off --guild <guild_id>
 ```
 
-Mod slash commands (test guild): `/inactivelist`, `/inactivitytest`.
+Mod slash commands (test guild): `/inactivelist` (lists **everyone holding the
+Inactive role** with the time until each is kicked, soonest first; parked members
+with no scheduled removal are shown last) and `/inactivitytest` (DMs you the
+notice templates).
 
 ## 3. Hourly server-backup system
 
