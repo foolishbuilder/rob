@@ -106,11 +106,13 @@ def _new_send() -> NewSend:
 
 
 class _FakeConnection:
-    def __init__(self, *, fetchrow_responses=None, fetch_responses=None):
+    def __init__(self, *, fetchrow_responses=None, fetch_responses=None, execute_responses=None):
         self.fetchrow_responses = list(fetchrow_responses or [])
         self.fetch_responses = list(fetch_responses or [])
+        self.execute_responses = list(execute_responses or [])
         self.fetchrow_calls: list[tuple[str, tuple]] = []
         self.fetch_calls: list[tuple[str, tuple]] = []
+        self.execute_calls: list[tuple[str, tuple]] = []
 
     async def fetchrow(self, query: str, *params):
         self.fetchrow_calls.append((query, params))
@@ -119,6 +121,10 @@ class _FakeConnection:
     async def fetch(self, query: str, *params):
         self.fetch_calls.append((query, params))
         return self.fetch_responses.pop(0) if self.fetch_responses else []
+
+    async def execute(self, query: str, *params):
+        self.execute_calls.append((query, params))
+        return self.execute_responses.pop(0) if self.execute_responses else "UPDATE 0"
 
 
 class _FakeDatabase:
@@ -175,6 +181,55 @@ def test_backfill_public_send_ids_updates_missing_rows():
 
     assert updated == 2
     assert len(connection.fetchrow_calls) == 2
+
+
+def test_repair_mention_sub_links_dry_run_counts_without_writing():
+    connection = _FakeConnection(fetch_responses=[[{"id": 1}, {"id": 2}]])
+    repo = SendsRepository(_FakeDatabase(connection))
+
+    candidates, updated = asyncio.run(repo.repair_mention_sub_links(dry_run=True))
+
+    assert candidates == 2
+    assert updated == 0
+    # No UPDATE is issued on a dry run.
+    assert connection.execute_calls == []
+    # All-guilds scope passes NULL for the guild filter param.
+    select_query, select_params = connection.fetch_calls[0]
+    assert "sub_user_id IS NULL" in select_query
+    assert select_params == (r"^<@!?[0-9]+>$", None)
+
+
+def test_repair_mention_sub_links_applies_update_and_returns_count():
+    connection = _FakeConnection(
+        fetch_responses=[[{"id": 5}, {"id": 6}, {"id": 7}]],
+        execute_responses=["UPDATE 3"],
+    )
+    repo = SendsRepository(_FakeDatabase(connection))
+
+    candidates, updated = asyncio.run(
+        repo.repair_mention_sub_links(guild_id=42, dry_run=False)
+    )
+
+    assert candidates == 3
+    assert updated == 3
+    assert len(connection.execute_calls) == 1
+    update_query, update_params = connection.execute_calls[0]
+    assert "UPDATE sends" in update_query
+    # Restores registered send names via the subs join, links unregistered users too.
+    assert "LEFT JOIN subs" in update_query
+    assert "substring(sub_name from '^<@!?([0-9]+)>$')" in update_query
+    assert update_params == (r"^<@!?[0-9]+>$", 42)
+
+
+def test_repair_mention_sub_links_skips_update_when_no_candidates():
+    connection = _FakeConnection(fetch_responses=[[]])
+    repo = SendsRepository(_FakeDatabase(connection))
+
+    candidates, updated = asyncio.run(repo.repair_mention_sub_links(dry_run=False))
+
+    assert candidates == 0
+    assert updated == 0
+    assert connection.execute_calls == []
 
 
 def test_public_send_id_db_build_scripts_define_column_and_unique_index():

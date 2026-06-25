@@ -38,6 +38,8 @@ rob throne invalidate-test-sends
 
 rob sends list --status all --guild-id <guild_id> --limit 25
 rob sends backfill-public-ids
+rob sends repair-mentions --dry-run
+rob sends repair-mentions
 rob sends mark-posted <send_id>
 
 rob guild scan --guild-id <guild_id>

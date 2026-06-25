@@ -475,6 +475,78 @@ class SendsRepository:
                 updated = int(result.rsplit(" ", 1)[-1])
         return len(candidates), updated
 
+    async def repair_mention_sub_links(
+        self,
+        *,
+        guild_id: int | None = None,
+        dry_run: bool = True,
+    ) -> tuple[int, int]:
+        """Attribute legacy sends whose ``sub_name`` is a raw Discord mention.
+
+        Older manual sends stored the raw ``<@123>`` mention token as the
+        sending name with no ``sub_user_id`` (this happened when a Dom/me picked
+        a member from the @-autocomplete in the free-text ``/add`` sub field), so
+        they rendered as "@User with no nickname claimed" and were never linked
+        to the user. This extracts the id, links the send, and — when the user is
+        a registered sub — restores their canonical send name; otherwise the raw
+        token is cleared so it no longer shows the claim hint.
+
+        Pass ``guild_id`` to scope the repair to one guild, or ``None`` for all
+        guilds. Returns ``(candidates, updated)`` where ``updated`` is ``0`` on a
+        dry run.
+        """
+
+        mention_pattern = r"^<@!?[0-9]+>$"
+        async with self.database.transaction() as connection:
+            candidates = await connection.fetch(
+                """
+                SELECT id
+                FROM sends
+                WHERE sub_user_id IS NULL
+                AND sub_name ~ $1
+                AND ($2::bigint IS NULL OR guild_id = $2)
+                ORDER BY id ASC
+                """,
+                mention_pattern,
+                guild_id,
+            )
+            updated = 0
+            if not dry_run and candidates:
+                result = await connection.execute(
+                    """
+                    UPDATE sends s
+                    SET
+                        sub_user_id = repaired.uid,
+                        sub_id = repaired.sub_id,
+                        sub_name = repaired.send_name
+                    FROM (
+                        SELECT
+                            c.id,
+                            c.uid,
+                            sub.id AS sub_id,
+                            sub.send_name AS send_name
+                        FROM (
+                            SELECT
+                                id,
+                                guild_id,
+                                substring(sub_name from '^<@!?([0-9]+)>$')::bigint AS uid
+                            FROM sends
+                            WHERE sub_user_id IS NULL
+                            AND sub_name ~ $1
+                            AND ($2::bigint IS NULL OR guild_id = $2)
+                        ) c
+                        LEFT JOIN subs sub
+                            ON sub.guild_id = c.guild_id
+                            AND sub.discord_user_id = c.uid
+                    ) repaired
+                    WHERE s.id = repaired.id
+                    """,
+                    mention_pattern,
+                    guild_id,
+                )
+                updated = int(result.rsplit(" ", 1)[-1])
+        return len(candidates), updated
+
     async def ensure_public_send_id(self, send: SendRecord) -> SendRecord:
         if send.stored_public_send_id:
             return send
