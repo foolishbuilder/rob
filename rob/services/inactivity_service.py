@@ -143,6 +143,45 @@ class InactivityService:
         await self.inactive_users.clear(guild.id, member.id)
         log.info("Reactivated member user_id=%s guild_id=%s on activity", member.id, guild.id)
 
+    async def sync_member_now(self, guild: discord.Guild, member: discord.abc.User) -> None:
+        """Instantly set a member's Active/Inactive role to match their current
+        status. Called on join and on verify/unverify role transitions so the
+        roles always reflect reality immediately rather than at the next sweep:
+
+        - Holds the Unverified role -> parked Inactive (Active off), no countdown.
+        - Otherwise -> Active now (this fires on events that imply presence:
+          joining, or verifying), activity stamped so the next sweep doesn't
+          immediately re-flag them.
+
+        Going *inactive* stays sweep-driven — there is no event for "stayed quiet
+        for a week" — so this never newly flags a member inactive.
+        """
+
+        if getattr(member, "roles", None) is None:
+            return
+        if not await self.is_enabled(guild.id):
+            return
+        settings = await self.guild_settings.get(guild.id)
+        if settings is None:
+            return
+        active_role = guild.get_role(settings.active_role_id) if settings.active_role_id else None
+        inactive_role = guild.get_role(settings.inactive_role_id) if settings.inactive_role_id else None
+        if active_role is None or inactive_role is None:
+            return
+
+        if settings.unverified_role_id is not None and self._has_role(member, settings.unverified_role_id):
+            await self._remove_role(member, active_role, reason="Member is unverified")
+            await self._add_role(member, inactive_role, reason="Member is unverified")
+            await self.inactive_users.clear(guild.id, member.id)
+            log.info("Parked unverified member user_id=%s guild_id=%s", member.id, guild.id)
+            return
+
+        await self.record_activity(guild.id, member.id)
+        await self._remove_role(member, inactive_role, reason="Member verified/active")
+        await self._add_role(member, active_role, reason="Member verified/active")
+        await self.inactive_users.clear(guild.id, member.id)
+        log.info("Activated member user_id=%s guild_id=%s instantly", member.id, guild.id)
+
     async def clear_member_state(self, guild_id: int, member_id: int) -> None:
         await self.inactive_users.clear(guild_id, member_id)
 

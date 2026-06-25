@@ -161,6 +161,14 @@ class InactivityCog(commands.Cog):
         )
 
     @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        if not is_test_guild(member.guild.id):
+            return
+        # New member: set their role state immediately (unverified -> parked,
+        # otherwise -> Active) rather than waiting for the next sweep.
+        await self.bot.inactivity_service.sync_member_now(member.guild, member)
+
+    @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
         if not is_test_guild(after.guild.id):
             return
@@ -174,14 +182,14 @@ class InactivityCog(commands.Cog):
         def _had(role_id: int | None, member: discord.Member) -> bool:
             return role_id is not None and any(role.id == role_id for role in member.roles)
 
+        # Gaining or losing the Unverified role flips their state instantly:
+        # gained -> parked inactive, lost (verified) -> Active right away.
+        if unverified_role_id is not None and _had(unverified_role_id, before) != _had(unverified_role_id, after):
+            await self.bot.inactivity_service.sync_member_now(after.guild, after)
+            return
+
         # Manual removal of the inactive role clears the countdown.
         if _had(inactive_role_id, before) and not _had(inactive_role_id, after):
-            await self.bot.inactivity_service.clear_member_state(after.guild.id, after.id)
-
-        # Verifying (losing the unverified role) counts as activity, so the next
-        # sweep grants the Active role instead of leaving them parked.
-        if _had(unverified_role_id, before) and not _had(unverified_role_id, after):
-            await self.bot.inactivity_service.record_activity(after.guild.id, after.id)
             await self.bot.inactivity_service.clear_member_state(after.guild.id, after.id)
 
     @commands.Cog.listener()

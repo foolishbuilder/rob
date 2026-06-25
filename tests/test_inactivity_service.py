@@ -427,6 +427,56 @@ def test_register_member_activity_records_when_disabled_without_role_changes():
     assert not member.has(ACTIVE_ROLE_ID)
 
 
+def test_sync_member_now_parks_unverified_instantly():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID), _FakeRole(UNVERIFIED_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users, unverified_role_id=UNVERIFIED_ROLE_ID)
+    _enable(service)
+
+    _run(service.sync_member_now(guild, member))
+
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+    assert (1, 10) not in inactive_users.rows
+
+
+def test_sync_member_now_activates_verified_instantly_and_stamps_activity():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now, remove_at=now + timedelta(days=5),
+        initial_notice_sent=True, final_notice_sent=False, status="watching",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])  # was parked, just verified
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users, unverified_role_id=UNVERIFIED_ROLE_ID)
+    _enable(service)
+
+    _run(service.sync_member_now(guild, member))
+
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert (1, 10) not in inactive_users.rows
+    assert bot_state.values.get("activity:1:user:10:last_active") is not None
+
+
+def test_sync_member_now_noop_when_disabled():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    # not enabled
+
+    _run(service.sync_member_now(guild, member))
+
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+
+
 def test_list_inactive_members_shows_role_holders_countdown_first():
     bot_state = _FakeBotState()
     inactive_users = _FakeInactiveUsers()

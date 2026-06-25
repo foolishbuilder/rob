@@ -33,14 +33,21 @@ rob guild set-channel --guild-id <guild_id> --field backup_approval_channel_id -
 
 ## 2. Activity / inactive-role system
 
-Rob records activity (messages, reactions, slash/button interactions) into
-`activity:{guild}:user:{uid}:last_active` **in real time, on every event** — and
-if the member was marked inactive, they are restored to Active immediately (no
-waiting for the next sweep).
+Everything that *can* be event-driven is instant — Rob does not wait for the
+sweep to react to a state change:
 
-Detecting the *absence* of activity isn't event-driven, so a periodic **sweep**
-flags newly-inactive members. It runs every `INACTIVITY_LOOP_MINUTES`
-(**default weekly = 10080**) and once on each restart. Each sweep:
+- **Talking / interacting** (message, reaction, slash/button use): activity is
+  stamped, and a member who was marked inactive is restored to **Active**
+  immediately.
+- **Going unverified** (gains `unverified_role_id`): parked **Inactive**
+  immediately (Active off, no countdown).
+- **Becoming verified** (loses `unverified_role_id`) and **joining**: set to the
+  correct state immediately — **Active** (or parked Inactive if still unverified).
+
+Only the *absence* of activity ("stayed quiet for a week") has no event, so a
+periodic **sweep** flags newly-inactive members. It runs every
+`INACTIVITY_LOOP_MINUTES` (**default weekly = 10080**) and once on each restart.
+Each sweep:
 
 - **Active** (interacted within `INACTIVITY_INACTIVE_AFTER_DAYS`, default 7):
   keeps the Active role, loses the Inactive role, clears any countdown.
