@@ -254,6 +254,16 @@ def build_parser() -> argparse.ArgumentParser:
         "backfill-public-ids",
         help="Generate and store missing public send IDs.",
     )
+    sends_repair_mentions = sends_subparsers.add_parser(
+        "repair-mentions",
+        help="Link legacy sends whose sub name is a raw @mention to that user.",
+    )
+    sends_repair_mentions.add_argument("--guild-id", type=int, default=None)
+    sends_repair_mentions.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview changes without writing.",
+    )
     sends_mark_posted = sends_subparsers.add_parser(
         "mark-posted",
         help="Force mark a send as posted.",
@@ -1270,6 +1280,22 @@ async def handle_sends(ctx: OperationsContext, args: argparse.Namespace) -> None
         updated = await ctx.sends.backfill_public_send_ids()
         print_header("Backfill Public Send IDs")
         print_field("Updated", updated)
+        print_kv("updated", updated)
+        return
+    if args.sends_command == "repair-mentions":
+        guild_id = getattr(args, "guild_id", None)
+        candidates, updated = await ctx.sends.repair_mention_sub_links(
+            guild_id=guild_id,
+            dry_run=bool(args.dry_run),
+        )
+        print_header("Repair Mention Sub Links")
+        print_field("Guild ID", guild_id if guild_id is not None else "all")
+        print_field("Dry Run", bool(args.dry_run))
+        print_field("Candidates", candidates)
+        print_field("Updated", updated)
+        print_kv("guild_id", guild_id if guild_id is not None else "all")
+        print_kv("dry_run", bool(args.dry_run))
+        print_kv("candidates", candidates)
         print_kv("updated", updated)
         return
     if args.sends_command == "mark-posted":

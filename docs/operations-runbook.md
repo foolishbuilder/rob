@@ -69,8 +69,16 @@ rob leaderboard adopt --guild-id <guild_id> --leaderboard-channel-id <channel_id
 rob sends list --status all --guild-id <guild_id> --limit 25
 rob sends mark-posted <send_id>
 rob sends backfill-public-ids
+rob sends repair-mentions --dry-run
+rob sends repair-mentions
 rob throne invalidate-test-sends
 ```
+
+`repair-mentions` relinks legacy sends whose sub name was stored as a raw
+`@mention` (e.g. a Dom/me picked a member from the autocomplete in the old
+`/add` sub field) to that user, restoring a registered sub's send name. Omit
+`--guild-id` to scan all guilds; run with `--dry-run` first, then re-run
+`rob leaderboard refresh` afterward so totals pick up the new attribution.
 
 ## Rehearsal Migration and Webhook Reissue
 

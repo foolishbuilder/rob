@@ -9,6 +9,7 @@ from rob.config.guilds import MAIN_GUILD_ID
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.registration import registration_card
 from rob.utils.money import dollars_to_cents, format_money_from_cents
+from rob.utils.text import parse_user_mention
 
 if TYPE_CHECKING:
     import discord
@@ -17,6 +18,28 @@ if TYPE_CHECKING:
 
 
 _MANUAL_METHODS = ["cashapp", "venmo", "paypal", "onlyfans", "loyalfans", "youpay", "other"]
+
+
+def _resolve_sub_attribution(
+    guild: "discord.Guild | None", sub: str | None
+) -> tuple[str | None, int | None]:
+    """Resolve the free-text ``sub`` field into ``(sub_name, sub_user_id)``.
+
+    When a Dom/me picks a real member from the @-autocomplete, Discord sends the
+    raw mention token ("<@123>"). Treat that as a link to the user so the send is
+    attributed to them and rendered as a clean mention, falling back to their
+    display name as the recorded sending name when the member is in cache.
+    """
+
+    cleaned = (sub or "").strip()
+    if not cleaned:
+        return None, None
+    user_id = parse_user_mention(cleaned)
+    if user_id is None:
+        return cleaned, None
+    member = guild.get_member(user_id) if guild is not None else None
+    sub_name = member.display_name if member is not None else None
+    return sub_name, user_id
 
 
 class SendsCog(commands.Cog):
@@ -59,11 +82,13 @@ class SendsCog(commands.Cog):
             return
 
         await interaction.response.defer(ephemeral=True)
+        sub_name, sub_user_id = _resolve_sub_attribution(interaction.guild, sub)
         send = await self.bot.send_service.record_manual_send(
             guild_id=interaction.guild.id,
             domme_id=domme.id,
             domme_user_id=interaction.user.id,
-            sub_name=(sub or "").strip() or None,
+            sub_name=sub_name,
+            sub_user_id=sub_user_id,
             amount_cents=dollars_to_cents(float(amount)),
             currency="USD",
             method=method.value,
@@ -89,13 +114,19 @@ class SendsCog(commands.Cog):
                 if send.discord_post_status == "queued_maintenance"
                 else "queued for posting"
             )
+        if send.sub_name:
+            sender_label = send.sub_name
+        elif send.sub_user_id is not None:
+            sender_label = f"<@{send.sub_user_id}>"
+        else:
+            sender_label = "Unclaimed"
         await interaction.followup.send(
             **registration_card(
                 title="Rob | Send Logged",
                 summary=f"Recorded {format_money_from_cents(send.amount_cents)} and {queue_label}.",
                 details=[
                     ("Method", method.value),
-                    ("Sender", send.sub_name or "Unclaimed"),
+                    ("Sender", sender_label),
                 ],
             ).send_kwargs(),
             ephemeral=True,
