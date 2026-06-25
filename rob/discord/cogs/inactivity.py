@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from rob.config.guilds import TEST_GUILD_ID, is_test_guild
+from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_new_system_guild
 from rob.discord.permissions import is_staff_member
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.inactivity import (
@@ -36,7 +36,7 @@ class InactivityCog(commands.Cog):
     async def inactivity_loop(self) -> None:
         guild_ids = await self.bot.guild_settings_repo.list_guild_ids()
         for guild_id in guild_ids:
-            if not is_test_guild(guild_id):
+            if not is_new_system_guild(guild_id):
                 continue
             guild = self.bot.get_guild(guild_id)
             if guild is None:
@@ -68,7 +68,7 @@ class InactivityCog(commands.Cog):
         )
 
     @app_commands.command(name="inactivitytest", description="DM the inactivity notice templates to yourself.")
-    @app_commands.guilds(TEST_GUILD_ID)
+    @app_commands.guilds(MAIN_GUILD_ID, TEST_GUILD_ID)
     @app_commands.choices(
         notice_type=[
             app_commands.Choice(name="All notices", value="all"),
@@ -126,7 +126,7 @@ class InactivityCog(commands.Cog):
         )
 
     @app_commands.command(name="inactivelist", description="List members with the Inactive role and time until removal.")
-    @app_commands.guilds(TEST_GUILD_ID)
+    @app_commands.guilds(MAIN_GUILD_ID, TEST_GUILD_ID)
     async def inactivity_list(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -162,7 +162,7 @@ class InactivityCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
-        if not is_test_guild(member.guild.id):
+        if not is_new_system_guild(member.guild.id):
             return
         # New member: set their role state immediately (unverified -> parked,
         # otherwise -> Active) rather than waiting for the next sweep.
@@ -170,7 +170,7 @@ class InactivityCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        if not is_test_guild(after.guild.id):
+        if not is_new_system_guild(after.guild.id):
             return
         settings = await self.bot.guild_settings_repo.get(after.guild.id)
         if settings is None:
@@ -194,6 +194,6 @@ class InactivityCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member) -> None:
-        if not is_test_guild(member.guild.id):
+        if not is_new_system_guild(member.guild.id):
             return
         await self.bot.inactivity_service.clear_member_state(member.guild.id, member.id)

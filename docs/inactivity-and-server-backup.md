@@ -1,9 +1,12 @@
 # Activity / inactive-role system & hourly server backups
 
-Two systems, both **scoped to the test guild** for now (gated on
-`rob.config.guilds.TEST_GUILD_ID`). Promote to the main guild later by widening
-that gate. Both stay dormant until their roles/channels are configured and the
-system is switched on per guild.
+Two systems, live on the **main + test guilds** (gated on
+`rob.config.guilds.is_new_system_guild`). Both stay **dormant** until their
+roles/channels are configured *and* the system is switched on per guild — so
+promoting the code does not change anything on a guild until you run
+`rob inactivity on` / `rob backup on` for it. Activity tracking, however, starts
+recording immediately on a promoted guild so history is ready before you enable
+the inactivity sweep.
 
 ## 1. Configure roles & channels (via `rob scan`)
 

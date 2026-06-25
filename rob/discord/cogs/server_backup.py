@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands, tasks
 
-from rob.config.guilds import is_test_guild
+from rob.config.guilds import is_new_system_guild
 from rob.database.repositories.models import GuildSettings, ServerBackupApproval
 from rob.discord.permissions import is_staff_member, member_has_role
 from rob.services.server_backup_service import BackupCycleResult
@@ -55,7 +55,7 @@ class ServerBackupCog(commands.Cog):
     async def backup_loop(self) -> None:
         guild_ids = await self.bot.guild_settings_repo.list_guild_ids()
         for guild_id in guild_ids:
-            if not is_test_guild(guild_id):
+            if not is_new_system_guild(guild_id):
                 continue
             guild = self.bot.get_guild(guild_id)
             if guild is None:
