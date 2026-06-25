@@ -17,7 +17,10 @@ Run in order:
 7. `008_dm_preferences.sql`
 8. `009_terms_acceptance.sql`
 9. `010_leaderboard_access_role.sql`
-10. `../grants/dev_rehearsal_prod_roles.sql`
+10. `011_send_fallback_hash_unique.sql`
+11. `012_inactivity_backup_settings.sql`
+12. `013_server_backups.sql`
+13. `../grants/dev_rehearsal_prod_roles.sql`
 
 `003_achievements.sql` is retired. `008_dm_preferences.sql` drops the
 achievements tables/sequences if they still exist, removes the prior
@@ -27,6 +30,12 @@ notification preference columns and `domme_onboarding_state` table.
 `010_leaderboard_access_role.sql` adds `vib_settings.leaderboard_view_role_id`
 for test-guild leaderboard access gating (no new grant needed — it is a column
 on the already-granted `vib_settings` table).
+`012_inactivity_backup_settings.sql` adds the `vib_settings` active /
+unverified / trial-mod role columns plus `backup_approval_channel_id` (all
+columns on the already-granted `vib_settings` table). `013_server_backups.sql`
+adds the `server_backups` and `server_backup_approvals` tables for the hourly
+server-backup system — re-run the relevant grants file afterwards so the runtime
+bot user can use the new tables/sequences.
 
 Important:
 

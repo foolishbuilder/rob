@@ -92,6 +92,9 @@ Usage:
   rob count status --guild <guild_id>
   rob scan --guild <guild_id>
   rob auto-apply --guild <guild_id> [all|channels|roles|field_a,field_b]
+
+  rob inactivity on|off|status --guild <guild_id>
+  rob backup on|off|status|run --guild <guild_id>
   rob migration audit --guild <guild_id>
   rob webhook preview --guild <guild_id>
   rob webhook send --guild <guild_id> --all [--limit <n>]
@@ -686,6 +689,49 @@ scan_command() {
   ops_get "/guilds/${GUILD_ID}/scan?format=text"
 }
 
+inactivity_command() {
+  local action="${1:-status}"
+  shift || true
+  collect_guild_option "$@"
+  case "${action}" in
+    status)
+      ops_get "/guilds/${GUILD_ID}/inactivity?format=text"
+      ;;
+    on)
+      ops_post_form "/guilds/${GUILD_ID}/inactivity?format=text" "enabled=true"
+      ;;
+    off)
+      ops_post_form "/guilds/${GUILD_ID}/inactivity?format=text" "enabled=false"
+      ;;
+    *)
+      die "usage: rob inactivity on|off|status --guild <guild_id>"
+      ;;
+  esac
+}
+
+backup_command() {
+  local action="${1:-status}"
+  shift || true
+  collect_guild_option "$@"
+  case "${action}" in
+    status)
+      ops_get "/guilds/${GUILD_ID}/backup?format=text"
+      ;;
+    on)
+      ops_post_form "/guilds/${GUILD_ID}/backup?format=text" "enabled=true"
+      ;;
+    off)
+      ops_post_form "/guilds/${GUILD_ID}/backup?format=text" "enabled=false"
+      ;;
+    run)
+      ops_post_form "/guilds/${GUILD_ID}/backup/run?format=text"
+      ;;
+    *)
+      die "usage: rob backup on|off|status|run --guild <guild_id>"
+      ;;
+  esac
+}
+
 auto_apply_command() {
   collect_guild_option "$@"
   if ((${#REMAINING_ARGS[@]})); then
@@ -824,6 +870,8 @@ clear_command() {
     count_recovery_windows
     sub_send_names
     inactive_users
+    server_backup_approvals
+    server_backups
     vib_leaderboard
     sends
     subs
@@ -866,6 +914,8 @@ TRUNCATE TABLE
     count_recovery_windows,
     sub_send_names,
     inactive_users,
+    server_backup_approvals,
+    server_backups,
     vib_leaderboard,
     sends,
     subs,
@@ -1042,6 +1092,12 @@ case "${cmd}" in
     ;;
   auto-apply)
     auto_apply_command "$@"
+    ;;
+  inactivity)
+    inactivity_command "$@"
+    ;;
+  backup)
+    backup_command "$@"
     ;;
   migration)
     migration_command "$@"

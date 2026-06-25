@@ -13,6 +13,7 @@ CHANNEL_FIELD_NAMES = {
     "counting_channel_id",
     "report_channel_id",
     "warn_log_channel_id",
+    "backup_approval_channel_id",
 }
 
 ROLE_FIELD_NAMES = {
@@ -21,6 +22,9 @@ ROLE_FIELD_NAMES = {
     "mod_role_id",
     "inactive_role_id",
     "leaderboard_view_role_id",
+    "active_role_id",
+    "unverified_role_id",
+    "trial_mod_role_id",
 }
 
 
@@ -41,6 +45,10 @@ def _build_vib_settings(row: Record) -> VibSettings:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         leaderboard_view_role_id=row["leaderboard_view_role_id"],
+        active_role_id=row["active_role_id"],
+        unverified_role_id=row["unverified_role_id"],
+        trial_mod_role_id=row["trial_mod_role_id"],
+        backup_approval_channel_id=row["backup_approval_channel_id"],
     )
 
 
