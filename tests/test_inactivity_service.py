@@ -360,6 +360,96 @@ def test_maintenance_suppresses_dms_and_kicks_but_still_swaps_roles():
     assert member.has(INACTIVE_ROLE_ID)
 
 
+def test_register_member_activity_reactivates_inactive_member_instantly():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now - timedelta(days=8),
+        remove_at=now + timedelta(days=7), initial_notice_sent=True, final_notice_sent=False, status="watching",
+    )
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.register_member_activity(guild, member))
+
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert (1, 10) not in inactive_users.rows
+    assert bot_state.values.get("activity:1:user:10:last_active") is not None
+
+
+def test_register_member_activity_records_but_does_not_touch_active_member():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.register_member_activity(guild, member))
+
+    # Activity recorded, but no role churn for an already-active member.
+    assert bot_state.values.get("activity:1:user:10:last_active") is not None
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+
+
+def test_register_member_activity_does_not_reactivate_unverified():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID), _FakeRole(UNVERIFIED_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users, unverified_role_id=UNVERIFIED_ROLE_ID)
+    _enable(service)
+
+    _run(service.register_member_activity(guild, member))
+
+    # Unverified members stay parked as inactive even when they interact.
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+
+
+def test_register_member_activity_records_when_disabled_without_role_changes():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    # Not enabled: activity still recorded (history), but no reactivation.
+
+    _run(service.register_member_activity(guild, member))
+
+    assert bot_state.values.get("activity:1:user:10:last_active") is not None
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+
+
+def test_list_inactive_members_shows_role_holders_countdown_first():
+    bot_state = _FakeBotState()
+    inactive_users = _FakeInactiveUsers()
+    now = datetime.now(timezone.utc)
+    on_countdown = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    parked = _FakeMember(11, roles=[_FakeRole(INACTIVE_ROLE_ID)])  # role but no countdown
+    inactive_users.rows[(1, 10)] = SimpleNamespace(
+        guild_id=1, discord_user_id=10, inactive_role_assigned_at=now,
+        remove_at=now + timedelta(days=5), initial_notice_sent=True, final_notice_sent=False, status="watching",
+    )
+    guild = _FakeGuild(1, [on_countdown, parked])
+    guild._roles[INACTIVE_ROLE_ID].members = [parked, on_countdown]  # deliberately unsorted
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+
+    rows = _run(service.list_inactive_members(guild))
+
+    # Everyone with the Inactive role appears; soonest scheduled kick first,
+    # parked (no countdown) last.
+    assert [member.id for member, _ in rows] == [10, 11]
+    assert rows[0][1] is not None
+    assert rows[1][1] is None
+
+
 def test_requires_active_and_inactive_roles_configured():
     bot_state = _FakeBotState()
     service = InactivityService(

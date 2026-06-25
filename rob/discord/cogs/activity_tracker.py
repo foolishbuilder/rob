@@ -16,7 +16,8 @@ log = logging.getLogger(__name__)
 
 class ActivityTrackerCog(commands.Cog):
     """Records member activity (messages, reactions, interactions) so the
-    inactivity system can tell active members from inactive ones.
+    inactivity system can tell active members from inactive ones, and reactivates
+    a member the instant they interact again.
 
     Scoped to the test guild while the activity / inactive-role system is rolled
     out there first."""
@@ -24,34 +25,54 @@ class ActivityTrackerCog(commands.Cog):
     def __init__(self, bot: "RobBot") -> None:
         self.bot = bot
 
-    async def _record(self, guild_id: int | None, user: discord.abc.User | None) -> None:
-        if guild_id is None or not is_test_guild(guild_id):
+    def _service(self):
+        return getattr(self.bot, "inactivity_service", None)
+
+    async def _register(self, guild: discord.Guild | None, member: discord.abc.User | None) -> None:
+        if guild is None or not is_test_guild(guild.id):
             return
-        if user is None or user.bot:
+        if member is None or getattr(member, "bot", False):
             return
-        service = getattr(self.bot, "inactivity_service", None)
+        service = self._service()
         if service is None:
             return
         try:
-            await service.record_activity(guild_id, user.id)
+            await service.register_member_activity(guild, member)
         except Exception:  # pragma: no cover - never let tracking break event handling
-            log.exception("Failed to record activity for user_id=%s guild_id=%s", user.id, guild_id)
+            log.exception(
+                "Failed to record activity for user_id=%s guild_id=%s",
+                getattr(member, "id", None),
+                guild.id,
+            )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         if message.guild is None:
             return
-        await self._record(message.guild.id, message.author)
+        await self._register(message.guild, message.author)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         if payload.guild_id is None:
             return
-        user = payload.member
-        if user is None and payload.user_id:
-            user = self.bot.get_user(payload.user_id)
-        await self._record(payload.guild_id, user)
+        if payload.member is not None:
+            guild = self.bot.get_guild(payload.guild_id) or payload.member.guild
+            await self._register(guild, payload.member)
+        elif payload.user_id and is_test_guild(payload.guild_id):
+            # Uncached reactor: record the activity signal even though we can't
+            # resolve a Member to reactivate here (the next sweep will catch it).
+            service = self._service()
+            if service is not None:
+                try:
+                    await service.record_activity(payload.guild_id, payload.user_id)
+                except Exception:  # pragma: no cover - defensive
+                    log.exception(
+                        "Failed to record reaction activity user_id=%s guild_id=%s",
+                        payload.user_id,
+                        payload.guild_id,
+                    )
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction) -> None:
-        await self._record(interaction.guild_id, interaction.user)
+        member = interaction.user if isinstance(interaction.user, discord.Member) else None
+        await self._register(interaction.guild, member)

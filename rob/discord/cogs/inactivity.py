@@ -125,7 +125,7 @@ class InactivityCog(commands.Cog):
             ephemeral=True,
         )
 
-    @app_commands.command(name="inactivelist", description="List members on the inactivity removal watchlist.")
+    @app_commands.command(name="inactivelist", description="List members with the Inactive role and time until removal.")
     @app_commands.guilds(TEST_GUILD_ID)
     async def inactivity_list(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
@@ -141,20 +141,22 @@ class InactivityCog(commands.Cog):
             )
             return
 
-        records = await self.bot.inactive_users_repo.list_for_guild(interaction.guild.id)
-        records = [record for record in records if record.remove_at is not None]
-        if not records:
+        rows = await self.bot.inactivity_service.list_inactive_members(interaction.guild)
+        if not rows:
             await interaction.response.send_message(
                 **inactivity_empty_list_card().send_kwargs(), ephemeral=True
             )
             return
 
         lines: list[str] = []
-        for record in records:
-            ts = int(record.remove_at.timestamp())
-            lines.append(f"- <@{record.discord_user_id}> (`{record.discord_user_id}`) — remove <t:{ts}:R> / <t:{ts}:F>")
+        for member, remove_at in rows:
+            if remove_at is not None:
+                ts = int(remove_at.timestamp())
+                lines.append(f"- {member.mention} (`{member.id}`) — kick <t:{ts}:R> (<t:{ts}:F>)")
+            else:
+                lines.append(f"- {member.mention} (`{member.id}`) — no removal scheduled")
         await interaction.response.send_message(
-            **inactivity_list_card(lines[:200], len(records)).send_kwargs(),
+            **inactivity_list_card(lines[:200], len(rows)).send_kwargs(),
             ephemeral=True,
         )
 

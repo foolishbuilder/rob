@@ -147,7 +147,7 @@ def load_base_settings(env_file: str | Path | None = None) -> BaseSettings:
         public_leaderboard_cache_seconds=_env_int("PUBLIC_LEADERBOARD_CACHE_SECONDS", 60, minimum=1),
         rob_public_base_url=_env_str("ROB_PUBLIC_BASE_URL", "https://leaderboard.robthebot.com"),
         inactivity_enabled_default=_env_bool("INACTIVITY_ENABLED_DEFAULT", False),
-        inactivity_loop_minutes=_env_int("INACTIVITY_LOOP_MINUTES", 60, minimum=1),
+        inactivity_loop_minutes=_env_int("INACTIVITY_LOOP_MINUTES", 10080, minimum=1),
         inactivity_inactive_after_days=_env_int("INACTIVITY_INACTIVE_AFTER_DAYS", 7, minimum=1),
         inactivity_kick_grace_days=_env_int("INACTIVITY_KICK_GRACE_DAYS", 14, minimum=1),
         inactivity_bootstrap_grace_days=_env_int("INACTIVITY_BOOTSTRAP_GRACE_DAYS", 21, minimum=1),
