@@ -269,6 +269,7 @@ class InactivityService:
             await self._add_role(member, inactive_role, reason="Member inactive for a week")
 
             record = await self.inactive_users.get(guild_id, member.id)
+            freshly_created = False
             if record is None or record.remove_at is None:
                 remove_at = now + grace
                 record = await self.inactive_users.start_watching(
@@ -277,9 +278,19 @@ class InactivityService:
                     inactive_role_assigned_at=now,
                     remove_at=remove_at,
                 )
+                freshly_created = True
             remove_at = record.remove_at or (now + grace)
 
-            if send_notifications and not record.initial_notice_sent:
+            # Grandfather members the bootstrap run discovers: give them the
+            # Inactive role + a full grace window, but skip the day-one first
+            # notice (they still get the final notice before any kick). Members
+            # who go inactive *after* bootstrap get the first notice immediately.
+            initial_notice_sent = record.initial_notice_sent
+            if freshly_created and is_bootstrap_run and not initial_notice_sent:
+                await self.inactive_users.mark_initial_notice(guild_id, member.id)
+                initial_notice_sent = True
+
+            if send_notifications and not initial_notice_sent:
                 await self._send_dm(
                     member,
                     message_kwargs=self._build_first_notice(member, remove_at, guild.name),

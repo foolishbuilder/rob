@@ -198,6 +198,10 @@ def test_inactive_member_swaps_roles_and_sends_first_notice():
     bot_state.values["activity:1:user:10:last_active"] = (
         datetime.now(timezone.utc) - timedelta(days=8)
     ).isoformat()
+    # Already bootstrapped: a member going inactive now gets the first notice.
+    bot_state.values["inactivity:1:bootstrapped_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).isoformat()
     inactive_users = _FakeInactiveUsers()
     member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
     guild = _FakeGuild(1, [member])
@@ -214,6 +218,27 @@ def test_inactive_member_swaps_roles_and_sends_first_notice():
     rendered = _view_text(member.dm_messages[0])
     assert "inactive" in rendered.lower()
     assert "<t:" in rendered
+
+
+def test_bootstrap_grandfathers_without_first_notice_blast():
+    bot_state = _FakeBotState()
+    bot_state.values["activity:1:user:10:last_active"] = (
+        datetime.now(timezone.utc) - timedelta(days=8)
+    ).isoformat()
+    # No bootstrapped marker -> this is the first run after enabling.
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    # Flagged inactive + on the watchlist, but no day-one first-notice DM.
+    assert member.has(INACTIVE_ROLE_ID)
+    assert member.dm_messages == []
+    assert member.kicked is False
+    assert inactive_users.rows[(1, 10)].initial_notice_sent is True
 
 
 def test_unverified_member_parked_inactive_without_countdown():
