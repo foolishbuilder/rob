@@ -174,3 +174,47 @@ def test_backup_toggle_and_run_endpoints():
     resp = _run(server._handle_backup_run(_Req(guild_id=7)))
     assert json.loads(resp.text)["action"] == "no_change"
     assert svc.ran == [7]
+
+
+class _FakeVibRepo:
+    def __init__(self):
+        self.settings = SimpleNamespace(backup_approval_channel_id=None, active_role_id=None)
+
+    async def set_channel_id(self, _guild_id, field, channel_id):
+        setattr(self.settings, field, channel_id)
+        return self.settings
+
+    async def set_role_id(self, _guild_id, field, role_id):
+        setattr(self.settings, field, role_id)
+        return self.settings
+
+
+def test_set_channel_and_role_endpoints():
+    repo = _FakeVibRepo()
+    bot = SimpleNamespace(vib_settings_repo=repo)
+    server = _server(bot)
+
+    resp = _run(server._handle_set_guild_channel(_Req(
+        guild_id=5,
+        payload={"field": "backup_approval_channel_id", "channel_id": "1496237724171112528"},
+    )))
+    assert json.loads(resp.text)["channel_id"] == 1496237724171112528
+    assert repo.settings.backup_approval_channel_id == 1496237724171112528
+
+    resp = _run(server._handle_set_guild_role(_Req(
+        guild_id=5, payload={"field": "active_role_id", "role_id": "777"},
+    )))
+    assert json.loads(resp.text)["role_id"] == 777
+    assert repo.settings.active_role_id == 777
+
+    # Unknown field is rejected.
+    resp = _run(server._handle_set_guild_channel(_Req(
+        guild_id=5, payload={"field": "not_a_real_field", "channel_id": "1"},
+    )))
+    assert resp.status == 400
+
+    # Clearing a field.
+    resp = _run(server._handle_set_guild_channel(_Req(
+        guild_id=5, payload={"field": "backup_approval_channel_id", "clear": "true"},
+    )))
+    assert json.loads(resp.text)["channel_id"] is None
