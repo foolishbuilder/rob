@@ -16,6 +16,16 @@ TEST_GUILD_ID: int = 1506597978251591813
 # owner from application_info(), which can be a team account or have DMs closed.
 OWNER_USER_ID: int = 1299308718009356289
 
+# "DO NOT TOUCH" users. Rob's member-lifecycle automations (the inactivity
+# system: Active/Inactive role swaps, inactivity DMs, and auto-kicks) must never
+# act on these accounts; instead they are kept Active and left in place. Seeded
+# with a deceased member whose account is preserved as a memorial.
+PROTECTED_USER_IDS: frozenset[int] = frozenset(
+    {
+        1455563825393832095,
+    }
+)
+
 
 def is_test_guild(guild_id: int | None) -> bool:
     """Return ``True`` when ``guild_id`` matches the test guild.
@@ -47,11 +57,22 @@ def is_new_system_guild(guild_id: int | None) -> bool:
     return is_main_guild(guild_id) or is_test_guild(guild_id)
 
 
+def is_protected_user(user_id: int | None) -> bool:
+    """Return ``True`` for "DO NOT TOUCH" accounts that Rob's member-lifecycle
+    automations must never act on (never kicked, never marked inactive)."""
+
+    if user_id is None:
+        return False
+    return int(user_id) in PROTECTED_USER_IDS
+
+
 __all__ = [
     "MAIN_GUILD_ID",
     "TEST_GUILD_ID",
     "OWNER_USER_ID",
+    "PROTECTED_USER_IDS",
     "is_test_guild",
     "is_main_guild",
     "is_new_system_guild",
+    "is_protected_user",
 ]

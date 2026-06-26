@@ -64,6 +64,11 @@ Each sweep:
   on, Active off) but **never** on the kick countdown. Verifying counts as
   activity and restores the Active role.
 
+**Protected ("DO NOT TOUCH") accounts.** User ids in
+`rob.config.guilds.PROTECTED_USER_IDS` are never marked inactive, DM'd, or
+kicked — every sweep keeps them **Active** and clears any countdown. Seeded with
+a deceased member's memorial account; add more ids to that set as needed.
+
 **History backfill.** Rob only has live activity for a guild from the moment the
 system is promoted there, so the **first sweep after enabling auto-scans recent
 chat history** (the last `INACTIVITY_INACTIVE_AFTER_DAYS` of messages across the
