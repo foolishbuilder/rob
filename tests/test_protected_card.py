@@ -58,22 +58,58 @@ def test_protected_card_renders_into_supplied_view_with_gofundme_button():
     assert button.style == discord.ButtonStyle.link
 
 
-def test_protected_command_replies_without_pinging_the_account():
+def test_protected_command_deletes_invocation_and_posts_card():
     sent: dict[str, object] = {}
+    deleted = {"called": False}
 
-    async def _reply(**kwargs):
+    async def _send(**kwargs):
         sent.update(kwargs)
 
-    ctx = SimpleNamespace(guild=SimpleNamespace(), reply=_reply)
+    async def _delete():
+        deleted["called"] = True
+
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(),
+        message=SimpleNamespace(delete=_delete),
+        send=_send,
+    )
     cog = ProtectedCog(SimpleNamespace())
 
     asyncio.run(cog.protected.callback(cog, ctx))
 
-    # The card is delivered as a Components V2 view, with mentions suppressed so
-    # the memorial account is never pinged.
+    # The invoking !protected message is deleted, leaving only the card — posted
+    # as a standalone message (not a reply) with mentions suppressed so the
+    # memorial account is never pinged.
+    assert deleted["called"] is True
+    assert "mention_author" not in sent
     assert sent["view"] is not None
-    assert sent["mention_author"] is False
     allowed = sent["allowed_mentions"]
     assert allowed.users is False
     assert allowed.roles is False
     assert allowed.everyone is False
+
+
+def test_protected_command_still_posts_card_when_delete_is_forbidden():
+    sent: dict[str, object] = {}
+
+    async def _send(**kwargs):
+        sent.update(kwargs)
+
+    async def _delete():
+        raise discord.HTTPException(
+            SimpleNamespace(status=403, reason="Forbidden"),
+            "missing Manage Messages",
+        )
+
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(),
+        message=SimpleNamespace(delete=_delete),
+        send=_send,
+    )
+    cog = ProtectedCog(SimpleNamespace())
+
+    asyncio.run(cog.protected.callback(cog, ctx))
+
+    # A failed delete (e.g. no Manage Messages permission) must not swallow the
+    # card — it is still posted.
+    assert sent["view"] is not None
