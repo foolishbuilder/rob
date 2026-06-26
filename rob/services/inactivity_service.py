@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 
+from rob.config.guilds import is_protected_user
 from rob.database.repositories.bot_state import BotStateRepository
 from rob.database.repositories.guild_settings import GuildSettingsRepository
 from rob.database.repositories.inactive_users import InactiveUsersRepository
@@ -201,6 +202,10 @@ class InactivityService:
         inactive_role = guild.get_role(settings.inactive_role_id) if settings.inactive_role_id else None
         if active_role is None or inactive_role is None:
             return
+        # Protected ("DO NOT TOUCH") accounts are always kept Active.
+        if is_protected_user(member.id):
+            await self._keep_active(guild.id, member, active_role, inactive_role, reason="Protected member")
+            return
         # Unverified members stay parked as inactive regardless of activity.
         if settings.unverified_role_id is not None and self._has_role(member, settings.unverified_role_id):
             return
@@ -237,6 +242,12 @@ class InactivityService:
         active_role = guild.get_role(settings.active_role_id) if settings.active_role_id else None
         inactive_role = guild.get_role(settings.inactive_role_id) if settings.inactive_role_id else None
         if active_role is None or inactive_role is None:
+            return
+
+        # Protected ("DO NOT TOUCH") accounts are always kept Active, even if
+        # they somehow hold the unverified role.
+        if is_protected_user(member.id):
+            await self._keep_active(guild.id, member, active_role, inactive_role, reason="Protected member")
             return
 
         if settings.unverified_role_id is not None and self._has_role(member, settings.unverified_role_id):
@@ -379,6 +390,22 @@ class InactivityService:
         except discord.HTTPException:
             log.warning("Failed to remove role %s from user_id=%s", role.id, member.id, exc_info=True)
 
+    async def _keep_active(
+        self,
+        guild_id: int,
+        member: discord.Member,
+        active_role: discord.Role,
+        inactive_role: discord.Role,
+        *,
+        reason: str,
+    ) -> None:
+        """Force a member to the Active state and drop any countdown — used for
+        active members and for protected ("DO NOT TOUCH") accounts."""
+
+        await self._remove_role(member, inactive_role, reason=reason)
+        await self._add_role(member, active_role, reason=reason)
+        await self.inactive_users.clear(guild_id, member.id)
+
     # -- main sweep -----------------------------------------------------------
 
     async def process_guild(
@@ -424,6 +451,12 @@ class InactivityService:
         snapshots: list[InactivitySnapshot] = []
         for member in guild.members:
             if not self._is_eligible_member(member):
+                continue
+
+            # "DO NOT TOUCH" accounts (e.g. a deceased member's memorial account)
+            # are kept Active and never marked inactive, DM'd, or kicked.
+            if is_protected_user(member.id):
+                await self._keep_active(guild_id, member, active_role, inactive_role, reason="Protected member")
                 continue
 
             # Unverified members are parked as inactive, never on the kick clock.

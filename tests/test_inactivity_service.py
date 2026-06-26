@@ -593,3 +593,46 @@ def test_backfill_only_overwrites_with_newer_timestamp():
     assert result["users_seeded"] == 0  # not overwritten with the older time
     stored = _run(service.get_last_activity(1, 10))
     assert (now - stored) < timedelta(hours=2)
+
+
+PROTECTED_USER_ID = 1455563825393832095
+
+
+def test_protected_user_kept_active_and_never_inactive():
+    from rob.config.guilds import is_protected_user
+
+    assert is_protected_user(PROTECTED_USER_ID) is True
+    assert is_protected_user(999) is False
+
+    bot_state = _FakeBotState()
+    now = datetime.now(timezone.utc)
+    # Old activity + already bootstrapped: a normal member here would be inactive.
+    bot_state.values[f"activity:1:user:{PROTECTED_USER_ID}:last_active"] = (now - timedelta(days=30)).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (now - timedelta(days=1)).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(PROTECTED_USER_ID, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert member.kicked is False
+    assert member.dm_messages == []
+    assert (1, PROTECTED_USER_ID) not in inactive_users.rows
+    assert all(snapshot.member.id != PROTECTED_USER_ID for snapshot in snapshots)
+
+
+def test_protected_user_kept_active_in_sync_even_if_unverified():
+    bot_state = _FakeBotState()
+    member = _FakeMember(PROTECTED_USER_ID, roles=[_FakeRole(INACTIVE_ROLE_ID), _FakeRole(UNVERIFIED_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers(), unverified_role_id=UNVERIFIED_ROLE_ID)
+    _enable(service)
+
+    _run(service.sync_member_now(guild, member))
+
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
