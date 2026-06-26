@@ -189,6 +189,39 @@ class _FakeVibRepo:
         return self.settings
 
 
+class _FakeBackfillService:
+    def __init__(self):
+        self.backfilled = []
+        self.swept = []
+
+    async def backfill_activity_from_history(self, guild, *, days):
+        self.backfilled.append((guild.id, days))
+        return {"channels_scanned": 3, "users_seen": 5, "users_seeded": 4}
+
+    async def process_guild(self, guild, *, send_notifications, perform_kicks):
+        self.swept.append((guild.id, send_notifications, perform_kicks))
+        return [object(), object()]  # 2 still inactive
+
+
+def test_inactivity_backfill_endpoint_seeds_then_safely_sweeps():
+    svc = _FakeBackfillService()
+    bot = SimpleNamespace(
+        inactivity_service=svc,
+        get_guild=lambda gid: SimpleNamespace(id=gid),
+    )
+    server = _server(bot)
+
+    resp = _run(server._handle_inactivity_backfill(_Req(guild_id=9, payload={"days": "7"})))
+    body = json.loads(resp.text)
+
+    assert body["members_seeded"] == 4
+    assert body["channels_scanned"] == 3
+    assert body["still_inactive"] == 2
+    assert svc.backfilled == [(9, 7)]
+    # The corrective sweep must not DM or kick anyone.
+    assert svc.swept == [(9, False, False)]
+
+
 def test_inactivelist_card_stays_within_discord_text_limit():
     from rob.discord.cogs.inactivity import fit_list_lines
     from rob.ui.cards.inactivity import inactivity_list_card

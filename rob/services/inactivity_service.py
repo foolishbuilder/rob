@@ -106,6 +106,76 @@ class InactivityService:
             await self.bot_state.get_text(self.activity_key(guild_id, member_id))
         )
 
+    @staticmethod
+    def _can_read_history(channel: object, me: object | None) -> bool:
+        if me is None:
+            return True
+        perms_for = getattr(channel, "permissions_for", None)
+        if perms_for is None:
+            return True
+        try:
+            perms = perms_for(me)
+        except Exception:
+            return False
+        return bool(getattr(perms, "view_channel", True) and getattr(perms, "read_message_history", True))
+
+    async def backfill_activity_from_history(
+        self, guild: discord.Guild, *, days: int
+    ) -> dict[str, int]:
+        """Seed ``last_active`` from the last ``days`` of message history.
+
+        Scans the readable text channels and active threads, records each
+        non-bot author's most recent message time (only when newer than any
+        existing record), and returns a summary. Used to bootstrap activity when
+        the system is first enabled on a guild so already-active members are not
+        wrongly flagged inactive before live tracking has any history.
+        """
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, days))
+        me = getattr(guild, "me", None)
+        latest: dict[int, datetime] = {}
+        channels_scanned = 0
+
+        sources: list[object] = list(getattr(guild, "text_channels", []))
+        sources.extend(getattr(guild, "threads", []))
+        for channel in sources:
+            if not self._can_read_history(channel, me):
+                continue
+            history = getattr(channel, "history", None)
+            if history is None:
+                continue
+            channels_scanned += 1
+            try:
+                async for message in history(after=cutoff, limit=None):
+                    author = getattr(message, "author", None)
+                    if author is None or getattr(author, "bot", False):
+                        continue
+                    ts = getattr(message, "created_at", None)
+                    if ts is None:
+                        continue
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if author.id not in latest or ts > latest[author.id]:
+                        latest[author.id] = ts
+            except (discord.Forbidden, discord.HTTPException):
+                continue
+
+        seeded = 0
+        for user_id, ts in latest.items():
+            existing = await self.get_last_activity(guild.id, user_id)
+            if existing is None or ts > existing:
+                await self.record_activity(guild.id, user_id, when=ts)
+                seeded += 1
+
+        log.info(
+            "Backfilled activity for guild_id=%s: seeded %s of %s members across %s channels",
+            guild.id,
+            seeded,
+            len(latest),
+            channels_scanned,
+        )
+        return {"channels_scanned": channels_scanned, "users_seen": len(latest), "users_seeded": seeded}
+
     async def register_member_activity(self, guild: discord.Guild, member: discord.abc.User) -> None:
         """Record activity for a member and reactivate them immediately if they
         were marked inactive.
@@ -341,6 +411,15 @@ class InactivityService:
         )
         is_bootstrap_run = bootstrapped_at is None
         grace = self.bootstrap_grace if is_bootstrap_run else self.kick_grace
+
+        # First sweep after enabling: seed activity from recent chat history so
+        # members who were active before Rob started tracking are not wrongly
+        # flagged inactive (we have no live history for them yet).
+        if is_bootstrap_run:
+            try:
+                await self.backfill_activity_from_history(guild, days=self.inactive_after.days)
+            except Exception:  # pragma: no cover - never let backfill abort the sweep
+                log.exception("Activity backfill failed during bootstrap for guild_id=%s", guild_id)
 
         snapshots: list[InactivitySnapshot] = []
         for member in guild.members:
