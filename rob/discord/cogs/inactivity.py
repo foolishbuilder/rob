@@ -22,6 +22,26 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Components V2 text blocks are capped at 4000 chars; budget below that with
+# headroom for the card header and the truncation note.
+_LIST_LINE_BUDGET = 3500
+
+
+def fit_list_lines(lines: list[str], total: int, *, budget: int = _LIST_LINE_BUDGET) -> list[str]:
+    """Trim ``lines`` so the rendered list stays under Discord's text limit,
+    appending a "…and N more" note when entries are omitted."""
+
+    fitted: list[str] = []
+    used = 0
+    for line in lines:
+        if fitted and used + len(line) + 1 > budget:
+            break
+        fitted.append(line)
+        used += len(line) + 1
+    if len(fitted) < total:
+        fitted.append(f"…and {total - len(fitted)} more (showing {len(fitted)} of {total})")
+    return fitted
+
 
 class InactivityCog(commands.Cog):
     def __init__(self, bot: "RobBot") -> None:
@@ -156,7 +176,7 @@ class InactivityCog(commands.Cog):
             else:
                 lines.append(f"- {member.mention} (`{member.id}`) — no removal scheduled")
         await interaction.response.send_message(
-            **inactivity_list_card(lines[:200], len(rows)).send_kwargs(),
+            **inactivity_list_card(fit_list_lines(lines, len(rows)), len(rows)).send_kwargs(),
             ephemeral=True,
         )
 
