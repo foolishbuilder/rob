@@ -64,6 +64,18 @@ Each sweep:
   on, Active off) but **never** on the kick countdown. Verifying counts as
   activity and restores the Active role.
 
+**History backfill.** Rob only has live activity for a guild from the moment the
+system is promoted there, so the **first sweep after enabling auto-scans recent
+chat history** (the last `INACTIVITY_INACTIVE_AFTER_DAYS` of messages across the
+readable text channels + active threads) and seeds `last_active` from it — so
+members who were active before Rob started tracking are not wrongly flagged
+inactive. You can also run it on demand (it re-seeds, then runs a safe corrective
+sweep that restores Active to now-active members **without** DMing or kicking):
+
+```bash
+rob inactivity backfill --guild <guild_id> [--days <n>]   # default 7 days
+```
+
 The first run after enabling uses `INACTIVITY_BOOTSTRAP_GRACE_DAYS` (default 21)
 so nobody is kicked the moment the system turns on. Maintenance mode suppresses
 DMs and kicks. Both `active_role_id` and `inactive_role_id` must be set or the
@@ -73,6 +85,7 @@ system no-ops.
 rob inactivity status --guild <guild_id>
 rob inactivity on  --guild <guild_id>
 rob inactivity off --guild <guild_id>
+rob inactivity backfill --guild <guild_id> [--days <n>]
 ```
 
 Mod slash commands (test guild): `/inactivelist` (lists **everyone holding the

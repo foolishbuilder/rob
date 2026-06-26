@@ -537,3 +537,59 @@ def test_bootstrap_uses_longer_grace_and_marks_bootstrapped():
     assert days_until_removal >= 20  # bootstrap grace (21d), not the 14d normal grace
     assert "inactivity:1:bootstrapped_at" in bot_state.values
     assert member.kicked is False  # nobody is kicked on the bootstrap run
+
+
+class _FakeHistoryMessage:
+    def __init__(self, author_id, created_at, *, bot=False):
+        self.author = SimpleNamespace(id=author_id, bot=bot)
+        self.created_at = created_at
+
+
+class _FakeHistoryChannel:
+    def __init__(self, messages):
+        self._messages = messages
+
+    def history(self, *, after=None, limit=None):
+        msgs = self._messages
+
+        async def _gen():
+            for m in msgs:
+                if after is None or m.created_at > after:
+                    yield m
+
+        return _gen()
+
+
+def test_backfill_activity_from_history_seeds_recent_authors():
+    bot_state = _FakeBotState()
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    now = datetime.now(timezone.utc)
+    channel = _FakeHistoryChannel([
+        _FakeHistoryMessage(10, now - timedelta(days=2)),            # active in window
+        _FakeHistoryMessage(11, now - timedelta(days=30)),           # too old (filtered by after=)
+        _FakeHistoryMessage(12, now - timedelta(days=1), bot=True),  # bot, skipped
+    ])
+    guild = SimpleNamespace(id=1, me=None, text_channels=[channel], threads=[], members=[])
+
+    result = _run(service.backfill_activity_from_history(guild, days=7))
+
+    assert result["users_seeded"] == 1
+    assert _run(service.get_last_activity(1, 10)) is not None
+    assert _run(service.get_last_activity(1, 11)) is None  # outside the window
+    assert _run(service.get_last_activity(1, 12)) is None  # bot
+
+
+def test_backfill_only_overwrites_with_newer_timestamp():
+    bot_state = _FakeBotState()
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    now = datetime.now(timezone.utc)
+    # Existing record is newer than the history message; backfill must not regress it.
+    bot_state.values["activity:1:user:10:last_active"] = (now - timedelta(hours=1)).isoformat()
+    channel = _FakeHistoryChannel([_FakeHistoryMessage(10, now - timedelta(days=3))])
+    guild = SimpleNamespace(id=1, me=None, text_channels=[channel], threads=[], members=[])
+
+    result = _run(service.backfill_activity_from_history(guild, days=7))
+
+    assert result["users_seeded"] == 0  # not overwritten with the older time
+    stored = _run(service.get_last_activity(1, 10))
+    assert (now - stored) < timedelta(hours=2)

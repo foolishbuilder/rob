@@ -96,6 +96,7 @@ Usage:
   rob set-role --guild <guild_id> --field <field> --role-id <id> [--clear]
 
   rob inactivity on|off|status --guild <guild_id>
+  rob inactivity backfill --guild <guild_id> [--days <n>]
   rob backup on|off|status|run --guild <guild_id>
   rob migration audit --guild <guild_id>
   rob webhook preview --guild <guild_id>
@@ -761,8 +762,28 @@ inactivity_command() {
     off)
       ops_post_form "/guilds/${GUILD_ID}/inactivity?format=text" "enabled=false"
       ;;
+    backfill)
+      local days=""
+      if ((${#REMAINING_ARGS[@]})); then
+        set -- "${REMAINING_ARGS[@]}"
+        while (($#)); do
+          case "$1" in
+            --days) shift; (($#)) || die "missing value for --days"; days="$1" ;;
+            --days=*) days="${1#*=}" ;;
+            *) die "usage: rob inactivity backfill --guild <guild_id> [--days <n>]" ;;
+          esac
+          shift || true
+        done
+      fi
+      if [[ -n "$days" ]]; then
+        [[ "$days" =~ ^[0-9]+$ ]] || die "days must be numeric."
+        ops_post_form "/guilds/${GUILD_ID}/inactivity/backfill?format=text" "days=${days}"
+      else
+        ops_post_form "/guilds/${GUILD_ID}/inactivity/backfill?format=text"
+      fi
+      ;;
     *)
-      die "usage: rob inactivity on|off|status --guild <guild_id>"
+      die "usage: rob inactivity on|off|status|backfill --guild <guild_id>"
       ;;
   esac
 }
