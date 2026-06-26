@@ -40,9 +40,13 @@ class ProtectedCog(commands.Cog):
                 style=discord.ButtonStyle.link,
             ),
         )
-        await ctx.reply(
+        # Remove the invoking "!protected" message so only the card remains.
+        try:
+            await ctx.message.delete()
+        except discord.HTTPException:
+            log.debug("Could not delete the !protected command message.", exc_info=True)
+        await ctx.send(
             **rendered.send_kwargs(),
-            mention_author=False,
             # Render the member's mention without pinging the account.
             allowed_mentions=discord.AllowedMentions.none(),
         )
