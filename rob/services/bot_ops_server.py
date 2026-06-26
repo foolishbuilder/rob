@@ -198,6 +198,8 @@ class BotOpsServer:
         app.router.add_get("/guilds/{guild_id}/backup", self._handle_get_backup)
         app.router.add_post("/guilds/{guild_id}/backup", self._handle_set_backup)
         app.router.add_post("/guilds/{guild_id}/backup/run", self._handle_backup_run)
+        app.router.add_post("/guilds/{guild_id}/settings/channel", self._handle_set_guild_channel)
+        app.router.add_post("/guilds/{guild_id}/settings/role", self._handle_set_guild_role)
         app.router.add_post("/guilds/{guild_id}/scan/apply", self._handle_apply_guild_scan)
         app.router.add_post(
             "/guilds/{guild_id}/webhook/reissue/send",
@@ -784,6 +786,66 @@ class BotOpsServer:
                 f"{pending['major_changes']} major change(s)"
             )
         return "\n".join(lines) + "\n"
+
+    async def _handle_set_guild_channel(self, request: web.Request) -> web.Response:
+        return await self._handle_set_guild_field(request, kind="channel")
+
+    async def _handle_set_guild_role(self, request: web.Request) -> web.Response:
+        return await self._handle_set_guild_field(request, kind="role")
+
+    async def _handle_set_guild_field(self, request: web.Request, *, kind: str) -> web.Response:
+        if not self._is_authorized(request):
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not hasattr(self.bot, "vib_settings_repo"):
+            return web.json_response({"error": "vib_settings_repo_unavailable"}, status=500)
+        guild_id = self._match_guild_id(request)
+        if guild_id is None:
+            return web.json_response({"error": "invalid_guild_id"}, status=400)
+
+        valid_fields = GUILD_CHANNEL_FIELDS if kind == "channel" else GUILD_ROLE_FIELDS
+        id_key = "channel_id" if kind == "channel" else "role_id"
+        payload = await self._json_payload(request)
+        field = str(payload.get("field") or "").strip()
+        if field not in valid_fields:
+            return web.json_response(
+                {"error": "invalid_field", "valid_fields": list(valid_fields)},
+                status=400,
+            )
+
+        clear = self._payload_bool(payload, "clear")
+        target_id: int | None = None
+        if not clear:
+            raw = payload.get(id_key)
+            try:
+                target_id = int(raw)
+            except (TypeError, ValueError):
+                return web.json_response({"error": f"invalid_{id_key}"}, status=400)
+
+        if kind == "channel":
+            updated = await self.bot.vib_settings_repo.set_channel_id(guild_id, field, target_id)
+        else:
+            updated = await self.bot.vib_settings_repo.set_role_id(guild_id, field, target_id)
+        await self._refresh_guild(guild_id)
+
+        stored = getattr(updated, field, None)
+        result = {
+            "ok": True,
+            "guild_id": guild_id,
+            "field": field,
+            id_key: stored,
+        }
+        if self._wants_text(request):
+            label = "Guild Channel Updated" if kind == "channel" else "Guild Role Updated"
+            text = "\n".join(
+                [
+                    f"Rob Control | {label}",
+                    f"- Guild ID: {guild_id}",
+                    f"- Field: {field}",
+                    f"- {id_key}: {stored if stored is not None else '(cleared)'}",
+                ]
+            )
+            return web.Response(text=text + "\n", content_type="text/plain")
+        return web.json_response(result)
 
     async def _handle_backup_run(self, request: web.Request) -> web.Response:
         if not self._is_authorized(request):

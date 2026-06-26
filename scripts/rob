@@ -92,6 +92,8 @@ Usage:
   rob count status --guild <guild_id>
   rob scan --guild <guild_id>
   rob auto-apply --guild <guild_id> [all|channels|roles|field_a,field_b]
+  rob set-channel --guild <guild_id> --field <field> --channel-id <id> [--clear]
+  rob set-role --guild <guild_id> --field <field> --role-id <id> [--clear]
 
   rob inactivity on|off|status --guild <guild_id>
   rob backup on|off|status|run --guild <guild_id>
@@ -689,6 +691,62 @@ scan_command() {
   ops_get "/guilds/${GUILD_ID}/scan?format=text"
 }
 
+set_channel_command() {
+  collect_guild_option "$@"
+  if ((${#REMAINING_ARGS[@]})); then
+    set -- "${REMAINING_ARGS[@]}"
+  else
+    set --
+  fi
+  local field="" cid="" clear="false"
+  while (($#)); do
+    case "$1" in
+      --field) shift; (($#)) || die "missing value for --field"; field="$1" ;;
+      --field=*) field="${1#*=}" ;;
+      --channel-id) shift; (($#)) || die "missing value for --channel-id"; cid="$1" ;;
+      --channel-id=*) cid="${1#*=}" ;;
+      --clear) clear="true" ;;
+      *) die "usage: rob set-channel --guild <id> --field <field> --channel-id <id> | --clear" ;;
+    esac
+    shift || true
+  done
+  [[ -n "$field" ]] || die "usage: rob set-channel --guild <id> --field <field> --channel-id <id> | --clear"
+  if [[ "$clear" == "true" ]]; then
+    ops_post_form "/guilds/${GUILD_ID}/settings/channel?format=text" "field=${field}" "clear=true"
+  else
+    [[ "$cid" =~ ^[0-9]+$ ]] || die "channel id must be numeric (or use --clear)."
+    ops_post_form "/guilds/${GUILD_ID}/settings/channel?format=text" "field=${field}" "channel_id=${cid}"
+  fi
+}
+
+set_role_command() {
+  collect_guild_option "$@"
+  if ((${#REMAINING_ARGS[@]})); then
+    set -- "${REMAINING_ARGS[@]}"
+  else
+    set --
+  fi
+  local field="" rid="" clear="false"
+  while (($#)); do
+    case "$1" in
+      --field) shift; (($#)) || die "missing value for --field"; field="$1" ;;
+      --field=*) field="${1#*=}" ;;
+      --role-id) shift; (($#)) || die "missing value for --role-id"; rid="$1" ;;
+      --role-id=*) rid="${1#*=}" ;;
+      --clear) clear="true" ;;
+      *) die "usage: rob set-role --guild <id> --field <field> --role-id <id> | --clear" ;;
+    esac
+    shift || true
+  done
+  [[ -n "$field" ]] || die "usage: rob set-role --guild <id> --field <field> --role-id <id> | --clear"
+  if [[ "$clear" == "true" ]]; then
+    ops_post_form "/guilds/${GUILD_ID}/settings/role?format=text" "field=${field}" "clear=true"
+  else
+    [[ "$rid" =~ ^[0-9]+$ ]] || die "role id must be numeric (or use --clear)."
+    ops_post_form "/guilds/${GUILD_ID}/settings/role?format=text" "field=${field}" "role_id=${rid}"
+  fi
+}
+
 inactivity_command() {
   local action="${1:-status}"
   shift || true
@@ -1092,6 +1150,12 @@ case "${cmd}" in
     ;;
   auto-apply)
     auto_apply_command "$@"
+    ;;
+  set-channel)
+    set_channel_command "$@"
+    ;;
+  set-role)
+    set_role_command "$@"
     ;;
   inactivity)
     inactivity_command "$@"

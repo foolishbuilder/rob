@@ -29,9 +29,9 @@ New scan fields:
 rob scan --guild <guild_id>            # review current + suggested mappings
 rob auto-apply --guild <guild_id> roles
 rob auto-apply --guild <guild_id> backup_approval_channel_id
-# or set explicitly:
-rob guild set-role    --guild-id <guild_id> --field active_role_id --role-id <id>
-rob guild set-channel --guild-id <guild_id> --field backup_approval_channel_id --channel-id <id>
+# or set a field to a specific id (when scan doesn't match it by name):
+rob set-role    --guild <guild_id> --field active_role_id --role-id <id>
+rob set-channel --guild <guild_id> --field backup_approval_channel_id --channel-id <id>
 ```
 
 ## 2. Activity / inactive-role system
