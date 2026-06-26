@@ -189,6 +189,29 @@ class _FakeVibRepo:
         return self.settings
 
 
+def test_inactivelist_card_stays_within_discord_text_limit():
+    from rob.discord.cogs.inactivity import fit_list_lines
+    from rob.ui.cards.inactivity import inactivity_list_card
+
+    # Many long rows (e.g. a big pre-existing Inactive role on the main guild).
+    raw = [
+        f"- <@{1000000000000000000 + i}> (`{1000000000000000000 + i}`) — kick <t:1750000000:R> (<t:1750000000:F>)"
+        for i in range(500)
+    ]
+    fitted = fit_list_lines(raw, len(raw))
+    rendered = inactivity_list_card(fitted, len(raw))
+
+    contents = [
+        getattr(sub, "content", "")
+        for item in rendered.view.children
+        for sub in getattr(item, "children", [])
+    ]
+    body = max(contents, key=len)
+    assert len(body) <= 4000
+    assert "more (showing" in body  # truncation note present
+    assert len(fitted) < len(raw)
+
+
 def test_set_channel_and_role_endpoints():
     repo = _FakeVibRepo()
     bot = SimpleNamespace(vib_settings_repo=repo)
