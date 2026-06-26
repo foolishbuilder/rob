@@ -26,7 +26,7 @@ def protected_member_card(
     )
     footer = (
         "Aly is shielded from the inactivity system and every other automation "
-        "that could remove them from the server.\n"
+        "that could remove her from the server.\n"
         "-# In every server backup, Aly's account is preserved and prioritised above all else."
     )
     return render(

@@ -25,26 +25,11 @@ class ProtectedCog(commands.Cog):
     def __init__(self, bot: "RobBot") -> None:
         self.bot = bot
 
-    async def _resolve_display_name(self, ctx: commands.Context) -> str | None:
-        if ctx.guild is not None:
-            member = ctx.guild.get_member(_MEMORIAL_USER_ID)
-            if member is not None:
-                return member.display_name
-        user = self.bot.get_user(_MEMORIAL_USER_ID)
-        if user is None:
-            try:
-                user = await self.bot.fetch_user(_MEMORIAL_USER_ID)
-            except discord.HTTPException:
-                return None
-        return user.display_name if user is not None else None
-
     @commands.command(name="protected")
     async def protected(self, ctx: commands.Context) -> None:
-        display_name = await self._resolve_display_name(ctx)
         view = discord.ui.LayoutView(timeout=None)
         rendered = protected_member_card(
             user_id=_MEMORIAL_USER_ID,
-            display_name=display_name,
             view=view,
         )
         add_card_actions(
@@ -58,6 +43,6 @@ class ProtectedCog(commands.Cog):
         await ctx.reply(
             **rendered.send_kwargs(),
             mention_author=False,
-            # Render the member's name without pinging the account.
+            # Render the member's mention without pinging the account.
             allowed_mentions=discord.AllowedMentions.none(),
         )
