@@ -31,6 +31,7 @@ from rob.discord.cogs.data_privacy import DataPrivacyCog
 from rob.discord.cogs.dm_onboarding import DMOnboardingCog
 from rob.discord.cogs.inactivity import InactivityCog
 from rob.discord.cogs.leaderboards import LeaderboardsCog
+from rob.discord.cogs.protected import ProtectedCog
 from rob.discord.cogs.registration import RegistrationCog
 from rob.discord.cogs.reports import ReportsCog
 from rob.discord.cogs.sends import SendsCog
@@ -204,6 +205,7 @@ class RobBot(commands.Bot):
         await self.add_cog(ActivityTrackerCog(self))
         await self.add_cog(InactivityCog(self))
         await self.add_cog(ServerBackupCog(self))
+        await self.add_cog(ProtectedCog(self))
 
         self.tree.interaction_check = self._global_interaction_check
         await self.send_change_request_service.rebind_pending_views()
