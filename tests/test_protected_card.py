@@ -19,7 +19,7 @@ def _card_text(rendered) -> str:
 
 
 def test_protected_card_is_white_and_mentions_the_account():
-    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID, display_name="Alyssa")
+    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID)
     assert rendered.view.children[0].accent_color == COLOR_WHITE
     contents = _card_text(rendered)
     assert "## 🪽 Protected Member 🪽" in contents
@@ -28,7 +28,7 @@ def test_protected_card_is_white_and_mentions_the_account():
 
 
 def test_protected_card_footer_uses_display_name_in_both_subtext_lines():
-    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID, display_name="Alyssa")
+    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID)
     contents = _card_text(rendered)
     # The footer renders as `-#` subtext and names the member in both lines.
     assert "-# Alyssa is shielded from the inactivity system" in contents
@@ -36,7 +36,7 @@ def test_protected_card_footer_uses_display_name_in_both_subtext_lines():
 
 
 def test_protected_card_falls_back_when_display_name_missing():
-    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID, display_name=None)
+    rendered = protected_member_card(user_id=_MEMORIAL_USER_ID)
     contents = _card_text(rendered)
     assert "This member is shielded" in contents
 
@@ -45,7 +45,6 @@ def test_protected_card_renders_into_supplied_view_with_gofundme_button():
     view = discord.ui.LayoutView(timeout=None)
     rendered = protected_member_card(
         user_id=_MEMORIAL_USER_ID,
-        display_name="Alyssa",
         view=view,
     )
     add_card_actions(
@@ -71,7 +70,7 @@ def test_protected_command_replies_without_pinging_the_account():
     async def _reply(**kwargs):
         sent.update(kwargs)
 
-    member = SimpleNamespace(display_name="Alyssa")
+    member = SimpleNamespace()
     guild = SimpleNamespace(get_member=lambda uid: member if uid == _MEMORIAL_USER_ID else None)
     ctx = SimpleNamespace(guild=guild, reply=_reply)
     bot = SimpleNamespace()
