@@ -117,13 +117,14 @@ class _FakeBackupsRepo:
         return record
 
 
-def _service(repo=None, bot_state=None, *, enabled_default=True, required=2):
+def _service(repo=None, bot_state=None, *, enabled_default=True, required=2, threshold=1):
     return ServerBackupService(
         backups=repo or _FakeBackupsRepo(),
         bot_state=bot_state or _FakeBotState(),
         guild_settings=SimpleNamespace(),
         enabled_default=enabled_default,
         required_approvals=required,
+        major_change_threshold=threshold,
     )
 
 
@@ -272,6 +273,42 @@ def test_cycle_major_change_opens_approval_and_blocks():
     blocked = _run(service.run_cycle(guild))
     assert blocked.action == "blocked"
     assert _run(repo.count_backups(1)) == 1
+
+
+def test_cycle_below_threshold_major_changes_auto_adopt():
+    repo = _FakeBackupsRepo()
+    service = _service(repo, threshold=3)
+    guild = _make_guild()
+    baseline = service.snapshot_guild(guild)
+    del baseline["roles"]["2"]                        # role added -> major (1)
+    baseline["guild"]["verification_level"] = "high"  # security setting -> major (2)
+    _run(repo.create_backup(guild_id=1, snapshot=baseline))
+
+    result = _run(service.run_cycle(guild))
+
+    # Only 2 majors < threshold 3 -> adopted silently as the new baseline.
+    assert result.action == "backed_up"
+    assert _run(repo.count_backups(1)) == 2
+    assert _run(repo.get_pending_approval(1)) is None
+
+
+def test_cycle_at_threshold_major_changes_open_approval():
+    repo = _FakeBackupsRepo()
+    service = _service(repo, threshold=3)
+    guild = _make_guild()
+    baseline = service.snapshot_guild(guild)
+    del baseline["roles"]["2"]                        # major (1)
+    baseline["guild"]["verification_level"] = "high"  # major (2)
+    baseline["channels"]["10"]["overwrites"] = [
+        {"id": 1, "type": "role", "allow": 0, "deny": 1024}
+    ]                                                  # major (3)
+    _run(repo.create_backup(guild_id=1, snapshot=baseline))
+
+    result = _run(service.run_cycle(guild))
+
+    assert result.action == "needs_approval"
+    assert len(result.major_changes) >= 3
+    assert _run(repo.get_pending_approval(1)) is not None
 
 
 def test_cycle_suppresses_identical_rejected_change():

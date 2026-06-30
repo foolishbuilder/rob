@@ -35,6 +35,7 @@ class BaseSettings:
     server_backup_enabled_default: bool
     server_backup_loop_minutes: int
     server_backup_required_approvals: int
+    server_backup_major_change_threshold: int
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,9 @@ def load_base_settings(env_file: str | Path | None = None) -> BaseSettings:
         server_backup_enabled_default=_env_bool("SERVER_BACKUP_ENABLED_DEFAULT", False),
         server_backup_loop_minutes=_env_int("SERVER_BACKUP_LOOP_MINUTES", 60, minimum=1),
         server_backup_required_approvals=_env_int("SERVER_BACKUP_REQUIRED_APPROVALS", 2, minimum=1),
+        server_backup_major_change_threshold=_env_int(
+            "SERVER_BACKUP_MAJOR_CHANGE_THRESHOLD", 5, minimum=1
+        ),
     )
 
 
@@ -187,6 +191,7 @@ def load_webhook_settings(env_file: str | Path | None = None) -> WebhookSettings
         server_backup_enabled_default=base.server_backup_enabled_default,
         server_backup_loop_minutes=base.server_backup_loop_minutes,
         server_backup_required_approvals=base.server_backup_required_approvals,
+        server_backup_major_change_threshold=base.server_backup_major_change_threshold,
         throne_webhook_host=_env_str("THRONE_WEBHOOK_HOST", "127.0.0.1"),
         throne_webhook_port=_env_int("THRONE_WEBHOOK_PORT", 8080, minimum=1),
         throne_webhook_base_url=_env_str(
@@ -252,6 +257,7 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         server_backup_enabled_default=base.server_backup_enabled_default,
         server_backup_loop_minutes=base.server_backup_loop_minutes,
         server_backup_required_approvals=base.server_backup_required_approvals,
+        server_backup_major_change_threshold=base.server_backup_major_change_threshold,
         discord_token=_env_str("DISCORD_TOKEN", required=True),
         bot_name=_env_str("BOT_NAME", "Rob"),
     )

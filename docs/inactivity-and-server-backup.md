@@ -69,6 +69,15 @@ Each sweep:
 kicked — every sweep keeps them **Active** and clears any countdown. Seeded with
 a deceased member's memorial account; add more ids to that set as needed.
 
+**Bots are ignored.** Discord bot accounts are skipped entirely — never tracked,
+flagged inactive, DM'd, or kicked, and never handed the Active/Inactive role when
+they join.
+
+**AFK exemption.** Any member can run **`/afk`** to exempt **only themselves**
+from the inactivity system for a week. While the AFK window is open the sweep
+keeps them **Active** and never flags or removes them; it lapses automatically
+(no command to undo). The window is the service's `afk_duration` (7 days).
+
 **History backfill.** Rob only has live activity for a guild from the moment the
 system is promoted there, so the **first sweep after enabling auto-scans recent
 chat history** (the last `INACTIVITY_INACTIVE_AFTER_DAYS` of messages across the
@@ -93,10 +102,11 @@ rob inactivity off --guild <guild_id>
 rob inactivity backfill --guild <guild_id> [--days <n>]
 ```
 
-Mod slash commands (test guild): `/inactivelist` (lists **everyone holding the
-Inactive role** with the time until each is kicked, soonest first; parked members
-with no scheduled removal are shown last) and `/inactivitytest` (DMs you the
-notice templates).
+Mod slash commands (main + test guilds): `/inactivelist` (lists **everyone holding
+the Inactive role** with the time until each is kicked, soonest first; parked
+members with no scheduled removal are shown last) and `/inactivitytest` (DMs you
+the notice templates). Member command (anyone): **`/afk`** exempts the caller from
+the inactivity system for a week.
 
 ## 3. Hourly server-backup system
 
@@ -105,15 +115,18 @@ and core server settings into `server_backups` and diffs against the last
 baseline:
 
 - **No changes** → nothing stored (the baseline still represents the guild).
-- **Minor edits** (renames, reorders, colours, topics, slowmode) → stored as the
-  new baseline.
-- **Major change** (deleted/created role or channel, changed role permissions,
-  changed channel permission overwrites, or a security-relevant server setting)
-  → backups pause and Rob posts a **`### Major Server Change Detected!`** prompt
-  to `backup_approval_channel_id`, pinging the mod + trial-mod roles. Backups
-  resume only after `SERVER_BACKUP_REQUIRED_APPROVALS` (default 2) **distinct**
-  moderators approve, at which point the pending snapshot becomes the new
-  baseline. A rejected change keeps the old baseline and is not re-prompted
+- **Minor edits** (renames, reorders, colours, topics, slowmode) **or only a few
+  major changes** (fewer than `SERVER_BACKUP_MAJOR_CHANGE_THRESHOLD`, default 5)
+  → adopted silently as the new baseline. A single new channel, one permission
+  tweak, or a lone role add no longer needs approval.
+- **A batch of major changes** (`SERVER_BACKUP_MAJOR_CHANGE_THRESHOLD` or more at
+  once — deleted/created roles or channels, changed role permissions, changed
+  channel permission overwrites, or security-relevant server settings; i.e. a
+  likely revamp) → backups pause and Rob posts a **`### Major Server Change
+  Detected!`** prompt to `backup_approval_channel_id`, pinging the mod + trial-mod
+  roles. Backups resume only after `SERVER_BACKUP_REQUIRED_APPROVALS` (default 2)
+  **distinct** moderators approve, at which point the pending snapshot becomes the
+  new baseline. A rejected change keeps the old baseline and is not re-prompted
   until the configuration changes again.
 
 > The prompt carries the warning: **DO NOT ACCEPT THIS IF YOU ARE DOING A REVAMP

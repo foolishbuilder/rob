@@ -79,6 +79,23 @@ def final_inactivity_warning_card(
     )
 
 
+def afk_confirmation_card(*, until_unix: int) -> RenderedMessage:
+    """Confirms to the author that they're exempt from the inactivity system."""
+
+    return render(
+        make_card(
+            title="💤 You're marked AFK",
+            body=(
+                "Rob won't flag you as inactive or remove you while you're away.\n\n"
+                f"Your exemption lifts <t:{until_unix}:R> (on <t:{until_unix}:F>). "
+                "Just start chatting again whenever you're back — there's nothing to undo."
+            ),
+            color=COLOR_SUCCESS,
+            variant="success",
+        )
+    )
+
+
 def inactivity_test_sent_card(sent_count: int) -> RenderedMessage:
     return render(
         make_card(

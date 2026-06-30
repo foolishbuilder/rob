@@ -636,3 +636,141 @@ def test_protected_user_kept_active_in_sync_even_if_unverified():
 
     assert member.has(ACTIVE_ROLE_ID)
     assert not member.has(INACTIVE_ROLE_ID)
+
+
+# -- bots are ignored by the inactivity system ----------------------------
+
+
+def test_bot_members_are_ignored_by_the_sweep():
+    bot_state = _FakeBotState()
+    now = datetime.now(timezone.utc)
+    # Old activity + already bootstrapped: a human here would be flagged inactive.
+    bot_state.values["activity:1:user:10:last_active"] = (now - timedelta(days=30)).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (now - timedelta(days=1)).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    member.bot = True
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert snapshots == []
+    assert member.kicked is False
+    assert member.dm_messages == []
+    assert not member.has(INACTIVE_ROLE_ID)  # untouched
+    assert (1, 10) not in inactive_users.rows
+
+
+def test_sync_member_now_ignores_bots():
+    bot_state = _FakeBotState()
+    member = _FakeMember(10, roles=[])  # a bot joining the server
+    member.bot = True
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    _enable(service)
+
+    _run(service.sync_member_now(guild, member))
+
+    # The bot is never handed the Active (or Inactive) role.
+    assert not member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+
+
+def test_register_member_activity_ignores_bots():
+    bot_state = _FakeBotState()
+    member = _FakeMember(10, roles=[_FakeRole(INACTIVE_ROLE_ID)])
+    member.bot = True
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    _enable(service)
+
+    _run(service.register_member_activity(guild, member))
+
+    # No activity stamped and no reactivation for a bot.
+    assert bot_state.values.get("activity:1:user:10:last_active") is None
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+
+
+# -- /afk exemption -------------------------------------------------------
+
+
+def test_set_member_afk_persists_until_and_returns_it():
+    bot_state = _FakeBotState()
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+
+    until = _run(service.set_member_afk(1, 10))
+
+    assert _run(service.get_afk_until(1, 10)) is not None
+    delta = until - datetime.now(timezone.utc)
+    assert timedelta(days=6) < delta <= timedelta(days=7)  # a week
+
+
+def test_afk_member_exempt_from_inactivity_sweep():
+    bot_state = _FakeBotState()
+    now = datetime.now(timezone.utc)
+    # Old activity + bootstrapped: normally inactive, but they ran /afk.
+    bot_state.values["activity:1:user:10:last_active"] = (now - timedelta(days=30)).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (now - timedelta(days=1)).isoformat()
+    bot_state.values["inactivity:1:user:10:afk_until"] = (now + timedelta(days=5)).isoformat()
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=True))
+
+    assert snapshots == []
+    assert member.has(ACTIVE_ROLE_ID)
+    assert not member.has(INACTIVE_ROLE_ID)
+    assert member.kicked is False
+    assert member.dm_messages == []
+    assert (1, 10) not in inactive_users.rows
+
+
+def test_afk_expired_member_is_flagged_inactive_normally():
+    bot_state = _FakeBotState()
+    now = datetime.now(timezone.utc)
+    bot_state.values["activity:1:user:10:last_active"] = (now - timedelta(days=30)).isoformat()
+    bot_state.values["inactivity:1:bootstrapped_at"] = (now - timedelta(days=1)).isoformat()
+    bot_state.values["inactivity:1:user:10:afk_until"] = (now - timedelta(days=1)).isoformat()  # lapsed
+    inactive_users = _FakeInactiveUsers()
+    member = _FakeMember(10, roles=[_FakeRole(ACTIVE_ROLE_ID)])
+    guild = _FakeGuild(1, [member])
+    service = _service(bot_state=bot_state, inactive_users=inactive_users)
+    _enable(service)
+
+    snapshots = _run(service.process_guild(guild, send_notifications=True, perform_kicks=False))
+
+    assert len(snapshots) == 1
+    assert member.has(INACTIVE_ROLE_ID)
+    assert not member.has(ACTIVE_ROLE_ID)
+
+
+def test_afk_command_marks_only_the_author_exempt():
+    from rob.discord.cogs.inactivity import InactivityCog
+
+    bot_state = _FakeBotState()
+    service = _service(bot_state=bot_state, inactive_users=_FakeInactiveUsers())
+    sent: dict = {}
+
+    async def _send_message(**kwargs):
+        sent.update(kwargs)
+
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(id=1),
+        user=SimpleNamespace(id=10),
+        response=SimpleNamespace(send_message=_send_message),
+    )
+    cog = SimpleNamespace(bot=SimpleNamespace(inactivity_service=service))
+
+    _run(InactivityCog.afk.callback(cog, interaction))
+
+    # Only the caller (id 10) is exempted, and the reply is ephemeral.
+    assert _run(service.get_afk_until(1, 10)) is not None
+    assert _run(service.get_afk_until(1, 11)) is None
+    assert sent.get("ephemeral") is True
+    assert sent.get("view") is not None
