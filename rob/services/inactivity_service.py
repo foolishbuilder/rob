@@ -59,6 +59,7 @@ class InactivityService:
         final_notice_days: int,
         notice_channel_id: int | None,
         maintenance: MaintenanceService | None = None,
+        afk_days: int = 7,
     ) -> None:
         self.bot_state = bot_state
         self.guild_settings = guild_settings
@@ -70,12 +71,17 @@ class InactivityService:
         self.final_notice_window = timedelta(days=max(1, final_notice_days))
         self.notice_channel_id = notice_channel_id
         self.maintenance = maintenance
+        self.afk_duration = timedelta(days=max(1, afk_days))
 
     # -- keys -----------------------------------------------------------------
 
     @staticmethod
     def activity_key(guild_id: int, member_id: int) -> str:
         return f"activity:{guild_id}:user:{member_id}:last_active"
+
+    @staticmethod
+    def afk_key(guild_id: int, member_id: int) -> str:
+        return f"inactivity:{guild_id}:user:{member_id}:afk_until"
 
     def _enabled_key(self, guild_id: int) -> str:
         return f"inactivity:{guild_id}:enabled"
@@ -105,6 +111,22 @@ class InactivityService:
     async def get_last_activity(self, guild_id: int, member_id: int) -> datetime | None:
         return self._parse_optional_datetime(
             await self.bot_state.get_text(self.activity_key(guild_id, member_id))
+        )
+
+    async def set_member_afk(
+        self, guild_id: int, member_id: int, *, now: datetime | None = None
+    ) -> datetime:
+        """Exempt a single member from the inactivity sweep for ``afk_duration``
+        (a week). Backs the ``/afk`` command. Returns when the exemption lifts."""
+
+        moment = now or datetime.now(timezone.utc)
+        until = moment + self.afk_duration
+        await self.bot_state.set_value(self.afk_key(guild_id, member_id), until.isoformat())
+        return until
+
+    async def get_afk_until(self, guild_id: int, member_id: int) -> datetime | None:
+        return self._parse_optional_datetime(
+            await self.bot_state.get_text(self.afk_key(guild_id, member_id))
         )
 
     @staticmethod
@@ -189,6 +211,9 @@ class InactivityService:
         this stays cheap on every message.
         """
 
+        # Discord bots are never tracked by the inactivity system.
+        if getattr(member, "bot", False):
+            return
         await self.record_activity(guild.id, member.id)
         # Skip non-guild authors (e.g. webhook/User objects have no roles).
         if getattr(member, "roles", None) is None:
@@ -232,6 +257,9 @@ class InactivityService:
         for a week" — so this never newly flags a member inactive.
         """
 
+        # Discord bots are never managed by the inactivity system.
+        if getattr(member, "bot", False):
+            return
         if getattr(member, "roles", None) is None:
             return
         if not await self.is_enabled(guild.id):
@@ -320,7 +348,7 @@ class InactivityService:
 
     @staticmethod
     def _is_eligible_member(member: discord.Member) -> bool:
-        return not member.bot
+        return not getattr(member, "bot", False)
 
     @staticmethod
     def _has_role(member: discord.Member, role_id: int | None) -> bool:
@@ -464,6 +492,13 @@ class InactivityService:
                 await self._remove_role(member, active_role, reason="Unverified member parked as inactive")
                 await self._add_role(member, inactive_role, reason="Unverified member parked as inactive")
                 await self.inactive_users.clear(guild_id, member.id)
+                continue
+
+            # Members who ran /afk are exempt from the sweep until their window
+            # expires — kept Active, never flagged inactive, DM'd, or kicked.
+            afk_until = await self.get_afk_until(guild_id, member.id)
+            if afk_until is not None and now < afk_until:
+                await self._keep_active(guild_id, member, active_role, inactive_role, reason="Member is AFK")
                 continue
 
             last_activity = await self.get_last_activity(guild_id, member.id)

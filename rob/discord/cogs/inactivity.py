@@ -12,6 +12,7 @@ from rob.config.guilds import MAIN_GUILD_ID, TEST_GUILD_ID, is_new_system_guild
 from rob.discord.permissions import is_staff_member
 from rob.ui.cards.errors import error_card
 from rob.ui.cards.inactivity import (
+    afk_confirmation_card,
     inactivity_empty_list_card,
     inactivity_list_card,
     inactivity_test_sent_card,
@@ -177,6 +178,24 @@ class InactivityCog(commands.Cog):
                 lines.append(f"- {member.mention} (`{member.id}`) — no removal scheduled")
         await interaction.response.send_message(
             **inactivity_list_card(fit_list_lines(lines, len(rows)), len(rows)).send_kwargs(),
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="afk", description="Exempt yourself from the inactivity system for a week.")
+    @app_commands.guilds(MAIN_GUILD_ID, TEST_GUILD_ID)
+    async def afk(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                **error_card("This command can only be used in a server.").send_kwargs(),
+                ephemeral=True,
+            )
+            return
+        # Only ever exempts the caller — no target argument by design.
+        until = await self.bot.inactivity_service.set_member_afk(
+            interaction.guild.id, interaction.user.id
+        )
+        await interaction.response.send_message(
+            **afk_confirmation_card(until_unix=int(until.timestamp())).send_kwargs(),
             ephemeral=True,
         )
 

@@ -114,6 +114,7 @@ class RobBot(commands.Bot):
             guild_settings=self.vib_settings_repo,
             enabled_default=self.settings.server_backup_enabled_default,
             required_approvals=self.settings.server_backup_required_approvals,
+            major_change_threshold=self.settings.server_backup_major_change_threshold,
         )
         self.leaderboard_service = LeaderboardService(
             bot=self,

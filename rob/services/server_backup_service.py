@@ -3,17 +3,20 @@
 Every cycle Rob snapshots a guild's structure (roles, channels, and core server
 settings) and diffs it against the last stored baseline:
 
-* No changes        -> nothing to store; the baseline still represents the guild.
-* Only minor edits  -> store the new snapshot as the new baseline.
-* A *major* change   -> pause backups and open a moderator approval. Backups stay
-  paused until ``required_approvals`` distinct moderators approve, at which point
-  the pending snapshot is promoted to the new baseline. A rejected change keeps
-  the old baseline; the identical change is not re-prompted until it changes.
+* No changes              -> nothing to store; the baseline still represents the guild.
+* Minor / a few majors    -> store the new snapshot as the new baseline silently.
+* A *batch* of major changes (``major_change_threshold`` or more) -> pause backups
+  and open a moderator approval. Backups stay paused until ``required_approvals``
+  distinct moderators approve, at which point the pending snapshot is promoted to
+  the new baseline. A rejected change keeps the old baseline; the identical change
+  is not re-prompted until it changes.
 
 "Major" covers deletions, permission changes, and structural changes (added /
 removed roles or channels, changed role permissions, changed channel permission
 overwrites, and security-relevant server settings). Renames, reorders, colours,
-topics, and slowmode are minor.
+topics, and slowmode are minor. A small number of major changes (a single new
+channel, one permission tweak) is treated as routine and adopted without a
+prompt; only a *bunch* of them at once (a likely revamp) trips the approval gate.
 
 The snapshot/diff helpers operate on plain dicts so they are easy to test; only
 :meth:`snapshot_guild` touches a live ``discord.Guild``.
@@ -85,12 +88,16 @@ class ServerBackupService:
         guild_settings: GuildSettingsRepository,
         enabled_default: bool,
         required_approvals: int,
+        major_change_threshold: int = 1,
     ) -> None:
         self.backups = backups
         self.bot_state = bot_state
         self.guild_settings = guild_settings
         self.enabled_default = enabled_default
         self.required_approvals = max(1, required_approvals)
+        # Approval only fires once this many major changes pile up since the last
+        # baseline; fewer than this are adopted silently like minor edits.
+        self.major_change_threshold = max(1, major_change_threshold)
 
     # -- enable flag ----------------------------------------------------------
 
@@ -327,13 +334,16 @@ class ServerBackupService:
         changes = self.diff_snapshots(baseline.snapshot, snapshot)
         major = self.major_changes(changes)
 
-        if not major:
+        # Only a *batch* of major changes warrants the moderator gate. Anything
+        # below the threshold (including minor-only edits) is adopted silently as
+        # the new baseline, just like a rename or a colour tweak.
+        if len(major) < self.major_change_threshold:
             if not changes:
                 return BackupCycleResult(action="no_change")
             backup = await self.backups.create_backup(guild_id=guild_id, snapshot=snapshot)
             return BackupCycleResult(action="backed_up", backup=backup, changes=changes)
 
-        # Major change present. Suppress a re-prompt of an identical change that
+        # Enough major changes to require approval. Suppress a re-prompt of an identical change that
         # was just rejected, so Rob does not nag about a known/declined change.
         signature = self.change_signature(major)
         last_decided = await self.backups.get_last_decided(guild_id)
