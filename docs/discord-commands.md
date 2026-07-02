@@ -41,7 +41,8 @@
 ## Automatic behaviours
 
 - Voice-message transcription: when `VOICE_TRANSCRIBE_ENABLED=true`, Rob replies
-  to every voice message (without pinging) with a transcript. See
+  to every voice message (without pinging) with a transcript; replying to an
+  older voice message while @mentioning Rob transcribes it on demand. See
   [`tldr-and-voice-transcription.md`](tldr-and-voice-transcription.md).
 
 ## Notes

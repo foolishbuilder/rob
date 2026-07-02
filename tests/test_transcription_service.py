@@ -66,6 +66,25 @@ def test_missing_faster_whisper_marks_unavailable():
     assert svc._permanent_fail is True
 
 
+def test_permission_error_load_failure_logs_actionable_hint(caplog):
+    import logging
+
+    svc = TranscriptionService(enabled=True)
+
+    def _denied():
+        raise PermissionError(13, "Permission denied", "/opt/rob-bot/.cache")
+
+    svc._load_model_blocking = _denied  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.ERROR, logger="rob.services.transcription_service"):
+        assert asyncio.run(svc.transcribe(b"audio-bytes")) is None
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert "VOICE_TRANSCRIBE_DOWNLOAD_ROOT" in messages
+    # Still treated as transient: fixable on the host without a bot restart.
+    assert svc._permanent_fail is False
+
+
 def test_transient_load_failure_backs_off_and_retries():
     # A non-ImportError load failure (e.g. a download blip) must NOT permanently
     # disable the feature — it backs off and becomes available again later.

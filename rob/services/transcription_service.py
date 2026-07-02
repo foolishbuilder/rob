@@ -97,13 +97,21 @@ class TranscriptionService:
                 return None
             try:
                 model = await asyncio.to_thread(self._load_model_blocking)
-            except Exception:
+            except Exception as exc:
                 # Transient load failure (e.g. download/IO hiccup): back off and
                 # retry on a later voice message rather than disabling forever.
+                hint = ""
+                if isinstance(exc, PermissionError):
+                    hint = (
+                        " The model cache directory is not writable by the bot "
+                        "user — set VOICE_TRANSCRIBE_DOWNLOAD_ROOT to a directory "
+                        "the bot owns (see docs/tldr-and-voice-transcription.md)."
+                    )
                 log.exception(
-                    "Failed to load Whisper model %s; retrying in %ss.",
+                    "Failed to load Whisper model %s; retrying in %ss.%s",
                     self.model_name,
                     _LOAD_RETRY_BACKOFF_SECONDS,
+                    hint,
                 )
                 self._retry_after = time.monotonic() + _LOAD_RETRY_BACKOFF_SECONDS
                 return None

@@ -148,6 +148,11 @@ When enabled, Rob watches for Discord **voice messages** and replies to each one
 (**without pinging** the author) with a transcript, produced by a local
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) model.
 
+**On-demand transcripts:** reply to any voice message and **@mention Rob** and
+he'll transcribe that message — this covers voice messages sent before the
+feature was enabled (the transcript is posted as a reply to the voice message
+itself, no ping).
+
 ### Enabling it
 
 `faster-whisper` is an **optional** dependency (kept out of the core install
@@ -167,6 +172,24 @@ runs on CPU by default; nothing leaves the host.
 
 Until both steps are done the feature is a no-op — the bot logs a clear message
 if it's enabled without `faster-whisper` installed, and stays running.
+
+**`PermissionError: … '.cache'` on first use:** the download cache must be
+writable by the bot user. The shipped systemd units handle this (they set
+`CacheDirectory=` + `HF_HOME` to a service-owned `/var/cache` dir — re-copy the
+unit and `systemctl daemon-reload` after updating). On an older unit, point the
+cache somewhere the bot owns instead:
+
+```bash
+sudo mkdir -p /opt/rob-bot/whisper-models
+sudo chown rob:rob /opt/rob-bot/whisper-models
+```
+
+```env
+VOICE_TRANSCRIBE_DOWNLOAD_ROOT=/opt/rob-bot/whisper-models
+```
+
+A failed load retries automatically every 5 minutes, so once the directory is
+fixed the next voice message recovers without a restart.
 
 ### Behaviour & safety
 
