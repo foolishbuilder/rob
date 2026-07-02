@@ -13,6 +13,7 @@ host):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -28,6 +29,9 @@ _URL_RE = re.compile(r"https?://[^\s<>|]+", re.IGNORECASE)
 # How long to stop trying Ollama after a connection failure, so a down server
 # doesn't add its connect timeout to every /tldr call.
 _OLLAMA_BACKOFF_SECONDS = 120
+# The startup warm-up may sit through a slow cold model load (disk + RAM alloc
+# on a small host), so it gets a much more generous window than user calls.
+_WARMUP_TIMEOUT_SECONDS = 600
 # Upper bound on the transcript handed to the local model; small models have
 # small context windows, so keep the most recent messages within this budget.
 _AI_TRANSCRIPT_CHAR_BUDGET = 8000
@@ -119,22 +123,80 @@ class TldrService:
         # first (cold) summary pays the model-load cost.
         self.keep_alive = keep_alive
         self.max_messages = max(1, max_messages)
-        # Injectable for tests; defaults to a real aiohttp session per request.
-        self._session_factory = session_factory or self._default_session
+        # Injectable for tests; when None, _make_session builds a real aiohttp
+        # session per request.
+        self._session_factory = session_factory
         self._ollama_disabled_until = 0.0
+        self._warmup_task: asyncio.Task | None = None
 
-    def _default_session(self) -> aiohttp.ClientSession:
+    def _make_session(self, *, total: int | None = None) -> aiohttp.ClientSession:
+        if self._session_factory is not None:
+            return self._session_factory()
         # Short connect timeout fails fast when Ollama is down; the (larger) total
         # covers a cold model load + generation on CPU.
-        timeout = aiohttp.ClientTimeout(
-            total=self.request_timeout_seconds,
-            sock_connect=min(5, self.request_timeout_seconds),
-        )
+        total = total or self.request_timeout_seconds
+        timeout = aiohttp.ClientTimeout(total=total, sock_connect=min(5, total))
         return aiohttp.ClientSession(timeout=timeout)
 
     @property
     def ai_available(self) -> bool:
         return bool(self.ollama_url)
+
+    def begin_warm_up(self) -> None:
+        """Schedule a background model warm-up so the first real /tldr doesn't
+        pay the cold-load cost. Safe no-op when the AI path is disabled."""
+        if not self.enabled or not self.ai_available:
+            return
+        if self._warmup_task is None or self._warmup_task.done():
+            self._warmup_task = asyncio.create_task(self.warm_up())
+
+    async def stop(self) -> None:
+        task = self._warmup_task
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def warm_up(self) -> None:
+        """Ask Ollama to load the model into memory — an ``/api/generate`` call
+        with no prompt is Ollama's documented load-only request. Failures are
+        logged but never trip the breaker: this is purely advisory."""
+        if not self.ai_available:
+            return
+        payload = {"model": self.model, "keep_alive": self.keep_alive}
+        url = f"{self.ollama_url}/api/generate"
+        started = time.monotonic()
+        try:
+            async with self._make_session(total=_WARMUP_TIMEOUT_SECONDS) as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        body = await _read_body(response)
+                        log.warning(
+                            "Ollama warm-up failed HTTP %s (model=%s): %s",
+                            response.status,
+                            self.model,
+                            body,
+                        )
+                        return
+                    await response.json()
+            log.info(
+                "Ollama model %s loaded (warm-up took %.1fs); /tldr summaries are ready.",
+                self.model,
+                time.monotonic() - started,
+            )
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            log.warning(
+                "Ollama warm-up for model %s gave up after %.1fs (%s: %s); "
+                "the first /tldr may fall back to the digest.",
+                self.model,
+                time.monotonic() - started,
+                type(exc).__name__,
+                exc,
+            )
+        except Exception:  # pragma: no cover - defensive; warm-up must never crash startup
+            log.exception("Unexpected error during Ollama warm-up.")
 
     async def summarize(
         self,
@@ -248,8 +310,9 @@ class TldrService:
             "options": {"temperature": 0.2, "num_predict": 400},
         }
         url = f"{self.ollama_url}/api/generate"
+        started = time.monotonic()
         try:
-            async with self._session_factory() as session:
+            async with self._make_session() as session:
                 async with session.post(url, json=payload) as response:
                     if response.status != 200:
                         # Include the body — Ollama explains *why* here (e.g.
@@ -270,11 +333,16 @@ class TldrService:
         except (aiohttp.ClientError, TimeoutError) as exc:
             # TimeoutError covers aiohttp's total-timeout (asyncio.TimeoutError is
             # an alias on 3.11+); both mean "server slow/unreachable", not a bug.
-            # Log the type name too — a bare timeout stringifies to "".
+            # Log the type name (a bare timeout stringifies to ""), how long we
+            # actually waited, and the configured limit — so "I raised the
+            # timeout" is verifiable straight from this line.
             log.info(
-                "Ollama unavailable for /tldr (%s: %s); using digest fallback.",
+                "Ollama unavailable for /tldr (%s: %s) after %.1fs with timeout=%ss; "
+                "using digest fallback.",
                 type(exc).__name__,
                 exc,
+                time.monotonic() - started,
+                self.request_timeout_seconds,
             )
             self._trip_ollama_breaker()
             return None
@@ -283,6 +351,11 @@ class TldrService:
             self._trip_ollama_breaker()
             return None
 
+        log.info(
+            "Ollama /tldr call finished in %.1fs (model=%s).",
+            time.monotonic() - started,
+            self.model,
+        )
         summary = _clean_summary(text)
         return summary or None
 

@@ -205,8 +205,69 @@ def test_ollama_timeout_logs_exception_type(caplog):
     )
     with caplog.at_level(logging.INFO, logger="rob.services.tldr_service"):
         _run(svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general"))
-    # The log must name the exception type, never an empty "()".
-    assert any("TimeoutError" in record.getMessage() for record in caplog.records)
+    # The log must name the exception type (never an empty "()") and show the
+    # configured timeout so "I raised the timeout" is verifiable from the log.
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("TimeoutError" in message for message in messages)
+    assert any("timeout=" in message for message in messages)
+
+
+def test_warm_up_sends_load_only_request():
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"done": True}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        keep_alive="10m",
+        session_factory=lambda: session,
+    )
+    _run(svc.warm_up())
+    assert session.calls
+    url, payload = session.calls[0]
+    assert url.endswith("/api/generate")
+    assert payload["model"] == svc.model
+    assert payload["keep_alive"] == "10m"
+    # No prompt: Ollama treats a promptless generate as "load the model only".
+    assert "prompt" not in payload
+    assert svc._ollama_ready()
+
+
+def test_warm_up_failure_never_trips_breaker():
+    # Warm-up is advisory: a timeout there must not block the next real /tldr.
+    session = _FakeSession(error=TimeoutError())
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    _run(svc.warm_up())
+    assert svc._ollama_ready()
+
+
+def test_begin_warm_up_noop_without_ollama_url():
+    svc = TldrService(enabled=True, ollama_url=None)
+
+    async def main():
+        svc.begin_warm_up()
+        assert svc._warmup_task is None
+
+    asyncio.run(main())
+
+
+def test_begin_warm_up_schedules_task_and_stop_awaits_it():
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"done": True}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+
+    async def main():
+        svc.begin_warm_up()
+        assert svc._warmup_task is not None
+        await svc.stop()
+        assert svc._warmup_task.done()
+
+    asyncio.run(main())
 
 
 def test_ollama_non_200_falls_back():

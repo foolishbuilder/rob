@@ -96,12 +96,36 @@ or add swap / more RAM.
 | `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
 | `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
 
-**Cold starts:** the first `/tldr` after a restart (or after the model unloads)
-loads the model into RAM, which is slow on CPU. That's why the timeout is
-generous and `TLDR_KEEP_ALIVE` keeps the model warm. If the first call times out,
-the bot log shows `Ollama unavailable for /tldr (TimeoutError: ) …`; raise
-`TLDR_REQUEST_TIMEOUT_SECONDS` and/or use a smaller model. After any failure Rob
-backs off from Ollama for ~2 minutes (restarting the bot clears that).
+**Cold starts:** loading the model into RAM is slow on CPU, so Rob **pre-warms
+it at startup** — a background load request with a generous (10-minute) window,
+logged as `Ollama model <model> loaded (warm-up took Xs)`. `TLDR_KEEP_ALIVE`
+then keeps it resident between calls. On a host dedicated to the bot, set
+`TLDR_KEEP_ALIVE=-1m` (any negative duration) to keep the model loaded
+**forever** so no call is ever cold.
+
+### Diagnosing timeouts
+
+A timed-out call logs how long it waited **and the timeout the bot is actually
+running with**:
+
+```
+Ollama unavailable for /tldr (TimeoutError: ) after 120.0s with timeout=120s; …
+```
+
+If `timeout=` doesn't match what you set in `.env`, the bot wasn't restarted
+after the edit (`sudo systemctl restart rob-bot`). If it does match, measure
+what the host can really do — run this **twice** on the bot host:
+
+```bash
+time curl -s http://127.0.0.1:11434/api/generate \
+  -d '{"model":"llama3.2:1b","prompt":"Write three short bullet points about pizza.","stream":false}' >/dev/null
+```
+
+The first run includes the cold model load; the second is the warm speed. If
+even the *warm* run is slower than your timeout, the CPU can't run that model —
+switch to a smaller one (`qwen2.5:0.5b`) rather than raising the timeout further.
+After any failure Rob backs off from Ollama for ~2 minutes; a successful call
+logs `Ollama /tldr call finished in Xs`.
 
 ---
 
