@@ -163,6 +163,52 @@ def test_ollama_connection_error_falls_back_to_digest_and_trips_breaker():
     assert not svc._ollama_ready()
 
 
+def test_ollama_payload_includes_keep_alive_and_num_predict():
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"response": "- ok"}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        keep_alive="15m",
+        session_factory=lambda: session,
+    )
+    _run(svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general"))
+    assert session.calls
+    _, payload = session.calls[0]
+    assert payload["keep_alive"] == "15m"
+    assert payload["options"]["num_predict"] == 400
+
+
+def test_ollama_timeout_falls_back_and_trips_breaker():
+    # A bare TimeoutError (aiohttp total-timeout) must be handled like any other
+    # "server slow/unreachable" case: digest fallback + breaker tripped.
+    session = _FakeSession(error=TimeoutError())
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    result = _run(
+        svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general")
+    )
+    assert result.method == "digest"
+    assert not svc._ollama_ready()
+
+
+def test_ollama_timeout_logs_exception_type(caplog):
+    import logging
+
+    session = _FakeSession(error=TimeoutError())
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    with caplog.at_level(logging.INFO, logger="rob.services.tldr_service"):
+        _run(svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general"))
+    # The log must name the exception type, never an empty "()".
+    assert any("TimeoutError" in record.getMessage() for record in caplog.records)
+
+
 def test_ollama_non_200_falls_back():
     session = _FakeSession(response=_FakeOllamaResponse(500, {}))
     svc = TldrService(
