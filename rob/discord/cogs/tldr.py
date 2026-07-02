@@ -214,6 +214,7 @@ class TldrCog(commands.Cog):
             topic=result.topic,
             matched_count=result.matched_count,
             model=result.model,
+            ai_message_count=result.ai_message_count,
         )
         await interaction.followup.send(
             **card.send_kwargs(),

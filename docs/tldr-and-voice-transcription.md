@@ -92,16 +92,53 @@ or add swap / more RAM.
 | `TLDR_OLLAMA_URL` | `http://127.0.0.1:11434` | Blank ⇒ digest only. |
 | `TLDR_MODEL` | `llama3.2:1b` | Must be pulled in Ollama. |
 | `TLDR_REQUEST_TIMEOUT_SECONDS` | `120` | Total per-summary timeout (covers a cold model load on CPU). |
-| `TLDR_KEEP_ALIVE` | `10m` | How long Ollama keeps the model resident between calls. |
+| `TLDR_KEEP_ALIVE` | `-1m` | Model residency after a call; negative = never unload, finite (e.g. `10m`) = unload when idle. |
 | `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
+| `TLDR_NUM_PREDICT` | `300` | Max tokens the model may generate per summary. |
+| `TLDR_TRANSCRIPT_CHAR_BUDGET` | `8000` | Max chars of chat handed to the model. |
+| `TLDR_STYLE` | `paragraphs` | `paragraphs` = short narrative run-through; `bullets` = 3-6 bullet points. |
 | `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
 
-**Cold starts:** the first `/tldr` after a restart (or after the model unloads)
-loads the model into RAM, which is slow on CPU. That's why the timeout is
-generous and `TLDR_KEEP_ALIVE` keeps the model warm. If the first call times out,
-the bot log shows `Ollama unavailable for /tldr (TimeoutError: ) …`; raise
-`TLDR_REQUEST_TIMEOUT_SECONDS` and/or use a smaller model. After any failure Rob
-backs off from Ollama for ~2 minutes (restarting the bot clears that).
+**Slow hosts:** on a small CPU VPS the wall-clock cost of a summary is roughly
+*(transcript length ÷ prompt-eval speed) + (output tokens ÷ generation speed)*.
+If the timed curl above shows the *warm* run is close to (or over) your timeout,
+switch to a smaller model first (`qwen2.5:0.5b`, `smollm2:360m`); lowering
+`TLDR_NUM_PREDICT` (e.g. 200) and `TLDR_TRANSCRIPT_CHAR_BUDGET` (e.g. 4000)
+trims the remaining cost.
+
+**Cold starts:** loading the model into RAM is slow on CPU, so Rob **pre-warms
+it at startup** — a background load request with a generous (10-minute) window,
+retried with backoff until Ollama is reachable (Ollama may start after the bot
+on a reboot). Success is logged as `Ollama model <model> loaded (warm-up took
+Xs)`. While the warm-up is still loading, `/tldr` serves the digest immediately
+instead of queueing behind the load. The default `TLDR_KEEP_ALIVE=-1m` (negative
+= never unload) then keeps the model resident **forever**, so no call is ever
+cold; on a RAM-tight host set a finite duration (e.g. `10m`) to let it unload
+when idle, accepting that the first call after idle is slow or falls back.
+
+### Diagnosing timeouts
+
+A timed-out call logs how long it waited **and the timeout the bot is actually
+running with**:
+
+```
+Ollama unavailable for /tldr (TimeoutError: ) after 120.0s with timeout=120s; …
+```
+
+If `timeout=` doesn't match what you set in `.env`, the bot wasn't restarted
+after the edit (`sudo systemctl restart rob-bot`). If it does match, measure
+what the host can really do — run this **twice** on the bot host:
+
+```bash
+time curl -s http://127.0.0.1:11434/api/generate \
+  -d '{"model":"llama3.2:1b","prompt":"Write three short bullet points about pizza.","stream":false}' >/dev/null
+```
+
+The first run includes the cold model load; the second is the warm speed. If
+even the *warm* run is slower than your timeout, the CPU can't run that model —
+switch to a smaller one (`qwen2.5:0.5b`) rather than raising the timeout further.
+After any failure Rob backs off from Ollama for ~2 minutes; a successful call
+logs `Ollama /tldr call finished in Xs`.
 
 ---
 

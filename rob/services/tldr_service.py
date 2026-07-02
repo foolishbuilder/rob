@@ -13,6 +13,7 @@ host):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -28,6 +29,9 @@ _URL_RE = re.compile(r"https?://[^\s<>|]+", re.IGNORECASE)
 # How long to stop trying Ollama after a connection failure, so a down server
 # doesn't add its connect timeout to every /tldr call.
 _OLLAMA_BACKOFF_SECONDS = 120
+# The startup warm-up may sit through a slow cold model load (disk + RAM alloc
+# on a small host), so it gets a much more generous window than user calls.
+_WARMUP_TIMEOUT_SECONDS = 600
 # Upper bound on the transcript handed to the local model; small models have
 # small context windows, so keep the most recent messages within this budget.
 _AI_TRANSCRIPT_CHAR_BUDGET = 8000
@@ -51,6 +55,9 @@ class TldrResult:
     topic: str | None = None
     model: str | None = None
     matched_count: int | None = None
+    # How many messages actually fit the model's transcript budget (AI path
+    # only); < message_count means the summary covers the most recent slice.
+    ai_message_count: int | None = None
     links: list[str] = field(default_factory=list)
 
 
@@ -107,34 +114,130 @@ class TldrService:
         ollama_url: str | None = None,
         model: str = "llama3.2:1b",
         request_timeout_seconds: int = 120,
-        keep_alive: str = "10m",
+        keep_alive: str = "-1m",
         max_messages: int = 400,
+        num_predict: int = 300,
+        transcript_char_budget: int = _AI_TRANSCRIPT_CHAR_BUDGET,
+        style: str = "paragraphs",
         session_factory=None,
     ) -> None:
         self.enabled = enabled
         self.ollama_url = ollama_url.rstrip("/") if ollama_url else None
         self.model = model
         self.request_timeout_seconds = max(1, request_timeout_seconds)
-        # How long Ollama keeps the model resident after a call, so only the
-        # first (cold) summary pays the model-load cost.
+        # How long Ollama keeps the model resident after a call. The default is
+        # a negative duration ("never unload"): together with the startup
+        # warm-up, that means no user call ever pays the cold-load cost.
         self.keep_alive = keep_alive
         self.max_messages = max(1, max_messages)
-        # Injectable for tests; defaults to a real aiohttp session per request.
-        self._session_factory = session_factory or self._default_session
+        # Generation-cost knobs: on a slow CPU host, output length and prompt
+        # size are what decide whether a summary fits inside the timeout.
+        self.num_predict = max(1, num_predict)
+        self.transcript_char_budget = max(200, transcript_char_budget)
+        # "paragraphs" (default): a short narrative run-through of the chat.
+        # "bullets": the classic 3-6 bullet-point TL;DR.
+        self.style = style if style in {"paragraphs", "bullets"} else "paragraphs"
+        # Injectable for tests; when None, _make_session builds a real aiohttp
+        # session per request.
+        self._session_factory = session_factory
         self._ollama_disabled_until = 0.0
+        self._warmup_task: asyncio.Task | None = None
+        # Initial retry delay when Ollama isn't reachable at startup (doubles up
+        # to the warm-up window). Overridable in tests.
+        self._warmup_retry_seconds = 60
 
-    def _default_session(self) -> aiohttp.ClientSession:
+    def _make_session(self, *, total: int | None = None) -> aiohttp.ClientSession:
+        if self._session_factory is not None:
+            return self._session_factory()
         # Short connect timeout fails fast when Ollama is down; the (larger) total
         # covers a cold model load + generation on CPU.
-        timeout = aiohttp.ClientTimeout(
-            total=self.request_timeout_seconds,
-            sock_connect=min(5, self.request_timeout_seconds),
-        )
+        total = total or self.request_timeout_seconds
+        timeout = aiohttp.ClientTimeout(total=total, sock_connect=min(5, total))
         return aiohttp.ClientSession(timeout=timeout)
 
     @property
     def ai_available(self) -> bool:
         return bool(self.ollama_url)
+
+    @property
+    def warming_up(self) -> bool:
+        """True while the background warm-up hasn't succeeded yet. While warming,
+        /tldr goes straight to the digest instead of queueing behind the model
+        load inside Ollama (which would time out AND trip the breaker)."""
+        return self._warmup_task is not None and not self._warmup_task.done()
+
+    def begin_warm_up(self) -> None:
+        """Schedule a background model warm-up so the first real /tldr doesn't
+        pay the cold-load cost. Retries until Ollama is reachable (it may start
+        after the bot on a reboot). Safe no-op when the AI path is disabled."""
+        if not self.enabled or not self.ai_available:
+            return
+        if self._warmup_task is None or self._warmup_task.done():
+            self._warmup_task = asyncio.create_task(self._warm_up_loop())
+
+    async def stop(self) -> None:
+        task = self._warmup_task
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def _warm_up_loop(self) -> None:
+        """Keep trying to load the model until it succeeds, backing off between
+        attempts — covers Ollama coming up after the bot on a host reboot."""
+        backoff = self._warmup_retry_seconds
+        while True:
+            if await self.warm_up():
+                return
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, _WARMUP_TIMEOUT_SECONDS)
+
+    async def warm_up(self) -> bool:
+        """Ask Ollama to load the model into memory — an ``/api/generate`` call
+        with no prompt is Ollama's documented load-only request. Failures are
+        logged but never trip the breaker: this is purely advisory. Returns
+        ``True`` once the model is confirmed loaded."""
+        if not self.ai_available:
+            return False
+        payload = {"model": self.model, "keep_alive": self.keep_alive}
+        url = f"{self.ollama_url}/api/generate"
+        started = time.monotonic()
+        try:
+            async with self._make_session(total=_WARMUP_TIMEOUT_SECONDS) as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        body = await _read_body(response)
+                        log.warning(
+                            "Ollama warm-up failed HTTP %s (model=%s): %s",
+                            response.status,
+                            self.model,
+                            body,
+                        )
+                        return False
+                    await response.json()
+            # A user /tldr that raced this load may have tripped the breaker;
+            # the model is confirmed ready now, so clear it.
+            self._ollama_disabled_until = 0.0
+            log.info(
+                "Ollama model %s loaded (warm-up took %.1fs); /tldr summaries are ready.",
+                self.model,
+                time.monotonic() - started,
+            )
+            return True
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            log.warning(
+                "Ollama warm-up for model %s failed after %.1fs (%s: %s); retrying later.",
+                self.model,
+                time.monotonic() - started,
+                type(exc).__name__,
+                exc,
+            )
+            return False
+        except Exception:  # pragma: no cover - defensive; warm-up must never crash startup
+            log.exception("Unexpected error during Ollama warm-up.")
+            return False
 
     async def summarize(
         self,
@@ -168,12 +271,22 @@ class TldrService:
                 summary=self._empty_summary(topic, timeframe_label, channel_name),
             )
 
-        if self.ai_available and self._ollama_ready():
-            ai_summary = await self._summarize_with_ollama(
+        # While the warm-up is still loading the model, don't queue behind it —
+        # a user call would hit its (shorter) timeout and trip the breaker,
+        # masking the model right as it becomes ready. Serve the digest instead.
+        if self.ai_available and self._ollama_ready() and not self.warming_up:
+            ai_result = await self._summarize_with_ollama(
                 scope, topic=topic, timeframe_label=timeframe_label, channel_name=channel_name
             )
-            if ai_summary:
-                return _replace(base, summary=ai_summary, method="ai", model=self.model)
+            if ai_result is not None:
+                ai_summary, included = ai_result
+                return _replace(
+                    base,
+                    summary=ai_summary,
+                    method="ai",
+                    model=self.model,
+                    ai_message_count=included,
+                )
 
         return _replace(base, summary=self._build_digest(scope, topic=topic))
 
@@ -192,7 +305,10 @@ class TldrService:
         topic: str | None,
         timeframe_label: str,
         channel_name: str,
-    ) -> str:
+    ) -> tuple[str, int]:
+        """Build the model prompt. Returns ``(prompt, included_count)`` — how
+        many messages actually fit the transcript budget, so the reply can be
+        honest when a busy window was truncated."""
         lines: list[str] = []
         used = 0
         # Keep the most recent messages that fit the budget, then restore order.
@@ -202,7 +318,7 @@ class TldrService:
             if not text:
                 continue
             line = f"{author}: {text}"
-            if used + len(line) + 1 > _AI_TRANSCRIPT_CHAR_BUDGET:
+            if used + len(line) + 1 > self.transcript_char_budget:
                 break
             lines.append(line)
             used += len(line) + 1
@@ -215,18 +331,31 @@ class TldrService:
             if topic
             else ""
         )
-        return (
+        if self.style == "bullets":
+            style_instruction = (
+                "Use 3-6 concise bullet points, each starting with '- '. Summarise "
+                "what was discussed and any decisions or outcomes."
+            )
+        else:
+            style_instruction = (
+                "Write 1-3 short paragraphs of plain prose — a quick run-through of "
+                "what people talked about, any decisions or plans that came out of "
+                "it, and how the conversation wrapped up. Do not use bullet points, "
+                "numbered lists, or headings."
+            )
+        prompt = (
             "You are Rob, a Discord assistant. Write a short, neutral TL;DR of the "
             f"chat from #{channel_name} ({timeframe_label}).\n"
             f"{focus}"
-            "Use 3-6 concise bullet points, each starting with '- '. Summarise what "
-            "was discussed and any decisions or outcomes. Do not add a preamble, do "
-            "not invent details, and never use @ mentions. If the chat is only "
-            "small talk, say that briefly.\n\n"
+            f"{style_instruction} Only include things that are clearly stated in "
+            "the transcript — if you are not sure about a detail or who said it, "
+            "leave it out. Do not add a preamble, do not invent details, and never "
+            "use @ mentions. If the chat is only small talk, say that briefly.\n\n"
             "Chat transcript:\n"
             f"{transcript}\n\n"
             "TL;DR:"
         )
+        return prompt, len(lines)
 
     async def _summarize_with_ollama(
         self,
@@ -235,8 +364,8 @@ class TldrService:
         topic: str | None,
         timeframe_label: str,
         channel_name: str,
-    ) -> str | None:
-        prompt = self._build_prompt(
+    ) -> tuple[str, int] | None:
+        prompt, included = self._build_prompt(
             messages, topic=topic, timeframe_label=timeframe_label, channel_name=channel_name
         )
         payload = {
@@ -245,11 +374,12 @@ class TldrService:
             "stream": False,
             "keep_alive": self.keep_alive,
             # A TL;DR is short; cap output so generation latency stays bounded.
-            "options": {"temperature": 0.2, "num_predict": 400},
+            "options": {"temperature": 0.2, "num_predict": self.num_predict},
         }
         url = f"{self.ollama_url}/api/generate"
+        started = time.monotonic()
         try:
-            async with self._session_factory() as session:
+            async with self._make_session() as session:
                 async with session.post(url, json=payload) as response:
                     if response.status != 200:
                         # Include the body — Ollama explains *why* here (e.g.
@@ -270,11 +400,16 @@ class TldrService:
         except (aiohttp.ClientError, TimeoutError) as exc:
             # TimeoutError covers aiohttp's total-timeout (asyncio.TimeoutError is
             # an alias on 3.11+); both mean "server slow/unreachable", not a bug.
-            # Log the type name too — a bare timeout stringifies to "".
+            # Log the type name (a bare timeout stringifies to ""), how long we
+            # actually waited, and the configured limit — so "I raised the
+            # timeout" is verifiable straight from this line.
             log.info(
-                "Ollama unavailable for /tldr (%s: %s); using digest fallback.",
+                "Ollama unavailable for /tldr (%s: %s) after %.1fs with timeout=%ss; "
+                "using digest fallback.",
                 type(exc).__name__,
                 exc,
+                time.monotonic() - started,
+                self.request_timeout_seconds,
             )
             self._trip_ollama_breaker()
             return None
@@ -283,8 +418,15 @@ class TldrService:
             self._trip_ollama_breaker()
             return None
 
+        log.info(
+            "Ollama /tldr call finished in %.1fs (model=%s).",
+            time.monotonic() - started,
+            self.model,
+        )
         summary = _clean_summary(text)
-        return summary or None
+        if not summary:
+            return None
+        return summary, included
 
     # -- Extractive digest -------------------------------------------------
 

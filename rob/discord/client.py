@@ -203,6 +203,9 @@ class RobBot(commands.Bot):
             request_timeout_seconds=self.settings.tldr_request_timeout_seconds,
             keep_alive=self.settings.tldr_keep_alive,
             max_messages=self.settings.tldr_max_messages,
+            num_predict=self.settings.tldr_num_predict,
+            transcript_char_budget=self.settings.tldr_transcript_char_budget,
+            style=self.settings.tldr_style,
         )
         self.transcription_service = TranscriptionService(
             enabled=self.settings.voice_transcribe_enabled,
@@ -248,6 +251,9 @@ class RobBot(commands.Bot):
         await self.counting_service.start()
         await self.send_queue_service.start()
         await self.bot_ops_server.start()
+        # Pre-load the local TL;DR model in the background so the first /tldr
+        # doesn't pay the cold-start cost (no-op when Ollama isn't configured).
+        self.tldr_service.begin_warm_up()
 
     async def _global_interaction_check(
         self,
@@ -297,6 +303,8 @@ class RobBot(commands.Bot):
         log.info("%s is online as %s.", self.settings.bot_name, self.user)
 
     async def close(self) -> None:
+        if hasattr(self, "tldr_service"):
+            await self.tldr_service.stop()
         if hasattr(self, "bot_ops_server"):
             await self.bot_ops_server.stop()
         if hasattr(self, "send_queue_service"):
