@@ -92,9 +92,18 @@ or add swap / more RAM.
 | `TLDR_OLLAMA_URL` | `http://127.0.0.1:11434` | Blank ⇒ digest only. |
 | `TLDR_MODEL` | `llama3.2:1b` | Must be pulled in Ollama. |
 | `TLDR_REQUEST_TIMEOUT_SECONDS` | `120` | Total per-summary timeout (covers a cold model load on CPU). |
-| `TLDR_KEEP_ALIVE` | `10m` | How long Ollama keeps the model resident between calls. |
+| `TLDR_KEEP_ALIVE` | `10m` | How long Ollama keeps the model resident between calls; `-1m` = never unload. |
 | `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
+| `TLDR_NUM_PREDICT` | `300` | Max tokens the model may generate per summary. |
+| `TLDR_TRANSCRIPT_CHAR_BUDGET` | `8000` | Max chars of chat handed to the model. |
 | `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
+
+**Slow hosts:** on a small CPU VPS the wall-clock cost of a summary is roughly
+*(transcript length ÷ prompt-eval speed) + (output tokens ÷ generation speed)*.
+If the timed curl above shows the *warm* run is close to (or over) your timeout,
+switch to a smaller model first (`qwen2.5:0.5b`, `smollm2:360m`); lowering
+`TLDR_NUM_PREDICT` (e.g. 200) and `TLDR_TRANSCRIPT_CHAR_BUDGET` (e.g. 4000)
+trims the remaining cost.
 
 **Cold starts:** loading the model into RAM is slow on CPU, so Rob **pre-warms
 it at startup** — a background load request with a generous (10-minute) window,

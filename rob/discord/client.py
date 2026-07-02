@@ -203,6 +203,8 @@ class RobBot(commands.Bot):
             request_timeout_seconds=self.settings.tldr_request_timeout_seconds,
             keep_alive=self.settings.tldr_keep_alive,
             max_messages=self.settings.tldr_max_messages,
+            num_predict=self.settings.tldr_num_predict,
+            transcript_char_budget=self.settings.tldr_transcript_char_budget,
         )
         self.transcription_service = TranscriptionService(
             enabled=self.settings.voice_transcribe_enabled,

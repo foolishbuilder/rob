@@ -113,6 +113,8 @@ class TldrService:
         request_timeout_seconds: int = 120,
         keep_alive: str = "10m",
         max_messages: int = 400,
+        num_predict: int = 300,
+        transcript_char_budget: int = _AI_TRANSCRIPT_CHAR_BUDGET,
         session_factory=None,
     ) -> None:
         self.enabled = enabled
@@ -123,6 +125,10 @@ class TldrService:
         # first (cold) summary pays the model-load cost.
         self.keep_alive = keep_alive
         self.max_messages = max(1, max_messages)
+        # Generation-cost knobs: on a slow CPU host, output length and prompt
+        # size are what decide whether a summary fits inside the timeout.
+        self.num_predict = max(1, num_predict)
+        self.transcript_char_budget = max(200, transcript_char_budget)
         # Injectable for tests; when None, _make_session builds a real aiohttp
         # session per request.
         self._session_factory = session_factory
@@ -264,7 +270,7 @@ class TldrService:
             if not text:
                 continue
             line = f"{author}: {text}"
-            if used + len(line) + 1 > _AI_TRANSCRIPT_CHAR_BUDGET:
+            if used + len(line) + 1 > self.transcript_char_budget:
                 break
             lines.append(line)
             used += len(line) + 1
@@ -307,7 +313,7 @@ class TldrService:
             "stream": False,
             "keep_alive": self.keep_alive,
             # A TL;DR is short; cap output so generation latency stays bounded.
-            "options": {"temperature": 0.2, "num_predict": 400},
+            "options": {"temperature": 0.2, "num_predict": self.num_predict},
         }
         url = f"{self.ollama_url}/api/generate"
         started = time.monotonic()

@@ -169,13 +169,29 @@ def test_ollama_payload_includes_keep_alive_and_num_predict():
         enabled=True,
         ollama_url="http://127.0.0.1:11434",
         keep_alive="15m",
+        num_predict=250,
         session_factory=lambda: session,
     )
     _run(svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general"))
     assert session.calls
     _, payload = session.calls[0]
     assert payload["keep_alive"] == "15m"
-    assert payload["options"]["num_predict"] == 400
+    assert payload["options"]["num_predict"] == 250
+
+
+def test_transcript_char_budget_limits_prompt_and_keeps_recent_messages():
+    from datetime import datetime, timezone
+    from rob.services.tldr_service import ChatMessage
+
+    msgs = [
+        ChatMessage(f"User{i}", f"message number {i} " + "x" * 80, datetime.now(timezone.utc))
+        for i in range(50)
+    ]
+    svc = TldrService(enabled=True, ollama_url="http://127.0.0.1:11434", transcript_char_budget=500)
+    prompt = svc._build_prompt(msgs, topic=None, timeframe_label="today", channel_name="general")
+    # The transcript keeps the most recent messages within the budget.
+    assert "message number 49" in prompt
+    assert "message number 0" not in prompt
 
 
 def test_ollama_timeout_falls_back_and_trips_breaker():
