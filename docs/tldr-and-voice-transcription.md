@@ -57,6 +57,33 @@ TLDR_MODEL=llama3.2:1b
 Any Ollama model works — `qwen2.5:1.5b`, `phi3:mini`, `gemma2:2b`, etc. Pick one
 that fits the host's RAM. Set `TLDR_OLLAMA_URL=` (blank) to force digest-only.
 
+### Right-sizing the model to the host's RAM
+
+The model has to fit in **free** RAM (CPU-only inference), and it's loaded on top
+of everything else already running on the host. `llama3.2:1b` needs roughly
+**1.3–1.6 GB free**. If the host is short on memory, Ollama returns HTTP 500 and
+Rob falls back to the digest; the bot log then shows the reason, e.g.:
+
+```
+Ollama returned HTTP 500 for /tldr (model=llama3.2:1b): {"error":"llama-server
+process has terminated ... ggml_aligned_malloc: insufficient memory ..."}
+```
+
+Check free memory with `free -h`, then pick a model that fits:
+
+| Model | `ollama pull` | Approx. RAM | Quality |
+|---|---|---|---|
+| `llama3.2:1b` | `llama3.2:1b` | ~1.3–1.6 GB | good |
+| `qwen2.5:0.5b` | `qwen2.5:0.5b` | ~0.7–1.0 GB | decent |
+| `smollm2:360m` | `smollm2:360m` | ~0.4–0.6 GB | basic |
+| `smollm2:135m` | `smollm2:135m` | ~0.2–0.3 GB | minimal |
+
+Then set `TLDR_MODEL` to the one you pulled and restart the bot. After a failed
+call Rob backs off from Ollama for ~2 minutes, so wait (or restart the bot)
+before retrying — the footer flips to "summarised by <model> (on-server)" once
+it works. If nothing fits, leave `TLDR_OLLAMA_URL` blank and rely on the digest,
+or add swap / more RAM.
+
 ### Config
 
 | Env var | Default | Notes |
