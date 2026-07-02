@@ -46,8 +46,15 @@ class TldrCog(commands.Cog):
 
     def _mark_cooldown(self, user_id: int) -> None:
         seconds = self.bot.settings.tldr_cooldown_seconds
-        if seconds > 0:
-            self._cooldowns[user_id] = time.monotonic() + seconds
+        if seconds <= 0:
+            return
+        now = time.monotonic()
+        # Opportunistically drop expired entries so the map stays proportional to
+        # currently-cooling-down users, not all-time invokers.
+        expired = [uid for uid, expiry in self._cooldowns.items() if expiry <= now]
+        for uid in expired:
+            del self._cooldowns[uid]
+        self._cooldowns[user_id] = now + seconds
 
     async def _collect_messages(
         self, channel, after
@@ -180,12 +187,22 @@ class TldrCog(commands.Cog):
             )
             return
 
-        result = await self.bot.tldr_service.summarize(
-            messages,
-            topic=topic,
-            timeframe_label=label,
-            channel_name=target.name,
-        )
+        try:
+            result = await self.bot.tldr_service.summarize(
+                messages,
+                topic=topic,
+                timeframe_label=label,
+                channel_name=target.name,
+            )
+        except Exception:
+            # The interaction is already deferred, so always give feedback rather
+            # than leaving the user on a permanent "thinking…" state.
+            log.exception("Failed to summarise chat for /tldr.")
+            await interaction.followup.send(
+                **error_card("Rob couldn't put together a summary right now.").send_kwargs(),
+                ephemeral=True,
+            )
+            return
 
         card = tldr_card(
             channel_name=target.name,

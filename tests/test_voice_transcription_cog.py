@@ -78,8 +78,17 @@ def test_voice_attachment_detection():
     non_voice = _FakeMessage(voice=False, attachments=[image])
     assert _voice_attachment(non_voice) is None
 
+    # A plain audio upload (not flagged, not named like a voice note) must NOT be
+    # treated as a voice message — Rob shouldn't transcribe arbitrary media.
+    music = _FakeMessage(
+        voice=False, attachments=[_FakeAttachment(content_type="audio/mpeg", filename="song.mp3")]
+    )
+    assert _voice_attachment(music) is None
+
     # Fallback: not flagged, but an audio file named like a voice note.
-    fallback = _FakeMessage(voice=False, attachments=[_FakeAttachment(content_type=None)])
+    fallback = _FakeMessage(
+        voice=False, attachments=[_FakeAttachment(content_type=None, filename="voice-message.ogg")]
+    )
     assert _voice_attachment(fallback) is not None
 
 
@@ -137,6 +146,17 @@ def test_over_duration_is_skipped():
     service = _FakeService()
     cog = VoiceTranscriptionCog(_bot(service, max_duration=10))
     message = _FakeMessage(attachments=[_FakeAttachment(duration=60.0)])
+    _run(cog, message)
+    assert not service.transcribe_calls
+    assert not message.reply_calls
+
+
+def test_unknown_duration_is_skipped():
+    # A voice-note-named attachment with no duration can't be length-capped, so
+    # Rob skips it rather than transcribing audio of unknown length.
+    service = _FakeService()
+    cog = VoiceTranscriptionCog(_bot(service))
+    message = _FakeMessage(attachments=[_FakeAttachment(duration=None)])
     _run(cog, message)
     assert not service.transcribe_calls
     assert not message.reply_calls

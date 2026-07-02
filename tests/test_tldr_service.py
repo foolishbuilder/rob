@@ -172,6 +172,36 @@ def test_ollama_non_200_falls_back():
     assert result.method == "digest"
 
 
+def test_ollama_null_response_falls_back_to_digest():
+    # A 200 with {"response": null} must not surface the literal "None" — it
+    # should fall back to the digest.
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"response": None}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    result = _run(
+        svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general")
+    )
+    assert result.method == "digest"
+    assert "None" not in result.summary.splitlines()[0]
+
+
+def test_ollama_non_dict_body_falls_back_to_digest():
+    # A 200 whose JSON body is a list/string must not raise out of summarize().
+    session = _FakeSession(response=_FakeOllamaResponse(200, ["unexpected"]))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    result = _run(
+        svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general")
+    )
+    assert result.method == "digest"
+
+
 def test_ai_summary_neutralises_mentions():
     session = _FakeSession(
         response=_FakeOllamaResponse(200, {"response": "- <@123> pinged @everyone about the event"})

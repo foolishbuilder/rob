@@ -235,7 +235,12 @@ class TldrService:
                         self._trip_ollama_breaker()
                         return None
                     data = await response.json()
-        except aiohttp.ClientError as exc:
+            # Parse inside the guard so a null/non-dict body can never escape.
+            raw = data.get("response") if isinstance(data, dict) else None
+            text = raw if isinstance(raw, str) else ""
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            # TimeoutError covers aiohttp's total-timeout (asyncio.TimeoutError is
+            # an alias on 3.11+); both mean "server slow/unreachable", not a bug.
             log.info("Ollama unavailable for /tldr (%s); using digest fallback.", exc)
             self._trip_ollama_breaker()
             return None
@@ -244,10 +249,8 @@ class TldrService:
             self._trip_ollama_breaker()
             return None
 
-        summary = _clean_summary(str(data.get("response", "")))
-        if not summary:
-            return None
-        return summary
+        summary = _clean_summary(text)
+        return summary or None
 
     # -- Extractive digest -------------------------------------------------
 
