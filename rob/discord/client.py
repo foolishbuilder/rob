@@ -205,6 +205,7 @@ class RobBot(commands.Bot):
             max_messages=self.settings.tldr_max_messages,
             num_predict=self.settings.tldr_num_predict,
             transcript_char_budget=self.settings.tldr_transcript_char_budget,
+            style=self.settings.tldr_style,
         )
         self.transcription_service = TranscriptionService(
             enabled=self.settings.voice_transcribe_enabled,

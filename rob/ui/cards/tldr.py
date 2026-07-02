@@ -28,6 +28,7 @@ def tldr_card(
     topic: str | None = None,
     matched_count: int | None = None,
     model: str | None = None,
+    ai_message_count: int | None = None,
 ) -> RenderedMessage:
     if method == "ai" and model:
         engine = f"summarised by {model} (on-server)"
@@ -36,7 +37,17 @@ def tldr_card(
 
     people = "person" if participant_count == 1 else "people"
     msgs = "message" if message_count == 1 else "messages"
-    footer_bits = [f"{message_count} {msgs}", f"{participant_count} {people}", engine]
+    # Be honest when a busy window didn't fully fit the model's budget: the
+    # summary then covers the most recent slice, not the whole timeframe.
+    if (
+        method == "ai"
+        and ai_message_count is not None
+        and 0 < ai_message_count < message_count
+    ):
+        count_bit = f"latest {ai_message_count} of {message_count} {msgs}"
+    else:
+        count_bit = f"{message_count} {msgs}"
+    footer_bits = [count_bit, f"{participant_count} {people}", engine]
     footer = " · ".join(footer_bits)
 
     eyebrow = "🧾 TL;DR"

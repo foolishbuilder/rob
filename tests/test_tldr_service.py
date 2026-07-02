@@ -143,7 +143,37 @@ def test_ollama_success_returns_ai_summary():
     assert "Friday event" in result.summary
     # message/participant counts still populated from the real messages
     assert result.message_count == 4
+    # All 4 sample messages fit the default budget, so the AI saw them all.
+    assert result.ai_message_count == 4
     assert session.calls and session.calls[0][0].endswith("/api/generate")
+
+
+def test_tldr_card_footer_is_honest_about_truncated_transcript():
+    from rob.ui.cards.tldr import tldr_card
+
+    card = tldr_card(
+        channel_name="main-chat",
+        timeframe_label="the last 7 days",
+        summary="a recap",
+        method="ai",
+        message_count=390,
+        participant_count=33,
+        model="qwen2.5:0.5b",
+        ai_message_count=72,
+    )
+    assert card.view is not None  # renders; footer content checked via repr walk
+    texts = []
+
+    def _walk(item):
+        for child in getattr(item, "children", []) or []:
+            content = getattr(child, "content", None)
+            if content:
+                texts.append(content)
+            _walk(child)
+
+    _walk(card.view)
+    joined = " ".join(texts)
+    assert "latest 72 of 390 messages" in joined
 
 
 def test_ollama_connection_error_falls_back_to_digest_and_trips_breaker():
@@ -188,10 +218,14 @@ def test_transcript_char_budget_limits_prompt_and_keeps_recent_messages():
         for i in range(50)
     ]
     svc = TldrService(enabled=True, ollama_url="http://127.0.0.1:11434", transcript_char_budget=500)
-    prompt = svc._build_prompt(msgs, topic=None, timeframe_label="today", channel_name="general")
-    # The transcript keeps the most recent messages within the budget.
+    prompt, included = svc._build_prompt(
+        msgs, topic=None, timeframe_label="today", channel_name="general"
+    )
+    # The transcript keeps the most recent messages within the budget, and
+    # reports how many actually fit so the card footer can be honest.
     assert "message number 49" in prompt
     assert "message number 0" not in prompt
+    assert 0 < included < 50
 
 
 def test_ollama_timeout_falls_back_and_trips_breaker():
@@ -257,6 +291,90 @@ def test_warm_up_failure_never_trips_breaker():
     )
     _run(svc.warm_up())
     assert svc._ollama_ready()
+
+
+def test_summarize_serves_digest_while_warm_up_in_flight():
+    from types import SimpleNamespace
+
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"response": "- ai"}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    # Simulate an in-flight warm-up: /tldr must not queue behind the model load
+    # (that would time out AND trip the breaker), it should serve the digest.
+    svc._warmup_task = SimpleNamespace(done=lambda: False)
+    result = _run(
+        svc.summarize(SAMPLE, topic=None, timeframe_label="today", channel_name="general")
+    )
+    assert result.method == "digest"
+    assert not session.calls
+    assert svc._ollama_ready()  # breaker untouched
+
+
+def test_warm_up_success_clears_tripped_breaker():
+    # A user call racing the cold load may have tripped the breaker; once the
+    # model is confirmed loaded the breaker must be cleared.
+    session = _FakeSession(response=_FakeOllamaResponse(200, {"done": True}))
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=lambda: session,
+    )
+    svc._trip_ollama_breaker()
+    assert not svc._ollama_ready()
+    assert _run(svc.warm_up()) is True
+    assert svc._ollama_ready()
+
+
+def test_warm_up_loop_retries_until_success():
+    # Ollama may start after the bot on a reboot: the loop must retry failures
+    # (with backoff) and stop once the model loads.
+    attempts = []
+
+    class _FlakySession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def post(self, url, json=None):
+            attempts.append(url)
+            if len(attempts) < 3:
+                raise TimeoutError()
+            return _FakeOllamaResponse(200, {"done": True})
+
+    svc = TldrService(
+        enabled=True,
+        ollama_url="http://127.0.0.1:11434",
+        session_factory=_FlakySession,
+    )
+    svc._warmup_retry_seconds = 0  # no real waiting in tests
+    _run(svc._warm_up_loop())
+    assert len(attempts) == 3
+
+
+def test_prompt_style_defaults_to_paragraphs_and_supports_bullets():
+    svc = TldrService(enabled=True, ollama_url="http://127.0.0.1:11434")
+    prompt, _ = svc._build_prompt(
+        SAMPLE, topic=None, timeframe_label="today", channel_name="general"
+    )
+    assert "short paragraphs" in prompt
+    assert "Do not use bullet points" in prompt
+    # Anti-hallucination guard for small models.
+    assert "clearly stated in the transcript" in prompt
+
+    bullet_svc = TldrService(enabled=True, ollama_url="http://127.0.0.1:11434", style="bullets")
+    bullet_prompt, _ = bullet_svc._build_prompt(
+        SAMPLE, topic=None, timeframe_label="today", channel_name="general"
+    )
+    assert "bullet points, each starting with" in bullet_prompt
+
+    # Unknown styles fall back to paragraphs rather than breaking the prompt.
+    weird = TldrService(enabled=True, ollama_url="http://127.0.0.1:11434", style="haiku")
+    assert weird.style == "paragraphs"
 
 
 def test_begin_warm_up_noop_without_ollama_url():

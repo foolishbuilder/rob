@@ -92,10 +92,11 @@ or add swap / more RAM.
 | `TLDR_OLLAMA_URL` | `http://127.0.0.1:11434` | Blank ⇒ digest only. |
 | `TLDR_MODEL` | `llama3.2:1b` | Must be pulled in Ollama. |
 | `TLDR_REQUEST_TIMEOUT_SECONDS` | `120` | Total per-summary timeout (covers a cold model load on CPU). |
-| `TLDR_KEEP_ALIVE` | `10m` | How long Ollama keeps the model resident between calls; `-1m` = never unload. |
+| `TLDR_KEEP_ALIVE` | `-1m` | Model residency after a call; negative = never unload, finite (e.g. `10m`) = unload when idle. |
 | `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
 | `TLDR_NUM_PREDICT` | `300` | Max tokens the model may generate per summary. |
 | `TLDR_TRANSCRIPT_CHAR_BUDGET` | `8000` | Max chars of chat handed to the model. |
+| `TLDR_STYLE` | `paragraphs` | `paragraphs` = short narrative run-through; `bullets` = 3-6 bullet points. |
 | `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
 
 **Slow hosts:** on a small CPU VPS the wall-clock cost of a summary is roughly
@@ -107,10 +108,13 @@ trims the remaining cost.
 
 **Cold starts:** loading the model into RAM is slow on CPU, so Rob **pre-warms
 it at startup** — a background load request with a generous (10-minute) window,
-logged as `Ollama model <model> loaded (warm-up took Xs)`. `TLDR_KEEP_ALIVE`
-then keeps it resident between calls. On a host dedicated to the bot, set
-`TLDR_KEEP_ALIVE=-1m` (any negative duration) to keep the model loaded
-**forever** so no call is ever cold.
+retried with backoff until Ollama is reachable (Ollama may start after the bot
+on a reboot). Success is logged as `Ollama model <model> loaded (warm-up took
+Xs)`. While the warm-up is still loading, `/tldr` serves the digest immediately
+instead of queueing behind the load. The default `TLDR_KEEP_ALIVE=-1m` (negative
+= never unload) then keeps the model resident **forever**, so no call is ever
+cold; on a RAM-tight host set a finite duration (e.g. `10m`) to let it unload
+when idle, accepting that the first call after idle is slow or falls back.
 
 ### Diagnosing timeouts
 
