@@ -37,6 +37,8 @@ from rob.discord.cogs.reports import ReportsCog
 from rob.discord.cogs.sends import SendsCog
 from rob.discord.cogs.server_backup import ServerBackupCog
 from rob.discord.cogs.settings import SettingsCog
+from rob.discord.cogs.tldr import TldrCog
+from rob.discord.cogs.voice_transcription import VoiceTranscriptionCog
 from rob.discord.cogs.warn_relay import WarnRelayCog
 from rob.services.counting_service import CountingService
 from rob.services.bot_ops_server import BotOpsServer
@@ -50,6 +52,8 @@ from rob.services.send_queue_service import SendQueueService
 from rob.services.send_service import SendService
 from rob.services.server_backup_service import ServerBackupService
 from rob.services.throne_service import ThroneService
+from rob.services.tldr_service import TldrService
+from rob.services.transcription_service import TranscriptionService
 from rob.ui.cards.maintenance import rob_offline_embed
 
 log = logging.getLogger(__name__)
@@ -192,6 +196,23 @@ class RobBot(commands.Bot):
             port=self.settings.rob_ops_port,
             secret=self.settings.rob_ops_secret,
         )
+        self.tldr_service = TldrService(
+            enabled=self.settings.tldr_enabled,
+            ollama_url=self.settings.tldr_ollama_url,
+            model=self.settings.tldr_model,
+            request_timeout_seconds=self.settings.tldr_request_timeout_seconds,
+            max_messages=self.settings.tldr_max_messages,
+        )
+        self.transcription_service = TranscriptionService(
+            enabled=self.settings.voice_transcribe_enabled,
+            model=self.settings.voice_transcribe_model,
+            device=self.settings.voice_transcribe_device,
+            compute_type=self.settings.voice_transcribe_compute_type,
+            language=self.settings.voice_transcribe_language,
+            download_root=self.settings.voice_transcribe_download_root,
+            beam_size=self.settings.voice_transcribe_beam_size,
+            max_concurrency=self.settings.voice_transcribe_max_concurrency,
+        )
 
         await self.add_cog(RegistrationCog(self))
         await self.add_cog(DMOnboardingCog(self))
@@ -207,6 +228,8 @@ class RobBot(commands.Bot):
         await self.add_cog(InactivityCog(self))
         await self.add_cog(ServerBackupCog(self))
         await self.add_cog(ProtectedCog(self))
+        await self.add_cog(TldrCog(self))
+        await self.add_cog(VoiceTranscriptionCog(self))
 
         self.tree.interaction_check = self._global_interaction_check
         await self.send_change_request_service.rebind_pending_views()

@@ -7,6 +7,7 @@
 - `/leaderboard`
 - `/achievements`
 - `/report`
+- `/tldr` (options: `timeframe`, `topic`, `channel`; summarises recent chat, ephemeral reply — see [`tldr-and-voice-transcription.md`](tldr-and-voice-transcription.md))
 
 ## Dom/me commands
 
@@ -36,6 +37,12 @@
 - `/sendrequest`
 - `/privacy`
 - `/broadcast`
+
+## Automatic behaviours
+
+- Voice-message transcription: when `VOICE_TRANSCRIBE_ENABLED=true`, Rob replies
+  to every voice message (without pinging) with a transcript. See
+  [`tldr-and-voice-transcription.md`](tldr-and-voice-transcription.md).
 
 ## Notes
 
