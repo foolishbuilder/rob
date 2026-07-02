@@ -66,6 +66,26 @@ def test_missing_faster_whisper_marks_unavailable():
     assert svc._permanent_fail is True
 
 
+def test_download_root_redirects_hf_home(monkeypatch):
+    # download_root must also cover huggingface's xet cache (HF_HOME), which
+    # otherwise writes under the bot user's unwritable ~/.cache.
+    monkeypatch.delenv("HF_HOME", raising=False)
+    svc = TranscriptionService(enabled=True, download_root="/data/whisper")
+    svc._load_model_blocking()  # returns None here (faster-whisper not installed)
+    import os
+
+    assert os.environ["HF_HOME"] == os.path.join("/data/whisper", "huggingface")
+
+
+def test_download_root_respects_existing_hf_home(monkeypatch):
+    monkeypatch.setenv("HF_HOME", "/var/cache/rob-bot/huggingface")
+    svc = TranscriptionService(enabled=True, download_root="/data/whisper")
+    svc._load_model_blocking()
+    import os
+
+    assert os.environ["HF_HOME"] == "/var/cache/rob-bot/huggingface"
+
+
 def test_permission_error_load_failure_logs_actionable_hint(caplog):
     import logging
 

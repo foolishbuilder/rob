@@ -122,6 +122,16 @@ class TranscriptionService:
             return model
 
     def _load_model_blocking(self):
+        # download_root only controls where the model files land; huggingface's
+        # transfer backend (xet) keeps its own cache/logs under HF_HOME, which
+        # defaults to ~/.cache — unwritable when the bot user's home is locked
+        # down. Point HF_HOME inside download_root too (before huggingface_hub
+        # is first imported, which is when it reads the env) unless the
+        # operator/systemd unit already set one.
+        if self.download_root:
+            os.environ.setdefault(
+                "HF_HOME", os.path.join(self.download_root, "huggingface")
+            )
         try:
             from faster_whisper import WhisperModel
         except ImportError:

@@ -173,11 +173,13 @@ runs on CPU by default; nothing leaves the host.
 Until both steps are done the feature is a no-op — the bot logs a clear message
 if it's enabled without `faster-whisper` installed, and stays running.
 
-**`PermissionError: … '.cache'` on first use:** the download cache must be
-writable by the bot user. The shipped systemd units handle this (they set
+**`PermissionError: … '.cache'` on first use:** everything huggingface writes
+(model files *and* the xet transfer backend's cache/logs under `HF_HOME`) must
+be writable by the bot user. The shipped systemd units handle this (they set
 `CacheDirectory=` + `HF_HOME` to a service-owned `/var/cache` dir — re-copy the
-unit and `systemctl daemon-reload` after updating). On an older unit, point the
-cache somewhere the bot owns instead:
+unit and `systemctl daemon-reload` after updating). Alternatively point the
+cache somewhere the bot owns; setting `VOICE_TRANSCRIBE_DOWNLOAD_ROOT` also
+redirects `HF_HOME` beneath it (unless one is already set):
 
 ```bash
 sudo mkdir -p /opt/rob-bot/whisper-models
