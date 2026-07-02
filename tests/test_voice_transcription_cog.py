@@ -29,12 +29,38 @@ class _FakeAttachment:
         return self._data
 
 
+class _FakeChannel:
+    def __init__(self, fetch_result=None):
+        self._fetch_result = fetch_result
+        self.fetched_ids: list[int] = []
+
+    async def fetch_message(self, message_id):
+        self.fetched_ids.append(message_id)
+        if self._fetch_result is None:
+            import discord
+
+            raise discord.NotFound(SimpleNamespace(status=404), "unknown message")
+        return self._fetch_result
+
+
 class _FakeMessage:
-    def __init__(self, *, voice=True, attachments=None, bot=False):
+    def __init__(
+        self,
+        *,
+        voice=True,
+        attachments=None,
+        bot=False,
+        mentions=None,
+        reference=None,
+        channel=None,
+    ):
         self.flags = SimpleNamespace(voice=voice)
         self.attachments = attachments if attachments is not None else [_FakeAttachment()]
         self.author = SimpleNamespace(bot=bot)
         self.id = 42
+        self.mentions = mentions if mentions is not None else []
+        self.reference = reference
+        self.channel = channel if channel is not None else _FakeChannel()
         self.reply_calls: list[dict] = []
 
     async def reply(self, **kwargs):
@@ -56,12 +82,17 @@ class _FakeService:
         return self.result
 
 
+_BOT_USER = SimpleNamespace(id=999, bot=True)
+
+
 def _bot(service, *, max_duration=300, max_mb=25):
     return SimpleNamespace(
         transcription_service=service,
+        user=_BOT_USER,
         settings=SimpleNamespace(
             voice_transcribe_max_duration_seconds=max_duration,
             voice_transcribe_max_file_mb=max_mb,
+            voice_transcribe_max_concurrency=1,
         ),
     )
 
@@ -170,6 +201,87 @@ def test_over_size_is_skipped():
     _run(cog, message)
     assert not service.transcribe_calls
     assert not message.reply_calls
+
+
+def _ping_reply_message(target, *, resolved=True, mention=True):
+    """A non-voice message replying to `target` and (optionally) pinging Rob."""
+    reference = SimpleNamespace(
+        resolved=target if resolved else None,
+        message_id=getattr(target, "id", None),
+    )
+    return _FakeMessage(
+        voice=False,
+        attachments=[],
+        mentions=[_BOT_USER] if mention else [],
+        reference=reference,
+        channel=_FakeChannel(fetch_result=target),
+    )
+
+
+def test_ping_reply_transcribes_older_voice_message():
+    import discord
+
+    service = _FakeService()
+    cog = VoiceTranscriptionCog(_bot(service))
+    old_voice = _FakeMessage()  # the (older) voice message being replied to
+
+    # discord.py resolves references to real Message objects; our fake isn't
+    # one, so patch the resolver the same way other cog tests patch helpers.
+    ping = _ping_reply_message(old_voice)
+
+    async def _resolve(_message):
+        return old_voice
+
+    cog._resolve_reference = _resolve  # type: ignore[method-assign]
+    _run(cog, ping)
+
+    assert service.transcribe_calls
+    # The transcript lands on the voice message itself, without pinging.
+    assert old_voice.reply_calls
+    assert old_voice.reply_calls[0]["mention_author"] is False
+    assert isinstance(old_voice.reply_calls[0]["allowed_mentions"], discord.AllowedMentions)
+    assert not ping.reply_calls
+
+
+def test_ping_reply_to_non_voice_target_is_ignored():
+    service = _FakeService()
+    cog = VoiceTranscriptionCog(_bot(service))
+    ordinary = _FakeMessage(voice=False, attachments=[])
+    ping = _ping_reply_message(ordinary)
+
+    async def _resolve(_message):
+        return ordinary
+
+    cog._resolve_reference = _resolve  # type: ignore[method-assign]
+    _run(cog, ping)
+
+    assert not service.transcribe_calls
+    assert not ordinary.reply_calls
+
+
+def test_reply_without_ping_is_ignored():
+    service = _FakeService()
+    cog = VoiceTranscriptionCog(_bot(service))
+    old_voice = _FakeMessage()
+    ping = _ping_reply_message(old_voice, mention=False)
+    _run(cog, ping)
+    assert not service.transcribe_calls
+    assert not old_voice.reply_calls
+
+
+def test_ping_reply_to_bot_voice_message_is_ignored():
+    service = _FakeService()
+    cog = VoiceTranscriptionCog(_bot(service))
+    bot_voice = _FakeMessage(bot=True)
+    ping = _ping_reply_message(bot_voice)
+
+    async def _resolve(_message):
+        return bot_voice
+
+    cog._resolve_reference = _resolve  # type: ignore[method-assign]
+    _run(cog, ping)
+    assert not service.transcribe_calls
+    assert not bot_voice.reply_calls
 
 
 def test_transcribe_none_result_no_reply():
