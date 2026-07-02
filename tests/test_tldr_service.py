@@ -88,9 +88,10 @@ def test_empty_topic_scope_mentions_topic():
 
 
 class _FakeOllamaResponse:
-    def __init__(self, status: int, payload: dict):
+    def __init__(self, status: int, payload, text: str = ""):
         self.status = status
         self._payload = payload
+        self._text = text
 
     async def __aenter__(self):
         return self
@@ -100,6 +101,9 @@ class _FakeOllamaResponse:
 
     async def json(self):
         return self._payload
+
+    async def text(self):
+        return self._text or str(self._payload)
 
 
 class _FakeSession:
