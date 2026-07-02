@@ -56,6 +56,27 @@ class WebhookSettings(BaseSettings):
 class BotSettings(BaseSettings):
     discord_token: str
     bot_name: str
+    # TL;DR (/tldr) chat summariser. The extractive digest always works; when an
+    # Ollama server is reachable at tldr_ollama_url a small local model turns it
+    # into a natural-language summary (no chat data ever leaves the host).
+    tldr_enabled: bool
+    tldr_ollama_url: str | None
+    tldr_model: str
+    tldr_request_timeout_seconds: int
+    tldr_max_messages: int
+    tldr_cooldown_seconds: int
+    # Voice-message speech-to-text. Uses a local faster-whisper model; disabled
+    # until the operator installs faster-whisper and flips the flag on.
+    voice_transcribe_enabled: bool
+    voice_transcribe_model: str
+    voice_transcribe_device: str
+    voice_transcribe_compute_type: str
+    voice_transcribe_language: str | None
+    voice_transcribe_download_root: str | None
+    voice_transcribe_beam_size: int
+    voice_transcribe_max_duration_seconds: int
+    voice_transcribe_max_file_mb: int
+    voice_transcribe_max_concurrency: int
 
 
 def _load_env_file(env_file: str | Path | None) -> None:
@@ -260,6 +281,26 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         server_backup_major_change_threshold=base.server_backup_major_change_threshold,
         discord_token=_env_str("DISCORD_TOKEN", required=True),
         bot_name=_env_str("BOT_NAME", "Rob"),
+        tldr_enabled=_env_bool("TLDR_ENABLED", True),
+        tldr_ollama_url=_env_str("TLDR_OLLAMA_URL", "http://127.0.0.1:11434") or None,
+        tldr_model=_env_str("TLDR_MODEL", "llama3.2:1b"),
+        tldr_request_timeout_seconds=_env_int("TLDR_REQUEST_TIMEOUT_SECONDS", 45, minimum=1),
+        tldr_max_messages=_env_int("TLDR_MAX_MESSAGES", 400, minimum=1),
+        tldr_cooldown_seconds=_env_int("TLDR_COOLDOWN_SECONDS", 30, minimum=0),
+        voice_transcribe_enabled=_env_bool("VOICE_TRANSCRIBE_ENABLED", False),
+        voice_transcribe_model=_env_str("VOICE_TRANSCRIBE_MODEL", "base"),
+        voice_transcribe_device=_env_str("VOICE_TRANSCRIBE_DEVICE", "cpu"),
+        voice_transcribe_compute_type=_env_str("VOICE_TRANSCRIBE_COMPUTE_TYPE", "int8"),
+        voice_transcribe_language=_env_str("VOICE_TRANSCRIBE_LANGUAGE") or None,
+        voice_transcribe_download_root=_env_str("VOICE_TRANSCRIBE_DOWNLOAD_ROOT") or None,
+        voice_transcribe_beam_size=_env_int("VOICE_TRANSCRIBE_BEAM_SIZE", 1, minimum=1),
+        voice_transcribe_max_duration_seconds=_env_int(
+            "VOICE_TRANSCRIBE_MAX_DURATION_SECONDS", 300, minimum=1
+        ),
+        voice_transcribe_max_file_mb=_env_int("VOICE_TRANSCRIBE_MAX_FILE_MB", 25, minimum=1),
+        voice_transcribe_max_concurrency=_env_int(
+            "VOICE_TRANSCRIBE_MAX_CONCURRENCY", 1, minimum=1
+        ),
     )
 
 

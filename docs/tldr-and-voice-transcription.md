@@ -1,0 +1,124 @@
+# TL;DR summaries & voice-message transcription
+
+Two AI-assisted features that both run **in-house** — chat content stays on the
+bot host and is never sent to a third-party API.
+
+---
+
+## `/tldr` — chat summaries
+
+Summarises recent chat in a channel, for everyone, on the main + test guilds.
+The reply is **ephemeral** (only the requester sees it).
+
+### Options
+
+| Option      | Required | Description |
+|-------------|----------|-------------|
+| `timeframe` | no       | How far back to look: last hour / 6 hours / 24 hours / 3 days / 7 days. Defaults to the last 24 hours. |
+| `topic`     | no       | Focus the summary on a topic. Non-matching chatter is filtered out (loosely) and the model is told to focus on it. |
+| `channel`   | no       | Summarise a different text channel/thread. Defaults to the current one. |
+
+A short per-user cooldown (`TLDR_COOLDOWN_SECONDS`, default 30s) prevents spam.
+Rob only ever reads channels the requester can already see: it checks that both
+the user and Rob have **View Channel** + **Read Message History** first.
+
+### How the summary is produced
+
+1. **Extractive digest (always available).** Pure-Python: most-active
+   participants, links shared, and a few representative "highlight" messages,
+   plus topic-match counts when a topic is given. No dependencies, nothing
+   leaves the host.
+2. **Natural-language summary (optional upgrade).** If a local
+   [Ollama](https://ollama.com) server is reachable at `TLDR_OLLAMA_URL`, the
+   selected messages are sent to a small local model (`TLDR_MODEL`) which writes
+   a bulleted TL;DR. If Ollama is unreachable, times out, or errors, Rob falls
+   back to the digest silently (and backs off from retrying for a couple of
+   minutes so a down server doesn't slow every call).
+
+The footer of the reply shows which path produced it ("summarised by <model>
+(on-server)" vs "quick digest").
+
+### Enabling the natural-language path
+
+On the **bot host** (loopback only — do not expose Ollama publicly):
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh   # or your platform's installer
+ollama pull llama3.2:1b                          # small, CPU-friendly model
+```
+
+Then point Rob at it (defaults already match a local install):
+
+```env
+TLDR_OLLAMA_URL=http://127.0.0.1:11434
+TLDR_MODEL=llama3.2:1b
+```
+
+Any Ollama model works — `qwen2.5:1.5b`, `phi3:mini`, `gemma2:2b`, etc. Pick one
+that fits the host's RAM. Set `TLDR_OLLAMA_URL=` (blank) to force digest-only.
+
+### Config
+
+| Env var | Default | Notes |
+|---|---|---|
+| `TLDR_ENABLED` | `true` | Master switch for `/tldr`. |
+| `TLDR_OLLAMA_URL` | `http://127.0.0.1:11434` | Blank ⇒ digest only. |
+| `TLDR_MODEL` | `llama3.2:1b` | Must be pulled in Ollama. |
+| `TLDR_REQUEST_TIMEOUT_SECONDS` | `45` | Per-summary Ollama timeout. |
+| `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
+| `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
+
+---
+
+## Voice-message transcription
+
+When enabled, Rob watches for Discord **voice messages** and replies to each one
+(**without pinging** the author) with a transcript, produced by a local
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) model.
+
+### Enabling it
+
+`faster-whisper` is an **optional** dependency (kept out of the core install
+because it pulls in CTranslate2/ONNX). On the bot host:
+
+```bash
+pip install -r requirements-voice.txt
+```
+
+```env
+VOICE_TRANSCRIBE_ENABLED=true
+VOICE_TRANSCRIBE_MODEL=base    # tiny | base | small | medium | large-v3
+```
+
+The model is downloaded from Hugging Face on first use and cached. Everything
+runs on CPU by default; nothing leaves the host.
+
+Until both steps are done the feature is a no-op — the bot logs a clear message
+if it's enabled without `faster-whisper` installed, and stays running.
+
+### Behaviour & safety
+
+- All model work runs in a worker thread (`asyncio.to_thread`) and is serialised
+  by a semaphore (`VOICE_TRANSCRIBE_MAX_CONCURRENCY`), so the Discord event loop
+  never stalls.
+- Voice messages longer than `VOICE_TRANSCRIBE_MAX_DURATION_SECONDS` (default
+  300s) or larger than `VOICE_TRANSCRIBE_MAX_FILE_MB` (default 25 MB) are skipped.
+- Replies never ping (`mention_author=False` + no allowed mentions), and any
+  mentions in the transcript text are neutralised.
+- If transcription fails, Rob skips silently (logged) rather than spamming the
+  channel.
+
+### Config
+
+| Env var | Default | Notes |
+|---|---|---|
+| `VOICE_TRANSCRIBE_ENABLED` | `false` | Master switch. |
+| `VOICE_TRANSCRIBE_MODEL` | `base` | Whisper size; bigger = better + slower. |
+| `VOICE_TRANSCRIBE_DEVICE` | `cpu` | `cpu` or `cuda`. |
+| `VOICE_TRANSCRIBE_COMPUTE_TYPE` | `int8` | `int8` is fastest on CPU. |
+| `VOICE_TRANSCRIBE_LANGUAGE` | _(blank)_ | Blank ⇒ auto-detect. |
+| `VOICE_TRANSCRIBE_DOWNLOAD_ROOT` | _(blank)_ | Model cache dir; blank ⇒ HF default. |
+| `VOICE_TRANSCRIBE_BEAM_SIZE` | `1` | Higher = more accurate + slower. |
+| `VOICE_TRANSCRIBE_MAX_DURATION_SECONDS` | `300` | Skip longer clips. |
+| `VOICE_TRANSCRIBE_MAX_FILE_MB` | `25` | Skip larger files. |
+| `VOICE_TRANSCRIBE_MAX_CONCURRENCY` | `1` | Simultaneous transcriptions. |
