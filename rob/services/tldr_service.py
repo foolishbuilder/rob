@@ -106,7 +106,8 @@ class TldrService:
         enabled: bool = True,
         ollama_url: str | None = None,
         model: str = "llama3.2:1b",
-        request_timeout_seconds: int = 45,
+        request_timeout_seconds: int = 120,
+        keep_alive: str = "10m",
         max_messages: int = 400,
         session_factory=None,
     ) -> None:
@@ -114,13 +115,21 @@ class TldrService:
         self.ollama_url = ollama_url.rstrip("/") if ollama_url else None
         self.model = model
         self.request_timeout_seconds = max(1, request_timeout_seconds)
+        # How long Ollama keeps the model resident after a call, so only the
+        # first (cold) summary pays the model-load cost.
+        self.keep_alive = keep_alive
         self.max_messages = max(1, max_messages)
         # Injectable for tests; defaults to a real aiohttp session per request.
         self._session_factory = session_factory or self._default_session
         self._ollama_disabled_until = 0.0
 
     def _default_session(self) -> aiohttp.ClientSession:
-        timeout = aiohttp.ClientTimeout(total=self.request_timeout_seconds)
+        # Short connect timeout fails fast when Ollama is down; the (larger) total
+        # covers a cold model load + generation on CPU.
+        timeout = aiohttp.ClientTimeout(
+            total=self.request_timeout_seconds,
+            sock_connect=min(5, self.request_timeout_seconds),
+        )
         return aiohttp.ClientSession(timeout=timeout)
 
     @property
@@ -234,7 +243,9 @@ class TldrService:
             "model": self.model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.2},
+            "keep_alive": self.keep_alive,
+            # A TL;DR is short; cap output so generation latency stays bounded.
+            "options": {"temperature": 0.2, "num_predict": 400},
         }
         url = f"{self.ollama_url}/api/generate"
         try:
@@ -259,7 +270,12 @@ class TldrService:
         except (aiohttp.ClientError, TimeoutError) as exc:
             # TimeoutError covers aiohttp's total-timeout (asyncio.TimeoutError is
             # an alias on 3.11+); both mean "server slow/unreachable", not a bug.
-            log.info("Ollama unavailable for /tldr (%s); using digest fallback.", exc)
+            # Log the type name too — a bare timeout stringifies to "".
+            log.info(
+                "Ollama unavailable for /tldr (%s: %s); using digest fallback.",
+                type(exc).__name__,
+                exc,
+            )
             self._trip_ollama_breaker()
             return None
         except Exception:  # pragma: no cover - defensive; never break the command

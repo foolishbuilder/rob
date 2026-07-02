@@ -63,6 +63,7 @@ class BotSettings(BaseSettings):
     tldr_ollama_url: str | None
     tldr_model: str
     tldr_request_timeout_seconds: int
+    tldr_keep_alive: str
     tldr_max_messages: int
     tldr_cooldown_seconds: int
     # Voice-message speech-to-text. Uses a local faster-whisper model; disabled
@@ -284,7 +285,8 @@ def load_bot_settings(env_file: str | Path | None = None) -> BotSettings:
         tldr_enabled=_env_bool("TLDR_ENABLED", True),
         tldr_ollama_url=_env_str("TLDR_OLLAMA_URL", "http://127.0.0.1:11434") or None,
         tldr_model=_env_str("TLDR_MODEL", "llama3.2:1b"),
-        tldr_request_timeout_seconds=_env_int("TLDR_REQUEST_TIMEOUT_SECONDS", 45, minimum=1),
+        tldr_request_timeout_seconds=_env_int("TLDR_REQUEST_TIMEOUT_SECONDS", 120, minimum=1),
+        tldr_keep_alive=_env_str("TLDR_KEEP_ALIVE", "10m"),
         tldr_max_messages=_env_int("TLDR_MAX_MESSAGES", 400, minimum=1),
         tldr_cooldown_seconds=_env_int("TLDR_COOLDOWN_SECONDS", 30, minimum=0),
         voice_transcribe_enabled=_env_bool("VOICE_TRANSCRIBE_ENABLED", False),

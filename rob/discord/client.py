@@ -201,6 +201,7 @@ class RobBot(commands.Bot):
             ollama_url=self.settings.tldr_ollama_url,
             model=self.settings.tldr_model,
             request_timeout_seconds=self.settings.tldr_request_timeout_seconds,
+            keep_alive=self.settings.tldr_keep_alive,
             max_messages=self.settings.tldr_max_messages,
         )
         self.transcription_service = TranscriptionService(

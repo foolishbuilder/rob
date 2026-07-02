@@ -91,9 +91,17 @@ or add swap / more RAM.
 | `TLDR_ENABLED` | `true` | Master switch for `/tldr`. |
 | `TLDR_OLLAMA_URL` | `http://127.0.0.1:11434` | Blank ⇒ digest only. |
 | `TLDR_MODEL` | `llama3.2:1b` | Must be pulled in Ollama. |
-| `TLDR_REQUEST_TIMEOUT_SECONDS` | `45` | Per-summary Ollama timeout. |
+| `TLDR_REQUEST_TIMEOUT_SECONDS` | `120` | Total per-summary timeout (covers a cold model load on CPU). |
+| `TLDR_KEEP_ALIVE` | `10m` | How long Ollama keeps the model resident between calls. |
 | `TLDR_MAX_MESSAGES` | `400` | Most-recent messages scanned in the window. |
 | `TLDR_COOLDOWN_SECONDS` | `30` | Per-user cooldown. |
+
+**Cold starts:** the first `/tldr` after a restart (or after the model unloads)
+loads the model into RAM, which is slow on CPU. That's why the timeout is
+generous and `TLDR_KEEP_ALIVE` keeps the model warm. If the first call times out,
+the bot log shows `Ollama unavailable for /tldr (TimeoutError: ) …`; raise
+`TLDR_REQUEST_TIMEOUT_SECONDS` and/or use a smaller model. After any failure Rob
+backs off from Ollama for ~2 minutes (restarting the bot clears that).
 
 ---
 
