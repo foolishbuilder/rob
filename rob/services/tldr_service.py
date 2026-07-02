@@ -54,6 +54,16 @@ class TldrResult:
     links: list[str] = field(default_factory=list)
 
 
+async def _read_body(response, limit: int = 400) -> str:
+    """Best-effort read of a small slice of a response body for diagnostics."""
+    try:
+        text = await response.text()
+    except Exception:  # pragma: no cover - defensive; logging must never raise
+        return "<unreadable body>"
+    text = _clean(text)
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
 def _clean(text: str) -> str:
     return " ".join(text.split()).strip()
 
@@ -231,7 +241,15 @@ class TldrService:
             async with self._session_factory() as session:
                 async with session.post(url, json=payload) as response:
                     if response.status != 200:
-                        log.warning("Ollama returned HTTP %s for /tldr.", response.status)
+                        # Include the body — Ollama explains *why* here (e.g.
+                        # "model 'x' not found, try pulling it", or an OOM error).
+                        body = await _read_body(response)
+                        log.warning(
+                            "Ollama returned HTTP %s for /tldr (model=%s): %s",
+                            response.status,
+                            self.model,
+                            body,
+                        )
                         self._trip_ollama_breaker()
                         return None
                     data = await response.json()
